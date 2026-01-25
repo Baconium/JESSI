@@ -6,4 +6,5 @@ dist/
 *.ipa
 *.tipa
 *.deb
+*.zip
 .DS_Store
