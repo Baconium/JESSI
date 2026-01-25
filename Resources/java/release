@@ -1,0 +1,6 @@
+JAVA_VERSION="1.8.0_462"
+OS_NAME="Darwin"
+OS_VERSION="11.2"
+OS_ARCH="aarch64"
+LIBC=""
+SOURCE=".:git:b6accdf23440+"
