@@ -178,13 +178,11 @@ struct SettingsView: View {
                     Text("Total RAM")
                     Spacer()
                     Text(model.totalRAM)
-                        .foregroundColor(.secondary)
                 }
                 HStack {
                     Text("Free RAM (estimated)")
                     Spacer()
                     Text(model.freeRAM)
-                        .foregroundColor(.secondary)
                 }
 
             }
