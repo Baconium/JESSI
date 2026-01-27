@@ -1,5 +1,7 @@
 If you would like support, want to request a feature, or just talk to other JESSI users you should join the discord: https://discord.gg/aZ9HbYXKur
 
+# Basic Information
+
 JESSI is a jailed app that runs Minecraft: Java Edition servers natively on iOS, targeting iOS 14+. (NOTE: iOS 14/15 as well as iOS 26 are currently not working. This will be fixed in the next beta!) While JESSI can run on non jailbroken devices, it requires JIT to be enabled in order to actually function.
 
 To enable JIT on iOS 14-17.0, just use trollstore to install JESSI, and JIT will automatically work.
@@ -10,7 +12,7 @@ To enable JIT on iOS 17.4-26.x, you must first install [LocalDevVPN](https://app
 
 JESSI also works inside of [LiveContainer](https://github.com/LiveContainer/LiveContainer), however this readme will not provide a setup guide for LiveContainer.
 
-If you would like to build JESSI yourself, it's pretty simple. Install theos on your system (make sure to download the swift stuff too), add it to your path, and then just clone the repo and run ipabuild.sh. The ipa will be in /dist. If you're on windows, the steps are the same but you have to build/package the ipa manually.
+# Features
 
 This project is in very active development, heres a list of some current features:
 
@@ -29,6 +31,10 @@ In the future, I plan to add the following:
 - a GUI to configure all server and mod configs
 - more system info in settings
 - and probably much more but this is all I could think of for now
+
+# Building/Miscellaneous extra info
+
+If you would like to build JESSI yourself, it's pretty simple. Install XCode and XCode CLI, then run fetch-runtimes.sh, and then build-ipa.sh.
 
 There are some limitations that I'm currently running into for jailed iOS, that I'm not sure are solvable. The main one is that the JVM must run in the same process as the app itself. Because of this, when the JVM is killed in any way, the app is also killed. So, at least for now, if you stop a server or create a forge/neoforge server in the server setup, the app will crash after the java process ends. You will not lose any data from a crash occuring this way, and in fact iOS doesn't even log it as a crash (you won't find an ips file for it in settings). This is solvable by running the JVM in a seperate process, however that is only possible on jailbroken/trollstore devices. (note: this functionality is not yet supported)
 
