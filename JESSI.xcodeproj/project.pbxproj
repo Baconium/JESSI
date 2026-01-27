@@ -28,6 +28,30 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		A6C5249D2F28A1A10030EE41 /* Embed Java Runtimes */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${SRCROOT}/Runtimes/java",
+				"${SRCROOT}/Runtimes/java17",
+				"${SRCROOT}/Runtimes/java21",
+			);
+			name = "Embed Java Runtimes";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Resources",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Resources/java",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Resources/java17",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Resources/java21",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\n\nRUNTIMES_DIR=\"${SRCROOT}/Runtimes\"\nDEST_DIR=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Resources\"\n\nfor name in java java17 java21; do\n  src=\"${RUNTIMES_DIR}/${name}\"\n  dst=\"${DEST_DIR}/${name}\"\n\n  if [ ! -d \"${src}\" ]; then\n    echo \"ERROR: Missing Java runtime folder: ${src}\" >&2\n    echo \"Run: ${SRCROOT}/scripts/fetch-runtimes.sh\" >&2\n    exit 1\n  fi\n\n  echo \"Embedding ${name} -> ${dst}\"\n  /bin/rm -rf \"${dst}\"\n  /bin/mkdir -p \"${dst}\"\n  /usr/bin/rsync -aL --delete \"${src}/\" \"${dst}/\"\ndone\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXGroup section */
 		A6C524862F2873DF0030EE41 = {
 			isa = PBXGroup;
@@ -54,6 +78,7 @@
 			buildPhases = (
 				A6C5248B2F2873DF0030EE41 /* Sources */,
 				A6C5248C2F2873DF0030EE41 /* Frameworks */,
+				A6C5249D2F28A1A10030EE41 /* Embed Java Runtimes */,
 				A6C5248D2F2873DF0030EE41 /* Resources */,
 			);
 			buildRules = (
@@ -162,7 +187,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -225,7 +250,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
