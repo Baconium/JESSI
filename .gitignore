@@ -1,0 +1,22 @@
+# Xcode / Apple
+.DS_Store
+xcuserdata/
+DerivedData/
+*.xcuserstate
+*.xcbkptlist
+*.xccheckout
+*.xcscmblueprint
+
+# Build outputs
+build/
+dist/
+*.ipa
+
+# Large bundled runtimes (fetched locally)
+Runtimes/
+
+# App packaging temp
+Payload/
+
+# Logs
+*.log
