@@ -8,15 +8,49 @@
 
 /* Begin PBXFileReference section */
 		A6C5248F2F2873DF0030EE41 /* JESSI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JESSI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1C0F700A1B2C3D4E5F60001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60004 /* Bridging.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Bridging.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateServerView.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoneToolbarTextField.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60008 /* JessiJITCheck.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiJITCheck.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiJITCheck.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchView.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6000B /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6000C /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6000D /* SwiftUIEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftUIEntry.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60010 /* JessiAppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiAppDelegate.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60011 /* JessiAppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiAppDelegate.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60012 /* JessiJavaRunner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiJavaRunner.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60013 /* JessiPaths.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiPaths.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60014 /* JessiPaths.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiPaths.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60015 /* JessiServerService.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiServerService.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60016 /* JessiServerService.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiServerService.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60017 /* JessiServerSoftware.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiServerSoftware.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60018 /* JessiServerSoftware.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiServerSoftware.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60019 /* JessiSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiSettings.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiSettings.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001B /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		A6C524912F2873DF0030EE41 /* JESSI */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = JESSI;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
+/* Begin PBXBuildFile section */
+		B1C0F700A1B2C3D4E5F60032 /* CreateServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */; };
+		B1C0F700A1B2C3D4E5F60033 /* DoneToolbarTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */; };
+		B1C0F700A1B2C3D4E5F60034 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */; };
+		B1C0F700A1B2C3D4E5F60035 /* JessiJITCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */; };
+		B1C0F700A1B2C3D4E5F60036 /* LaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */; };
+		B1C0F700A1B2C3D4E5F60037 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000B /* RootTabView.swift */; };
+		B1C0F700A1B2C3D4E5F60038 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000C /* SettingsView.swift */; };
+		B1C0F700A1B2C3D4E5F60039 /* SwiftUIEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000D /* SwiftUIEntry.swift */; };
+		B1C0F700A1B2C3D4E5F6003A /* JessiAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60011 /* JessiAppDelegate.m */; };
+		B1C0F700A1B2C3D4E5F6003B /* JessiJavaRunner.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60012 /* JessiJavaRunner.m */; };
+		B1C0F700A1B2C3D4E5F6003C /* JessiPaths.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60014 /* JessiPaths.m */; };
+		B1C0F700A1B2C3D4E5F6003D /* JessiServerService.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60016 /* JessiServerService.m */; };
+		B1C0F700A1B2C3D4E5F6003E /* JessiServerSoftware.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60018 /* JessiServerSoftware.m */; };
+		B1C0F700A1B2C3D4E5F6003F /* JessiSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */; };
+		B1C0F700A1B2C3D4E5F60040 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001B /* main.m */; };
+		B1C0F700A1B2C3D4E5F60041 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60001 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A6C5248C2F2873DF0030EE41 /* Frameworks */ = {
@@ -28,30 +62,6 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		A6C5249D2F28A1A10030EE41 /* Embed Java Runtimes */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${SRCROOT}/Runtimes/java",
-				"${SRCROOT}/Runtimes/java17",
-				"${SRCROOT}/Runtimes/java21",
-			);
-			name = "Embed Java Runtimes";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Resources",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Resources/java",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Resources/java17",
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Resources/java21",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\n\nRUNTIMES_DIR=\"${SRCROOT}/Runtimes\"\nDEST_DIR=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/Resources\"\n\nfor name in java java17 java21; do\n  src=\"${RUNTIMES_DIR}/${name}\"\n  dst=\"${DEST_DIR}/${name}\"\n\n  if [ ! -d \"${src}\" ]; then\n    echo \"ERROR: Missing Java runtime folder: ${src}\" >&2\n    echo \"Run: ${SRCROOT}/scripts/fetch-runtimes.sh\" >&2\n    exit 1\n  fi\n\n  echo \"Embedding ${name} -> ${dst}\"\n  /bin/rm -rf \"${dst}\"\n  /bin/mkdir -p \"${dst}\"\n  /usr/bin/rsync -aL --delete \"${src}/\" \"${dst}/\"\ndone\n";
-		};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXGroup section */
 		A6C524862F2873DF0030EE41 = {
 			isa = PBXGroup;
@@ -59,6 +69,60 @@
 				A6C524912F2873DF0030EE41 /* JESSI */,
 				A6C524902F2873DF0030EE41 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		A6C524912F2873DF0030EE41 /* JESSI */ = {
+			isa = PBXGroup;
+			children = (
+				B1C0F700A1B2C3D4E5F60060 /* App */,
+				B1C0F700A1B2C3D4E5F60061 /* JessiCore */,
+				B1C0F700A1B2C3D4E5F60062 /* SwiftUI */,
+			);
+			path = JESSI;
+			sourceTree = "<group>";
+		};
+		B1C0F700A1B2C3D4E5F60060 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				B1C0F700A1B2C3D4E5F60001 /* Assets.xcassets */,
+			);
+			name = App;
+			sourceTree = "<group>";
+		};
+		B1C0F700A1B2C3D4E5F60061 /* JessiCore */ = {
+			isa = PBXGroup;
+			children = (
+				B1C0F700A1B2C3D4E5F60010 /* JessiAppDelegate.h */,
+				B1C0F700A1B2C3D4E5F60011 /* JessiAppDelegate.m */,
+				B1C0F700A1B2C3D4E5F60012 /* JessiJavaRunner.m */,
+				B1C0F700A1B2C3D4E5F60013 /* JessiPaths.h */,
+				B1C0F700A1B2C3D4E5F60014 /* JessiPaths.m */,
+				B1C0F700A1B2C3D4E5F60015 /* JessiServerService.h */,
+				B1C0F700A1B2C3D4E5F60016 /* JessiServerService.m */,
+				B1C0F700A1B2C3D4E5F60017 /* JessiServerSoftware.h */,
+				B1C0F700A1B2C3D4E5F60018 /* JessiServerSoftware.m */,
+				B1C0F700A1B2C3D4E5F60019 /* JessiSettings.h */,
+				B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */,
+				B1C0F700A1B2C3D4E5F6001B /* main.m */,
+			);
+			path = JessiCore;
+			sourceTree = "<group>";
+		};
+		B1C0F700A1B2C3D4E5F60062 /* SwiftUI */ = {
+			isa = PBXGroup;
+			children = (
+				B1C0F700A1B2C3D4E5F60004 /* Bridging.h */,
+				B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */,
+				B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */,
+				B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */,
+				B1C0F700A1B2C3D4E5F60008 /* JessiJITCheck.h */,
+				B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */,
+				B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */,
+				B1C0F700A1B2C3D4E5F6000B /* RootTabView.swift */,
+				B1C0F700A1B2C3D4E5F6000C /* SettingsView.swift */,
+				B1C0F700A1B2C3D4E5F6000D /* SwiftUIEntry.swift */,
+			);
+			path = SwiftUI;
 			sourceTree = "<group>";
 		};
 		A6C524902F2873DF0030EE41 /* Products */ = {
@@ -78,15 +142,12 @@
 			buildPhases = (
 				A6C5248B2F2873DF0030EE41 /* Sources */,
 				A6C5248C2F2873DF0030EE41 /* Frameworks */,
-				A6C5249D2F28A1A10030EE41 /* Embed Java Runtimes */,
+				A6C5249D2F2875000030EE41 /* ShellScript */,
 				A6C5248D2F2873DF0030EE41 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				A6C524912F2873DF0030EE41 /* JESSI */,
 			);
 			name = JESSI;
 			packageProductDependencies = (
@@ -134,16 +195,58 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B1C0F700A1B2C3D4E5F60041 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A6C5249D2F2875000030EE41 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Runtimes/java",
+				"$(SRCROOT)/Runtimes/java17",
+				"$(SRCROOT)/Runtimes/java21",
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/java",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/java17",
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/java21",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\nRES_SRC=\"${SRCROOT}/Runtimes\"\nDEST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\n\ncopy_dir() {\n  name=\"$1\"\n  if [ -d \"${RES_SRC}/${name}\" ]; then\n    mkdir -p \"${DEST}/${name}\"\n    /usr/bin/rsync -a --delete \"${RES_SRC}/${name}/\" \"${DEST}/${name}/\"\n  fi\n}\n\ncopy_dir java\ncopy_dir java17\ncopy_dir java21\n\n# Ensure expected executables stay executable.\nfor name in java java17 java21; do\n  if [ -d \"${DEST}/${name}/bin\" ]; then\n    /usr/bin/find \"${DEST}/${name}/bin\" -type f -maxdepth 1 -print0 | /usr/bin/xargs -0 /bin/chmod 0755 || true\n  fi\n  if [ -f \"${DEST}/${name}/jspawnhelper\" ]; then\n    /bin/chmod 0755 \"${DEST}/${name}/jspawnhelper\" || true\n  fi\n  if [ -f \"${DEST}/${name}/lib/jspawnhelper\" ]; then\n    /bin/chmod 0755 \"${DEST}/${name}/lib/jspawnhelper\" || true\n  fi\n  if [ -f \"${DEST}/${name}/bin/java\" ]; then\n    /bin/chmod 0755 \"${DEST}/${name}/bin/java\" || true\n  fi\ndone\n\n# On real devices, every Mach-O must be individually signed. Xcode does NOT automatically\n# sign executables/dylibs buried in Resources.\nif [ \"${PLATFORM_NAME:-}\" = \"iphoneos\" ] && [ \"${CODE_SIGNING_ALLOWED:-NO}\" = \"YES\" ]; then\n  SIGN_ID=\"${EXPANDED_CODE_SIGN_IDENTITY:--}\"\n  for name in java java17 java21; do\n    ROOT=\"${DEST}/${name}\"\n    if [ -d \"${ROOT}\" ]; then\n      /usr/bin/find \"${ROOT}\" -type f 2>/dev/null | while IFS= read -r f; do\n        if /usr/bin/file -b \"$f\" | /usr/bin/grep -q \"Mach-O\"; then\n          /usr/bin/codesign --force --sign \"$SIGN_ID\" --timestamp=none \"$f\" >/dev/null 2>&1 || true\n        fi\n      done\n    fi\n  done\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A6C5248B2F2873DF0030EE41 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B1C0F700A1B2C3D4E5F60040 /* main.m in Sources */,
+				B1C0F700A1B2C3D4E5F6003A /* JessiAppDelegate.m in Sources */,
+				B1C0F700A1B2C3D4E5F6003B /* JessiJavaRunner.m in Sources */,
+				B1C0F700A1B2C3D4E5F6003C /* JessiPaths.m in Sources */,
+				B1C0F700A1B2C3D4E5F6003D /* JessiServerService.m in Sources */,
+				B1C0F700A1B2C3D4E5F6003E /* JessiServerSoftware.m in Sources */,
+				B1C0F700A1B2C3D4E5F6003F /* JessiSettings.m in Sources */,
+				B1C0F700A1B2C3D4E5F60035 /* JessiJITCheck.m in Sources */,
+				B1C0F700A1B2C3D4E5F60032 /* CreateServerView.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60033 /* DoneToolbarTextField.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60034 /* FileBrowserView.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60036 /* LaunchView.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60037 /* RootTabView.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60038 /* SettingsView.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60039 /* SwiftUIEntry.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -187,7 +290,7 @@
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -250,7 +353,7 @@
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -277,26 +380,33 @@
 				CODE_SIGN_ENTITLEMENTS = Config/JESSI.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_PREVIEWS = YES;
+				DEVELOPMENT_TEAM = Q99T4XZBJT;
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_PREVIEWS = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.JESSI;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-Wl,-e,_main",
+					"-Wl,-export_dynamic",
+					"-Wl,-exported_symbol,_main",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = JESSI/SwiftUI/Bridging.h;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/JESSI/SwiftUI/Bridging.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -311,26 +421,33 @@
 				CODE_SIGN_ENTITLEMENTS = Config/JESSI.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_PREVIEWS = YES;
+				DEVELOPMENT_TEAM = Q99T4XZBJT;
+				ENABLE_DEBUG_DYLIB = NO;
+				ENABLE_PREVIEWS = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.JESSI;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-Wl,-e,_main",
+					"-Wl,-export_dynamic",
+					"-Wl,-exported_symbol,_main",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = JESSI/SwiftUI/Bridging.h;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/JESSI/SwiftUI/Bridging.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

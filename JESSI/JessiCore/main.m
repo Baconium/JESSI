@@ -1,5 +1,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import <dispatch/dispatch.h>
+#import <objc/runtime.h>
 #import <pthread.h>
 #import <string.h>
 #import <stdlib.h>
@@ -18,7 +20,45 @@ static const char *getenv_nonempty(const char *k) {
     return (v && *v) ? v : NULL;
 }
 
-int main(int argc, char *argv[]) {
+static NSString *const kJessiBundleId = @"com.baconmania.jessi";
+static NSString *(*gOrigBundleIdentifier)(id, SEL) = NULL;
+
+static NSString *jessi_bundleIdentifier(NSBundle *self, SEL _cmd) {
+    // Call original implementation.
+    if (!gOrigBundleIdentifier) {
+        return kJessiBundleId;
+    }
+
+    NSString *bid = gOrigBundleIdentifier(self, _cmd);
+    if (bid.length > 0) {
+        return bid;
+    }
+
+    // Only provide a fallback for the main bundle.
+    if (self == [NSBundle mainBundle]) {
+        return kJessiBundleId;
+    }
+
+    return bid;
+}
+
+static void jessi_install_bundleid_fallback(void) {
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        Class cls = [NSBundle class];
+        SEL sel = @selector(bundleIdentifier);
+        Method method = class_getInstanceMethod(cls, sel);
+        if (!method) {
+            return;
+        }
+
+        IMP oldImp = method_getImplementation(method);
+        gOrigBundleIdentifier = (NSString *(*)(id, SEL))oldImp;
+        method_setImplementation(method, (IMP)jessi_bundleIdentifier);
+    });
+}
+
+__attribute__((visibility("default"))) int main(int argc, char *argv[]) {
     static BOOL s_appLaunched = NO;
 
     BOOL isMainThread = pthread_main_np() != 0;
@@ -80,6 +120,8 @@ int main(int argc, char *argv[]) {
     }
 
     @autoreleasepool {
+        jessi_install_bundleid_fallback();
+        (void)[[NSBundle mainBundle] bundleIdentifier];
         return UIApplicationMain(argc, argv, nil, NSStringFromClass([JessiAppDelegate class]));
     }
 }

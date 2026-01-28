@@ -257,7 +257,6 @@ struct CreateServerView: View {
             return
         }
 
-        // Copy into our sandbox so we can read it later (security-scoped URLs often stop working).
         let scoped = pickedURL.startAccessingSecurityScopedResource()
         defer { if scoped { pickedURL.stopAccessingSecurityScopedResource() } }
 
@@ -273,7 +272,6 @@ struct CreateServerView: View {
                 try fm.removeItem(at: destURL)
             }
 
-            // Prefer file copy; fall back to stream copy if needed.
             do {
                 try fm.copyItem(at: pickedURL, to: destURL)
             } catch {

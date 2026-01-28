@@ -20,23 +20,43 @@ static NSString *const kJessiLaunchArgs = @"jessi.jvm.launchArgs";
 
 + (NSArray<NSString *> *)availableJavaVersions {
     NSMutableArray<NSString *> *available = [NSMutableArray array];
-    NSString *bundleRoot = [[NSBundle mainBundle] bundlePath];
+    NSBundle *b = [NSBundle mainBundle];
+    NSString *bundleRoot = b.bundlePath;
+    NSString *resourceRoot = b.resourcePath;
     NSFileManager *fm = [NSFileManager defaultManager];
 
+    NSMutableArray<NSString *> *roots = [NSMutableArray array];
+    if (bundleRoot.length) [roots addObject:bundleRoot];
+    if (resourceRoot.length && ![resourceRoot isEqualToString:bundleRoot]) [roots addObject:resourceRoot];
+    if (bundleRoot.length) {
+        NSString *resourcesUnderBundle = [bundleRoot stringByAppendingPathComponent:@"Resources"];
+        if (![roots containsObject:resourcesUnderBundle]) [roots addObject:resourcesUnderBundle];
+    }
+
     for (NSString *ver in @[@"8", @"17", @"21"]) {
-        NSString *path = [bundleRoot stringByAppendingPathComponent:[NSString stringWithFormat:@"java%@", ver]];
-        if ([fm fileExistsAtPath:path]) {
-            [available addObject:ver];
-            continue;
+        for (NSString *root in roots) {
+            NSString *path = [root stringByAppendingPathComponent:[NSString stringWithFormat:@"java%@", ver]];
+            if ([fm fileExistsAtPath:path]) {
+                [available addObject:ver];
+                break;
+            }
         }
     }
 
     if (![available containsObject:@"8"]) {
-        NSString *genericPath = [bundleRoot stringByAppendingPathComponent:@"java"];
-        if ([fm fileExistsAtPath:genericPath]) {
+        NSString *genericPath = nil;
+        for (NSString *root in roots) {
+            NSString *candidate = [root stringByAppendingPathComponent:@"java"];
+            if ([fm fileExistsAtPath:candidate]) {
+                genericPath = candidate;
+                break;
+            }
+        }
+
+        if (genericPath.length) {
             NSString *releasePath = [genericPath stringByAppendingPathComponent:@"release"];
             NSString *releaseContent = [NSString stringWithContentsOfFile:releasePath encoding:NSUTF8StringEncoding error:nil];
-            
+
             if ([releaseContent containsString:@"1.8.0"]) {
                 [available insertObject:@"8" atIndex:0];
             } else if ([releaseContent containsString:@"\"17."]) {

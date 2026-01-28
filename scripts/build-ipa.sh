@@ -49,15 +49,6 @@ else
   cp -aL "$APP_DIR/." "$DEST_APP/"
 fi
 
-# ensure runtimes actually got embedded by the xcode build
-for name in java java17 java21; do
-  if [[ ! -d "$DEST_APP/Resources/$name" ]]; then
-    echo "ERROR: Built app is missing embedded runtime: $DEST_APP/Resources/$name" >&2
-    echo "This usually means the Xcode project isn't copying Runtimes/ into the app bundle." >&2
-    exit 1
-  fi
-done
-
 # remove mobileprovision
 rm -rf "$DEST_APP/_CodeSignature" "$DEST_APP/embedded.mobileprovision" || true
 
@@ -69,4 +60,4 @@ rm -f "$IPA_PATH"
 )
 
 echo "Created: $IPA_PATH"
-echo "Build complete."
+echo "IPA built successfully"

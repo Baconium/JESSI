@@ -9,7 +9,7 @@
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<string>com.baconmania.jessi</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -20,33 +20,25 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>JESSI needs access to your local network so other devices on your Wi-Fi can connect to Minecraft servers ran by the app.</string>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_minecraft._tcp</string>
 	</array>
-
-	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>JESSI needs access to your local network so other devices on your Wi-Fi can connect to Minecraft servers ran by the app.</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIFileSharingEnabled</key>
 	<true/>
-	<key>UISupportsDocumentBrowser</key>
-	<true/>
-
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
 		<string>AccentColor</string>
 	</dict>
-
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -60,12 +52,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-
+	<key>UISupportsDocumentBrowser</key>
+	<true/>
 	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.java.archive</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
@@ -73,6 +64,8 @@
 			</array>
 			<key>UTTypeDescription</key>
 			<string>Java Archive</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.java.archive</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
