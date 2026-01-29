@@ -9,6 +9,7 @@ final class LaunchModel: NSObject, ObservableObject {
     @Published var isRunning: Bool = false
     @Published var consoleText: String = ""
     @Published var commandText: String = ""
+    @Published var showJITAlert: Bool = false
 
     private let service: JessiServerService
 
@@ -28,10 +29,25 @@ final class LaunchModel: NSObject, ObservableObject {
         }
     }
 
-    func start() {
+    func startServer() {
         guard !selectedServer.isEmpty else { return }
         UIApplication.shared.isIdleTimerDisabled = true
         service.startServerNamed(selectedServer)
+    }
+    
+    func isJITEnabledCheck() -> Bool {
+        return jessi_check_jit_enabled()
+    }
+
+    func start() {
+        guard !selectedServer.isEmpty else { return }
+
+        if !isJITEnabledCheck() {
+            showJITAlert = true
+            return
+        }
+
+        startServer()
     }
 
     func stop() {
@@ -222,6 +238,16 @@ struct LaunchView: View {
                 primaryButton: .destructive(Text("Stop & Close")) {
                     exitAfterStopRequested = true
                     model.stop()
+                },
+                secondaryButton: .cancel(Text("Cancel"))
+            )
+        }
+        .alert(isPresented: $model.showJITAlert) {
+            Alert(
+                title: Text("JIT Not Enabled"),
+                message: Text("Just-In-Time compilation is not enabled. The app may crash if you start the server."),
+                primaryButton: .destructive(Text("Start Anyway")) {
+                    model.startServer()
                 },
                 secondaryButton: .cancel(Text("Cancel"))
             )
