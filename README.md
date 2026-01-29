@@ -1,5 +1,3 @@
-
-
 If you would like support, want to request a feature, or just talk to other JESSI users you should join the discord: https://discord.gg/aZ9HbYXKur
 
 # Basic Information
