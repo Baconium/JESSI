@@ -1,3 +1,22 @@
+<div align="center">
+  <img src="./jessi26.png" width="128" style="border-radius: 22.5%;" alt="JESSI Icon" />
+
+  # JESSI
+  **Run Minecraft: Java Edition servers natively on iOS.**
+
+  <!-- 
+  DISABLED UNTIL BACON TURNS ON THE WIDGET IN SERVER SETTINGS
+  [![Discord](https://img.shields.io/discord/1461386332961112289?color=7289da&label=Discord&logo=discord&logoColor=white)](https://discord.gg/aZ9HbYXKur)
+  -->
+  ![iOS Version](https://img.shields.io/badge/iOS-14.0+-000000?logo=apple&logoColor=white)
+  ![Status](https://img.shields.io/badge/Status-Beta-orange)
+  ![License](https://img.shields.io/badge/License-MIT-green)
+
+  *JESSI is a jailed app that brings the power of JVM to your iOS Device.*
+</div>
+
+---
+
 If you would like support, want to request a feature, or just talk to other JESSI users you should join the discord: https://discord.gg/aZ9HbYXKur
 
 # Basic Information
