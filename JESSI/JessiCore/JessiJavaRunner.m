@@ -174,6 +174,11 @@ int jessi_server_main(int argc, char *argv[]) {
             
             jargv[idx++] = "-XX:+UseSerialGC";
 
+            // iOS 26 JIT
+            jargv[idx++] = "-XX:-UseCompressedOops";
+            jargv[idx++] = "-XX:-UseCompressedClassPointers";
+            jargv[idx++] = "-Xverify:none";
+
             if (flagNettyNoNative) {
                 jargv[idx++] = "-Dio.netty.transport.noNative=true";
             }
@@ -221,6 +226,13 @@ int jessi_server_main(int argc, char *argv[]) {
             jargv[idx++] = NULL;
 
             int jargc = idx - 1;
+
+            if ([JessiSettings shared].iOS26JITSupport) {
+                printf("[JESSI] ios 26 jit support enabled");
+                trigger_ios26_jit(0, 128 * 1024 * 1024);
+            } else {
+                printf("[JESSI] ios 26 jit support disabled");
+            }
 
             const char *fullver = "1.8.0-internal";
             const char *dotver = "1.8";
