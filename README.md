@@ -8,7 +8,9 @@ To enable JIT on iOS 14-17.0, just use trollstore to install JESSI, and JIT will
 
 To enable JIT on iOS 17.0.1-17.3.1, good luck!
 
-To enable JIT on iOS 17.4-26.x, you must first install [LocalDevVPN](https://apps.apple.com/us/app/localdevvpn/id6755608044) and [StikDebug](https://github.com/StephenDev0/StikDebug). After this, you will need to get your pairing file. Download [Jitterbugpair](https://github.com/osy/Jitterbug) on your computer. Make sure you download Jitterbugpair, not Jitterbug. Then, use it to get your pairing file, and get it to your devices files app. Then, enable the VPN in LocalDevVPN and import the pairing file into StikDebug, and you're ready to enable JIT. Make sure you have JESSI installed, then in StikDebug tap the "Connect by App" button and select JESSI. To make sure JIT is enabled, you can check the settings tab in JESSI.
+To enable JIT on iOS 17.4-18.7.4, you must first install [LocalDevVPN](https://apps.apple.com/us/app/localdevvpn/id6755608044) and [StikDebug](https://github.com/StephenDev0/StikDebug). After this, you will need to get your pairing file. Download [Jitterbugpair](https://github.com/osy/Jitterbug) on your computer. Make sure you download Jitterbugpair, not Jitterbug. Then, use it to get your pairing file, and get it to your devices files app. Then, enable the VPN in LocalDevVPN and import the pairing file into StikDebug, and you're ready to enable JIT. Make sure you have JESSI installed, then in StikDebug tap the "Connect by App" button and select JESSI. To make sure JIT is enabled, you can check the settings tab in JESSI.
+
+iOS 26 is currently unsupported, but will hopefully be supported in the near future!
 
 JESSI also works inside of [LiveContainer](https://github.com/LiveContainer/LiveContainer), however this readme will not provide a setup guide for LiveContainer.
 
