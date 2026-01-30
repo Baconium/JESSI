@@ -175,6 +175,7 @@ int jessi_server_main(int argc, char *argv[]) {
             jargv[idx++] = "-XX:+UseSerialGC";
 
             // iOS 26 JIT
+            jargv[idx++] = "-XX:+MirrorMappedCodeCache";
             jargv[idx++] = "-XX:-UseCompressedOops";
             jargv[idx++] = "-XX:-UseCompressedClassPointers";
             jargv[idx++] = "-Xverify:none";
