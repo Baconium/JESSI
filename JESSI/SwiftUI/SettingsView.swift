@@ -14,6 +14,7 @@ final class SettingsModel: ObservableObject {
     @Published var totalRAM: String = ""
     @Published var freeRAM: String = ""
     @Published var launchArgs: String = ""
+    @Published var iOS26JIT: Bool = false
 
     init() {
         let s = JessiSettings.shared()
@@ -59,6 +60,12 @@ final class SettingsModel: ObservableObject {
         let s = JessiSettings.shared()
         s.flagNettyNoNative = flagNettyNoNative
         s.flagJnaNoSys = flagJnaNoSys
+        s.save()
+    }
+
+    func applyAndSaveIOS26JIT() {
+        let s = JessiSettings.shared()
+        s.iOS26JITSupport = iOS26JIT
         s.save()
     }
 
@@ -169,11 +176,19 @@ struct SettingsView: View {
                 }
             }
 
+            Section(header: Text("Just-in-Time"), footer: Text("This Feature is currently in Beta and might not be fully functional.")) {
+                Toggle("iOS 26 JIT Support", isOn: $model.iOS26JIT)
+                    .onChange(of: model.iOS26JIT) { _ in
+                        model.applyAndSaveIOS26JIT()
+                    }
+            }
+
             Section(header: Text("System")) {
                 HStack {
                     Text("JIT Enabled")
                     Spacer()
                     Text(model.isJITEnabled ? "Yes" : "No")
+                        .foregroundColor(model.isJITEnabled ? Color.green : Color.red)
                 }
                 HStack {
                     Text("Total RAM")
@@ -197,6 +212,7 @@ struct SettingsView: View {
             model.javaVersion = s.javaVersion
             model.heapMB = s.maxHeapMB
             model.heapText = String(s.maxHeapMB)
+            model.iOS26JIT = s.iOS26JITSupport
         }
     }
 }
