@@ -30,6 +30,36 @@ typedef jint JLI_Launch_func(
     jint ergo
 );
 
+static BOOL jessi_is_ios26_or_later_core(void) {
+    NSOperatingSystemVersion v = [NSProcessInfo processInfo].operatingSystemVersion;
+    return v.majorVersion >= 26;
+}
+
+static NSArray<NSString *> *jessi_filter_extra_jvm_args(NSArray<NSString *> *args, BOOL ios26OrLater, BOOL isJava17Plus) {
+    if (args.count == 0) return args;
+
+    NSMutableArray<NSString *> *out = [NSMutableArray arrayWithCapacity:args.count];
+    for (NSString *arg in args) {
+        if (arg.length == 0) continue;
+
+        // only use ios 26 stuff on well, ios 26
+        if (!ios26OrLater) {
+            if ([arg rangeOfString:@"MirrorMappedCodeCache"].location != NSNotFound) continue;
+            if ([arg isEqualToString:@"-Xverify:none"]) continue;
+            if ([arg isEqualToString:@"-XX:-UseCompressedOops"]) continue;
+            if ([arg isEqualToString:@"-XX:-UseCompressedClassPointers"]) continue;
+        }
+
+        // java 8 doesnt support the mirror mapped code cache argument
+        if (!isJava17Plus && [arg rangeOfString:@"MirrorMappedCodeCache"].location != NSNotFound) {
+            continue;
+        }
+
+        [out addObject:arg];
+    }
+    return out;
+}
+
 static NSString *bundleJavaHomeForVersion(NSString *javaVersion) {
     NSString *bundleRoot = [[NSBundle mainBundle] bundlePath];
 
@@ -157,9 +187,11 @@ int jessi_server_main(int argc, char *argv[]) {
 
             NSString *javaVersionStr = [NSString stringWithUTF8String:javaVersionC];
             BOOL isJava17Plus = [javaVersionStr isEqualToString:@"17"] || [javaVersionStr isEqualToString:@"21"];
+            BOOL ios26OrLater = jessi_is_ios26_or_later_core();
 
             BOOL flagNettyNoNative = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jvm.flagNettyNoNative"];
             BOOL flagJnaNoSys = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jvm.flagJnaNoSys"];
+            BOOL ios26JITSupport = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jit.ios26"];
 
             const char *jargv[80];
             int idx = 0;
@@ -167,9 +199,25 @@ int jessi_server_main(int argc, char *argv[]) {
             jargv[idx++] = xmx.UTF8String;
             jargv[idx++] = xms.UTF8String;
 
-            if (isJava17Plus) {
+            fprintf(stderr, "[JESSI] Launching JVM (iOS%ld, Java %s)\n", (long)[NSProcessInfo processInfo].operatingSystemVersion.majorVersion, javaVersionC);
+
+            // These flags are only intended for iOS 26+.
+            if (ios26OrLater && isJava17Plus) {
                 jargv[idx++] = "-XX:-UseCompressedOops";
                 jargv[idx++] = "-XX:-UseCompressedClassPointers";
+            }
+            
+            if (ios26JITSupport && ios26OrLater && isJava17Plus) {
+                printf("[JESSI] iOS 26 JIT support enabled - adding -XX:+MirrorMappedCodeCache\n");
+                jargv[idx++] = "-XX:+MirrorMappedCodeCache";
+            } else if (ios26JITSupport && ios26OrLater && !isJava17Plus) {
+                fprintf(stderr, "[JESSI] iOS 26 JIT support requested, but Java 8 runtime lacks MirrorMappedCodeCache; ignoring.\n");
+            }
+
+            if (ios26OrLater && !isJava17Plus) {
+                fprintf(stderr, "[JESSI] iOS 26 detected with Java 8; forcing interpreter-only mode (-Xint).\n");
+                jargv[idx++] = "-Xint";
+                jargv[idx++] = "-Djava.compiler=NONE";
             }
             
             jargv[idx++] = "-XX:+UseSerialGC";
@@ -207,6 +255,10 @@ int jessi_server_main(int argc, char *argv[]) {
             if (savedArgs.length) {
                 NSArray<NSString *> *parts = [savedArgs componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                 for (NSString *p in parts) if (p.length) [extra addObject:p];
+            }
+            NSMutableArray<NSString *> *filteredExtra = [[jessi_filter_extra_jvm_args(extra, ios26OrLater, isJava17Plus) mutableCopy] mutableCopy];
+            if (filteredExtra) {
+                extra = filteredExtra;
             }
             if (extra.count) {
                 for (NSString *arg in extra) {
@@ -330,11 +382,13 @@ int jessi_tool_main(int argc, char *argv[]) {
             NSString *maxMeta = @"-XX:MaxMetaspaceSize=256M";
 
             NSString *javaVersionStr = [NSString stringWithUTF8String:javaVersionC];
+            BOOL ios26OrLater = jessi_is_ios26_or_later_core();
 
             BOOL flagNettyNoNative = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jvm.flagNettyNoNative"];
             BOOL flagJnaNoSys = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jvm.flagJnaNoSys"];
 
-            NSArray<NSString *> *extra = argsPathC ? readArgsFile([NSString stringWithUTF8String:argsPathC]) : @[];
+            NSArray<NSString *> *extraRaw = argsPathC ? readArgsFile([NSString stringWithUTF8String:argsPathC]) : @[];
+            NSArray<NSString *> *extra = jessi_filter_extra_jvm_args(extraRaw, ios26OrLater, [javaVersionStr isEqualToString:@"17"] || [javaVersionStr isEqualToString:@"21"]);
 
             const char *jargv[96];
             int idx = 0;

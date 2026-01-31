@@ -2,6 +2,7 @@
 
 #import <Foundation/Foundation.h>
 #import <unistd.h>
+#import <sys/utsname.h>
 #if __has_include(<sys/codesign.h>)
 #import <sys/codesign.h>
 #else
@@ -47,4 +48,11 @@ BOOL jessi_check_jit_enabled(void) {
     }
 
     return (flags & CS_DEBUGGED) != 0;
+}
+
+BOOL jessi_is_ios26_or_later(void) {
+    if (@available(iOS 26, *)) {
+        return YES;
+    }
+    return NO;
 }

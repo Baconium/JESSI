@@ -14,6 +14,8 @@ final class SettingsModel: ObservableObject {
     @Published var totalRAM: String = ""
     @Published var freeRAM: String = ""
     @Published var launchArgs: String = ""
+    @Published var iOS26JIT: Bool = false
+    @Published var isIOS26: Bool = false
 
     init() {
         let s = JessiSettings.shared()
@@ -28,6 +30,8 @@ final class SettingsModel: ObservableObject {
         totalRAM = formatRAM(ProcessInfo.processInfo.physicalMemory)
         freeRAM = formatRAM(getFreeMemory())
         launchArgs = s.launchArguments
+        iOS26JIT = s.iOS26JITSupport
+        isIOS26 = jessi_is_ios26_or_later()
     }
 
     func applyAndSaveJavaVersion(_ ver: String) {
@@ -59,6 +63,12 @@ final class SettingsModel: ObservableObject {
         let s = JessiSettings.shared()
         s.flagNettyNoNative = flagNettyNoNative
         s.flagJnaNoSys = flagJnaNoSys
+        s.save()
+    }
+    
+    func applyAndSaveIOS26JIT() {
+        let s = JessiSettings.shared()
+        s.iOS26JITSupport = iOS26JIT
         s.save()
     }
 
@@ -174,6 +184,13 @@ struct SettingsView: View {
                     Text("JIT Enabled")
                     Spacer()
                     Text(model.isJITEnabled ? "Yes" : "No")
+                        .foregroundColor(model.isJITEnabled ? .green : .red)
+                }
+                HStack {
+                    Text("iOS Version")
+                    Spacer()
+                    Text(model.isIOS26 ? "26+" : "< 26")
+                        .foregroundColor(.secondary)
                 }
                 HStack {
                     Text("Total RAM")
@@ -187,6 +204,15 @@ struct SettingsView: View {
                 }
 
             }
+            
+            if model.isIOS26 {
+                Section(header: Text("TXM Support"), footer: Text("Enable for a15/m2 on ios 26.")) {
+                    Toggle("TXMSupport", isOn: $model.iOS26JIT)
+                        .onChange(of: model.iOS26JIT) { _ in
+                            model.applyAndSaveIOS26JIT()
+                        }
+                }
+            }
 
         }
         .listStyle(InsetGroupedListStyle())
@@ -197,6 +223,7 @@ struct SettingsView: View {
             model.javaVersion = s.javaVersion
             model.heapMB = s.maxHeapMB
             model.heapText = String(s.maxHeapMB)
+            model.iOS26JIT = s.iOS26JITSupport
         }
     }
 }

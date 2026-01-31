@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 bool jessi_check_jit_enabled(void);
+bool jessi_is_ios26_or_later(void);
 
 #ifdef __cplusplus
 }
