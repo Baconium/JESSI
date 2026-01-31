@@ -21,60 +21,30 @@ static NSString *const kJessiIOS26JIT = @"jessi.jit.ios26";
 
 + (NSArray<NSString *> *)availableJavaVersions {
     NSMutableArray<NSString *> *available = [NSMutableArray array];
-    NSBundle *b = [NSBundle mainBundle];
-    NSString *bundleRoot = b.bundlePath;
-    NSString *resourceRoot = b.resourcePath;
     NSFileManager *fm = [NSFileManager defaultManager];
 
-    NSMutableArray<NSString *> *roots = [NSMutableArray array];
-    if (bundleRoot.length) [roots addObject:bundleRoot];
-    if (resourceRoot.length && ![resourceRoot isEqualToString:bundleRoot]) [roots addObject:resourceRoot];
-    if (bundleRoot.length) {
-        NSString *resourcesUnderBundle = [bundleRoot stringByAppendingPathComponent:@"Resources"];
-        if (![roots containsObject:resourcesUnderBundle]) [roots addObject:resourcesUnderBundle];
+    BOOL is26plus = NO;
+    if (@available(iOS 26.0, *)) {
+        is26plus = YES;
     }
+
+    NSURL *appSupport = [[fm URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask] firstObject];
+    NSURL *runtimes = [appSupport URLByAppendingPathComponent:@"Runtimes"];
+    NSString *runtimesPath = runtimes.path;
 
     for (NSString *ver in @[@"8", @"17", @"21"]) {
-        for (NSString *root in roots) {
-            NSString *path = [root stringByAppendingPathComponent:[NSString stringWithFormat:@"java%@", ver]];
-            if ([fm fileExistsAtPath:path]) {
-                [available addObject:ver];
-                break;
-            }
-        }
-    }
-
-    if (![available containsObject:@"8"]) {
-        NSString *genericPath = nil;
-        for (NSString *root in roots) {
-            NSString *candidate = [root stringByAppendingPathComponent:@"java"];
-            if ([fm fileExistsAtPath:candidate]) {
-                genericPath = candidate;
-                break;
-            }
+        if (is26plus && [ver isEqualToString:@"8"]) {
+            continue;
         }
 
-        if (genericPath.length) {
-            NSString *releasePath = [genericPath stringByAppendingPathComponent:@"release"];
-            NSString *releaseContent = [NSString stringWithContentsOfFile:releasePath encoding:NSUTF8StringEncoding error:nil];
-
-            if ([releaseContent containsString:@"1.8.0"]) {
-                [available insertObject:@"8" atIndex:0];
-            } else if ([releaseContent containsString:@"\"17."]) {
-                NSMutableArray *newAvailable = [NSMutableArray array];
-                [newAvailable addObject:@"8"];
-                [newAvailable addObjectsFromArray:available];
-                available = newAvailable;
-            }
+        NSString *path = [runtimesPath stringByAppendingPathComponent:[NSString stringWithFormat:@"jre%@", ver]];
+        if ([fm fileExistsAtPath:path]) {
+            [available addObject:ver];
         }
-    }
-
-    if (available.count == 0) {
-        [available addObject:@"8"];
     }
 
     return [available sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
-        return [a integerValue] - [b integerValue] > 0 ? NSOrderedDescending : NSOrderedAscending;
+        return [@(a.integerValue) compare:@(b.integerValue)];
     }];
 }
 
