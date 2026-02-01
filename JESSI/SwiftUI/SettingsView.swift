@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import UIKit
 import Darwin
+import ZIPFoundation
 
 final class SettingsModel: ObservableObject {
     @Published var availableJavaVersions: [String] = []
@@ -112,10 +113,128 @@ final class SettingsModel: ObservableObject {
         }
         return 0
     }
+    
+    func refreshAvailableJavaVersions() {
+        availableJavaVersions = JessiSettings.availableJavaVersions()
+    }
+    
+    private let jres: [String: URL] = [
+        "8": URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre8-ios-aarch64.zip")!,
+        "17": URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre17-ios-aarch64.zip")!,
+        "21": URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre21-ios-aarch64.zip")!
+    ]
+
+    private var runtimesdir: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Runtimes")
+    }
+
+    func fetch(version: String) async {
+        guard let url = jres[version] else {
+            runtimelogger.log("Unknown Java version: \(version)")
+            return
+        }
+
+        runtimelogger.log("Downloading Java \(version)…")
+
+        do {
+            try FileManager.default.createDirectory(at: runtimesdir, withIntermediateDirectories: true)
+
+            let zipPath = runtimesdir.appendingPathComponent("jre\(version).zip")
+            let (data, _) = try await URLSession.shared.data(from: url)
+            try data.write(to: zipPath)
+
+            let extractDir = runtimesdir.appendingPathComponent("jre\(version)")
+            try FileManager.default.createDirectory(at: extractDir, withIntermediateDirectories: true)
+
+            runtimelogger.log("Extracting Java \(version)…")
+            try extract(at: zipPath, to: extractDir)
+            
+            runtimelogger.log("Java \(version) installed successfully at \(extractDir.path)")
+            runtimelogger.divider()
+            
+            refreshAvailableJavaVersions()
+        } catch {
+            runtimelogger.log("Error installing Java \(version): \(error.localizedDescription)")
+            runtimelogger.divider()
+        }
+    }
+
+    func fetchall() async {
+        var versions = ["17", "21"]
+        
+        if #unavailable(iOS 26.0) {
+            versions.append(contentsOf: ["8"])
+        }
+        
+        for version in versions {
+            await fetch(version: version)
+        }
+    }
+
+    private func extract(at zipPath: URL, to destDir: URL) throws {
+        guard let archive = Archive(url: zipPath, accessMode: .read) else {
+            throw NSError(domain: "ZIP", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to open ZIP archive"])
+        }
+
+        for entry in archive {
+            let entryPath = destDir.appendingPathComponent(entry.path)
+            if entry.type == .directory {
+                try FileManager.default.createDirectory(at: entryPath, withIntermediateDirectories: true)
+            } else {
+                try archive.extract(entry, to: entryPath)
+            }
+        }
+    }
+    
+    func getRuntimeSize(version: String) -> String {
+        let runtimesdir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Runtimes/jre\(version)")
+        
+        guard FileManager.default.fileExists(atPath: runtimesdir.path) else {
+            return "--"
+        }
+        
+        do {
+            let enumerator = FileManager.default.enumerator(at: runtimesdir, includingPropertiesForKeys: [.fileSizeKey], options: [], errorHandler: nil)
+            var total: UInt64 = 0
+            for case let fileURL as URL in enumerator! {
+                let attrs = try fileURL.resourceValues(forKeys: [.fileSizeKey])
+                total += UInt64(attrs.fileSize ?? 0)
+            }
+            
+            let mb = Double(total) / (1024 * 1024)
+            return String(format: "%.1f MB", mb)
+        } catch {
+            return "--"
+        }
+    }
+    
+    func deleteRuntime(at offsets: IndexSet) {
+        for index in offsets {
+            let version = availableJavaVersions[index]
+            let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Runtimes/jre\(version)")
+            
+            do {
+                if FileManager.default.fileExists(atPath: dir.path) {
+                    try FileManager.default.removeItem(at: dir)
+                    runtimelogger.log("Deleted runtime for Java \(version)")
+                    runtimelogger.divider()
+                }
+            } catch {
+                runtimelogger.log("Failed to delete runtime \(version): \(error)")
+                runtimelogger.divider()
+            }
+        }
+        
+        availableJavaVersions.remove(atOffsets: offsets)
+    }
 }
 
 struct SettingsView: View {
     @StateObject private var model = SettingsModel()
+    @StateObject private var logger = runtimelogger
+    @State private var runtime: String = "21"
 
     var body: some View {
         List {
@@ -123,13 +242,20 @@ struct SettingsView: View {
                 HStack(alignment: .center, spacing: 12) {
                     Text("Version")
                     Spacer()
-                    Picker("Java", selection: $model.javaVersion) {
-                        ForEach(model.availableJavaVersions, id: \.self) { ver in
-                            Text("Java \(ver)").tag(ver)
+                    if model.availableJavaVersions.isEmpty {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(Color.yellow)
+                        Text("No runtimes found")
+                            .foregroundColor(Color.secondary)
+                    } else {
+                        Picker("Java", selection: $model.javaVersion) {
+                            ForEach(model.availableJavaVersions, id: \.self) { ver in
+                                Text("Java \(ver)").tag(ver)
+                            }
                         }
+                        .pickerStyle(SegmentedPickerStyle())
+                        .frame(maxWidth: 260)
                     }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .frame(maxWidth: 260)
                 }
                 .onChange(of: model.javaVersion) { newValue in
                     model.applyAndSaveJavaVersion(newValue)
@@ -138,12 +264,82 @@ struct SettingsView: View {
                 HStack(alignment: .center, spacing: 12) {
                     Text("Launch Arguments")
                     Spacer()
-                    DoneToolbarTextField(text: $model.launchArgs, placeholder: "Advanced users only", keyboardType: .default, textAlignment: .right, font: UIFont.systemFont(ofSize: 14), onEndEditing: { model.applyAndSaveLaunchArgs() })
+                    DoneToolbarTextField(text: $model.launchArgs, placeholder: "Advanced users only", keyboardType: .default, textAlignment: .right, onEndEditing: { model.applyAndSaveLaunchArgs() })
                         .frame(maxWidth: 420)
                         .onChange(of: model.launchArgs) { _ in model.applyAndSaveLaunchArgs() }
                 }
+            } header: {
+                Text("Java")
+            } footer: {
+                VStack(alignment: .leading) {
+                    if model.availableJavaVersions.isEmpty {
+                        Text("JESSI requires a Java Runtime to work. You can get one using the 'Fetch Runtimes' button.")
+                    }
+                    
+                    if #available(iOS 26.0, *) {
+                        Text("Java 8 is not supported on iOS 26 or later.")
+                    }
+                }
             }
-
+            
+            Section {
+                if model.availableJavaVersions.isEmpty {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(Color.yellow)
+                        Text("No runtimes found")
+                            .foregroundColor(Color.secondary)
+                            .bold()
+                    }
+                }
+                
+                ForEach(model.availableJavaVersions, id: \.self) { ver in
+                    HStack {
+                        Text("Java \(ver)")
+                        Spacer()
+                        Text(model.getRuntimeSize(version: ver))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .onDelete(perform: model.deleteRuntime)
+                
+                Picker("Runtime", selection: $runtime) {
+                    if #unavailable(iOS 26.0) {
+                        Text("Java 8").tag("8")
+                    }
+                    Text("Java 17").tag("17")
+                    Text("Java 21").tag("21")
+                    Text("All").tag("all")
+                }
+                
+                Button("Fetch Runtime") {
+                    Task {
+                        if runtime == "all" {
+                            await model.fetchall()
+                        } else {
+                            await model.fetch(version: runtime)
+                        }
+                    }
+                }
+            } header: {
+                Text("Runtimes")
+            } footer: {
+                if #available(iOS 26.0, *) {
+                    Text("Java 8 is not supported on iOS 26 or later.")
+                }
+            }
+        
+            if !logger.logs.isEmpty {
+                ForEach(logger.logs, id: \.self) { log in
+                    Text(log)
+                        .font(.system(.body, design: .monospaced))
+                        // .font(.system(size: 15))
+                        .onTapGesture {
+                            UIPasteboard.general.string = log
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        }
+                }
+            }
 
             Section(header: Text("Memory"), footer: Text(model.heapDescription)) {
                 HStack(spacing: 12) {
@@ -177,6 +373,15 @@ struct SettingsView: View {
                         step: 64
                     )
                 }
+            }            
+            
+            if model.isIOS26 {
+                Section(header: Text("Trusted Execution Monitor"), footer: Text("Enable for A15/M2 on iOS 26.")) {
+                    Toggle("TXM Support", isOn: $model.iOS26JIT)
+                        .onChange(of: model.iOS26JIT) { _ in
+                            model.applyAndSaveIOS26JIT()
+                        }
+                }
             }
 
             Section(header: Text("System")) {
@@ -204,16 +409,6 @@ struct SettingsView: View {
                 }
 
             }
-            
-            if model.isIOS26 {
-                Section(header: Text("TXM Support"), footer: Text("Enable for a15/m2 on ios 26.")) {
-                    Toggle("TXMSupport", isOn: $model.iOS26JIT)
-                        .onChange(of: model.iOS26JIT) { _ in
-                            model.applyAndSaveIOS26JIT()
-                        }
-                }
-            }
-
         }
         .listStyle(InsetGroupedListStyle())
         .navigationTitle("Settings")
