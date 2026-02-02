@@ -48,7 +48,6 @@
       "scale" : "3x",
       "size" : "60x60"
     },
-
     {
       "filename" : "AppIcon-20.png",
       "idiom" : "ipad",
@@ -98,14 +97,13 @@
       "size" : "76x76"
     },
     {
-      "filename" : "AppIcon-167.png",
+      "filename" : "better jessi 1.png",
       "idiom" : "ipad",
       "scale" : "2x",
       "size" : "83.5x83.5"
     },
-
     {
-      "filename" : "AppIcon-1024.png",
+      "filename" : "better jessi.png",
       "idiom" : "ios-marketing",
       "scale" : "1x",
       "size" : "1024x1024"
