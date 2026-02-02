@@ -11,6 +11,8 @@ struct FileBrowserView: View {
     @State private var showingFileImporter: Bool = false
     @State private var importError: String? = nil
     @State private var showImportError: Bool = false
+    
+    @State private var modsSheetItem: SheetItem? = nil
 
     struct FileItem: Identifiable {
         let id = UUID()
@@ -21,27 +23,47 @@ struct FileBrowserView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                ForEach(sortedFiles) { file in
-                    NavigationLink(destination: fileDestination(for: file)) {
-                        HStack(spacing: 12) {
-                            Image(systemName: file.isDirectory ? "folder.fill" : "doc.text.fill")
-                                .foregroundColor(file.isDirectory ? .blue : .gray)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(file.name)
-                                    .font(.system(size: 16, weight: .medium))
-                                Text(formatDate(file.modDate))
-                                    .font(.system(size: 12, weight: .regular))
-                                    .foregroundColor(.secondary)
+        ZStack(alignment: .bottom) {
+            List {
+                Section {
+                    ForEach(sortedFiles) { file in
+                        NavigationLink(destination: fileDestination(for: file)) {
+                            HStack(spacing: 12) {
+                                Image(systemName: file.isDirectory ? "folder.fill" : "doc.text.fill")
+                                    .foregroundColor(file.isDirectory ? .blue : .gray)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(file.name)
+                                        .font(.system(size: 16, weight: .medium))
+                                    Text(formatDate(file.modDate))
+                                        .font(.system(size: 12, weight: .regular))
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
                             }
-                            Spacer()
                         }
                     }
+                } footer: {
+                    Text("Deleting or modifing files may result in your server not working or not being able to install mods. Only do this if you know what youre doing.")
                 }
             }
+            .listStyle(InsetGroupedListStyle())
+            
+            Spacer()
+            
+            Button {
+                modsSheetItem = SheetItem(input: title)
+            } label: {
+                Text("Install Mods")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+            }
+            .foregroundColor(.white)
+            .background(Color.green)
+            .cornerRadius(14)
+            .padding(.horizontal, 16)
+            .padding(.bottom, createButtonBottomPadding)
         }
-        .listStyle(InsetGroupedListStyle())
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarItems(trailing: Button(action: { showingFileImporter = true }) {
@@ -60,6 +82,11 @@ struct FileBrowserView: View {
                 importPickedFiles(urls)
             }
         }
+        .sheet(item: $modsSheetItem) { item in
+            NavigationView {
+                ModsView(servername: item.input)
+            }
+        }
         .alert(isPresented: $showImportError) {
             Alert(
                 title: Text("Import Failed"),
@@ -68,6 +95,10 @@ struct FileBrowserView: View {
             )
         }
         .onAppear { reload() }
+    }
+    
+    private var createButtonBottomPadding: CGFloat {
+        24
     }
 
     private var sortedFiles: [FileItem] {
