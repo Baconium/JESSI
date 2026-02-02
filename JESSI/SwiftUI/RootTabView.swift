@@ -8,6 +8,7 @@ struct RootTabView: View {
 			NavigationView {
 				ServerManagerView()
 			}
+			.navigationViewStyle(StackNavigationViewStyle())
 			.tag(0)
 			.tabItem {
 				Label("Servers", systemImage: "folder")
@@ -16,6 +17,7 @@ struct RootTabView: View {
 			NavigationView {
 				LaunchView()
 			}
+			.navigationViewStyle(StackNavigationViewStyle())
 			.tag(1)
 			.tabItem {
 				Label("Launch", systemImage: "play")
@@ -24,6 +26,7 @@ struct RootTabView: View {
 			NavigationView {
 				SettingsView()
 			}
+			.navigationViewStyle(StackNavigationViewStyle())
 			.tag(2)
 			.tabItem {
 				Label("Settings", systemImage: "gear")

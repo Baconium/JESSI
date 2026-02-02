@@ -6,14 +6,33 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B1C0F700A1B2C3D4E5F60032 /* CreateServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */; };
+		B1C0F700A1B2C3D4E5F60033 /* DoneToolbarTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */; };
+		B1C0F700A1B2C3D4E5F60034 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */; };
+		B1C0F700A1B2C3D4E5F60035 /* JessiJITCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */; };
+		B1C0F700A1B2C3D4E5F60036 /* LaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */; };
+		B1C0F700A1B2C3D4E5F60037 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000B /* RootTabView.swift */; };
+		B1C0F700A1B2C3D4E5F60038 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000C /* SettingsView.swift */; };
+		B1C0F700A1B2C3D4E5F60039 /* SwiftUIEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000D /* SwiftUIEntry.swift */; };
+		B1C0F700A1B2C3D4E5F6003A /* JessiAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60011 /* JessiAppDelegate.m */; };
+		B1C0F700A1B2C3D4E5F6003B /* JessiJavaRunner.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60012 /* JessiJavaRunner.m */; };
+		B1C0F700A1B2C3D4E5F6003C /* JessiPaths.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60014 /* JessiPaths.m */; };
+		B1C0F700A1B2C3D4E5F6003D /* JessiServerService.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60016 /* JessiServerService.m */; };
+		B1C0F700A1B2C3D4E5F6003E /* JessiServerSoftware.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60018 /* JessiServerSoftware.m */; };
+		B1C0F700A1B2C3D4E5F6003F /* JessiSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */; };
+		B1C0F700A1B2C3D4E5F60040 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001B /* main.m */; };
+		B1C0F700A1B2C3D4E5F60041 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60001 /* Assets.xcassets */; };
+		B1C0F700A1B2C3D4E5F60042 /* mach_excServer.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */; };
+		B1C0F700A1B2C3D4E5F60043 /* mach_excUser.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */; };
+		B1C0F700A1B2C3D4E5F60110 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = B1C0F700A1B2C3D4E5F60100 /* ZIPFoundation */; };
+		B1C0F700A1B2C3D4E5F60111 /* SWCompression in Frameworks */ = {isa = PBXBuildFile; productRef = B1C0F700A1B2C3D4E5F60101 /* SWCompression */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		A6C5248F2F2873DF0030EE41 /* JESSI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JESSI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1C0F700A1B2C3D4E5F60001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60004 /* Bridging.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Bridging.h; sourceTree = "<group>"; };
-		B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mach_excServer.c; sourceTree = "<group>"; };
-		B1C0F700A1B2C3D4E5F6001D /* mach_excServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mach_excServer.h; sourceTree = "<group>"; };
-		B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mach_excUser.c; sourceTree = "<group>"; };
-		B1C0F700A1B2C3D4E5F6001F /* mach_excUser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mach_excUser.h; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateServerView.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoneToolbarTextField.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
@@ -35,30 +54,11 @@
 		B1C0F700A1B2C3D4E5F60019 /* JessiSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiSettings.h; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiSettings.m; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F6001B /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mach_excServer.c; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001D /* mach_excServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mach_excServer.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mach_excUser.c; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001F /* mach_excUser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mach_excUser.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXBuildFile section */
-		B1C0F700A1B2C3D4E5F60110 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = B1C0F700A1B2C3D4E5F60100 /* ZIPFoundation */; };
-		B1C0F700A1B2C3D4E5F60111 /* SWCompression in Frameworks */ = {isa = PBXBuildFile; productRef = B1C0F700A1B2C3D4E5F60101 /* SWCompression */; };
-		B1C0F700A1B2C3D4E5F60042 /* mach_excServer.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */; };
-		B1C0F700A1B2C3D4E5F60043 /* mach_excUser.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */; };
-		B1C0F700A1B2C3D4E5F60032 /* CreateServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */; };
-		B1C0F700A1B2C3D4E5F60033 /* DoneToolbarTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */; };
-		B1C0F700A1B2C3D4E5F60034 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */; };
-		B1C0F700A1B2C3D4E5F60035 /* JessiJITCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */; };
-		B1C0F700A1B2C3D4E5F60036 /* LaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */; };
-		B1C0F700A1B2C3D4E5F60037 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000B /* RootTabView.swift */; };
-		B1C0F700A1B2C3D4E5F60038 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000C /* SettingsView.swift */; };
-		B1C0F700A1B2C3D4E5F60039 /* SwiftUIEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000D /* SwiftUIEntry.swift */; };
-		B1C0F700A1B2C3D4E5F6003A /* JessiAppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60011 /* JessiAppDelegate.m */; };
-		B1C0F700A1B2C3D4E5F6003B /* JessiJavaRunner.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60012 /* JessiJavaRunner.m */; };
-		B1C0F700A1B2C3D4E5F6003C /* JessiPaths.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60014 /* JessiPaths.m */; };
-		B1C0F700A1B2C3D4E5F6003D /* JessiServerService.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60016 /* JessiServerService.m */; };
-		B1C0F700A1B2C3D4E5F6003E /* JessiServerSoftware.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60018 /* JessiServerSoftware.m */; };
-		B1C0F700A1B2C3D4E5F6003F /* JessiSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */; };
-		B1C0F700A1B2C3D4E5F60040 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001B /* main.m */; };
-		B1C0F700A1B2C3D4E5F60041 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60001 /* Assets.xcassets */; };
-/* End PBXBuildFile section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A6C5248C2F2873DF0030EE41 /* Frameworks */ = {
@@ -79,6 +79,14 @@
 				A6C524912F2873DF0030EE41 /* JESSI */,
 				A6C524902F2873DF0030EE41 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		A6C524902F2873DF0030EE41 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A6C5248F2F2873DF0030EE41 /* JESSI.app */,
+			);
+			name = Products;
 			sourceTree = "<group>";
 		};
 		A6C524912F2873DF0030EE41 /* JESSI */ = {
@@ -119,17 +127,6 @@
 			path = JessiCore;
 			sourceTree = "<group>";
 		};
-		B1C0F700A1B2C3D4E5F60063 /* MachExc */ = {
-			isa = PBXGroup;
-			children = (
-				B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */,
-				B1C0F700A1B2C3D4E5F6001D /* mach_excServer.h */,
-				B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */,
-				B1C0F700A1B2C3D4E5F6001F /* mach_excUser.h */,
-			);
-			path = MachExc;
-			sourceTree = "<group>";
-		};
 		B1C0F700A1B2C3D4E5F60062 /* SwiftUI */ = {
 			isa = PBXGroup;
 			children = (
@@ -147,12 +144,15 @@
 			path = SwiftUI;
 			sourceTree = "<group>";
 		};
-		A6C524902F2873DF0030EE41 /* Products */ = {
+		B1C0F700A1B2C3D4E5F60063 /* MachExc */ = {
 			isa = PBXGroup;
 			children = (
-				A6C5248F2F2873DF0030EE41 /* JESSI.app */,
+				B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */,
+				B1C0F700A1B2C3D4E5F6001D /* mach_excServer.h */,
+				B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */,
+				B1C0F700A1B2C3D4E5F6001F /* mach_excUser.h */,
 			);
-			name = Products;
+			path = MachExc;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -217,38 +217,6 @@
 		};
 /* End PBXProject section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		B1C0F700A1B2C3D4E5F60120 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 0.9.0;
-			};
-		};
-		B1C0F700A1B2C3D4E5F60121 /* XCRemoteSwiftPackageReference "SWCompression" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/tsolomko/SWCompression";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.0.0;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		B1C0F700A1B2C3D4E5F60100 /* ZIPFoundation */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B1C0F700A1B2C3D4E5F60120 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
-			productName = ZIPFoundation;
-		};
-		B1C0F700A1B2C3D4E5F60101 /* SWCompression */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B1C0F700A1B2C3D4E5F60121 /* XCRemoteSwiftPackageReference "SWCompression" */;
-			productName = SWCompression;
-		};
-/* End XCSwiftPackageProductDependency section */
-
 /* Begin PBXResourcesBuildPhase section */
 		A6C5248D2F2873DF0030EE41 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
@@ -259,7 +227,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
-
 
 /* Begin PBXSourcesBuildPhase section */
 		A6C5248B2F2873DF0030EE41 /* Sources */ = {
@@ -512,6 +479,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B1C0F700A1B2C3D4E5F60120 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+		B1C0F700A1B2C3D4E5F60121 /* XCRemoteSwiftPackageReference "SWCompression" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tsolomko/SWCompression";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B1C0F700A1B2C3D4E5F60100 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1C0F700A1B2C3D4E5F60120 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+		B1C0F700A1B2C3D4E5F60101 /* SWCompression */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1C0F700A1B2C3D4E5F60121 /* XCRemoteSwiftPackageReference "SWCompression" */;
+			productName = SWCompression;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A6C524872F2873DF0030EE41 /* Project object */;
 }
