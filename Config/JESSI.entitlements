@@ -10,6 +10,18 @@
 	-->
 	<key>get-task-allow</key>
 	<true/>
+	<!--
+	  Needed for TrollStore-based JIT workflows. JessiJITCheck.m checks this entitlement.
+	  Note: Some signers/installers may strip or refuse this.
+	-->
+	<key>dynamic-codesigning</key>
+	<true/>
+	<!--
+	  Allows loading third-party signed dylibs (e.g. downloaded JVM runtime) when supported
+	  by the installer. Without this, dlopen() can fail due to library validation.
+	-->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
 	<key>com.apple.developer.networking.multicast</key>
 	<true/>
 </dict>

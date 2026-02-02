@@ -3,6 +3,49 @@ import Combine
 import UIKit
 import Darwin
 import ZIPFoundation
+import SWCompression
+
+private struct InstallJVMRow: View {
+    let version: String
+    let isInstalled: Bool
+    let isUnsupported: Bool
+    let isSelected: Bool
+    let isInstalling: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 10) {
+                Image(systemName: isInstalled ? "checkmark.circle.fill" : (isSelected ? "checkmark.circle.fill" : "circle"))
+                    .foregroundColor(isInstalled ? .green : (isSelected ? Color.accentColor : .secondary))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Java \(version)")
+                        .foregroundColor(.primary)
+
+                    if isUnsupported {
+                        Text("Not supported on iOS 26+")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else if isInstalling {
+                        Text("Installing…")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else if isInstalled {
+                        Text("Installed")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(isUnsupported || isInstalled)
+    }
+}
 
 final class SettingsModel: ObservableObject {
     @Published var availableJavaVersions: [String] = []
@@ -17,13 +60,34 @@ final class SettingsModel: ObservableObject {
     @Published var launchArgs: String = ""
     @Published var iOS26JIT: Bool = false
     @Published var isIOS26: Bool = false
+    @Published var iOSVersionString: String = ""
+
+    @Published var installedJVMVersions: Set<String> = []
+
+    @Published var heapMaxMB: Int = 8192
+
+    @Published var installErrorMessage: String? = nil
+    @Published var showInstallError: Bool = false
+
+    let allJVMVersions: [String] = ["8", "17", "21"]
 
     init() {
         let s = JessiSettings.shared()
+
+        let os = ProcessInfo.processInfo.operatingSystemVersion
+        iOSVersionString = "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"
+
+        let totalMB = Int(ProcessInfo.processInfo.physicalMemory / (1024 * 1024))
+        heapMaxMB = max(128, totalMB)
+
         availableJavaVersions = JessiSettings.availableJavaVersions()
         javaVersion = s.javaVersion
-        heapMB = s.maxHeapMB
-        heapText = String(heapMB)
+
+        let d = UserDefaults.standard
+        let hasUserHeap = d.object(forKey: "jessi.maxHeapMB") != nil
+        let desiredDefault = max(128, (heapMaxMB / 2 / 64) * 64)
+        let configured = hasUserHeap ? s.maxHeapMB : desiredDefault
+        applyAndSaveHeap(configured)
 
         flagNettyNoNative = s.flagNettyNoNative
         flagJnaNoSys = s.flagJnaNoSys
@@ -33,6 +97,8 @@ final class SettingsModel: ObservableObject {
         launchArgs = s.launchArguments
         iOS26JIT = s.iOS26JITSupport
         isIOS26 = jessi_is_ios26_or_later()
+
+        refreshInstalledJVMVersions()
     }
 
     func applyAndSaveJavaVersion(_ ver: String) {
@@ -48,7 +114,7 @@ final class SettingsModel: ObservableObject {
     }
 
     func applyAndSaveHeap(_ mb: Int) {
-        let clamped = max(128, min(8192, mb))
+        let clamped = max(128, min(heapMaxMB, mb))
         let snapped = (clamped / 64) * 64
 
         heapMB = snapped
@@ -84,8 +150,8 @@ final class SettingsModel: ObservableObject {
 
     var heapDescription: String {
         if heapMB < 513 { return "Low — the server will be highly unstable with this little ram" }
-        if heapMB > 4095 { return "High — make sure your device has enough ram!" }
-        return "Recommended: 1024–2048 MB depending on your device. if you exceed the amount of ram your device has the app will crash!"
+        if heapMB > 4095 { return "High — JESSI may crash!" }
+        return "Recommended: approximately half of your device's total ram. if you exceed the amount of ram your device has available, JESSI will crash!"
     }
 
     private func isJITEnabledCheck() -> Bool {
@@ -117,128 +183,334 @@ final class SettingsModel: ObservableObject {
     func refreshAvailableJavaVersions() {
         availableJavaVersions = JessiSettings.availableJavaVersions()
     }
-    
-    private let jres: [String: URL] = [
-        "8": URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre8-ios-aarch64.zip")!,
-        "17": URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre17-ios-aarch64.zip")!,
-        "21": URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre21-ios-aarch64.zip")!
-    ]
 
-    private var runtimesdir: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Runtimes")
+    private var runtimesDir: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Runtimes", isDirectory: true)
     }
 
-    func fetch(version: String) async {
-        guard let url = jres[version] else {
-            runtimelogger.log("Unknown Java version: \(version)")
+    func runtimeDir(for version: String) -> URL {
+        runtimesDir.appendingPathComponent("jre\(version)", isDirectory: true)
+    }
+
+    func refreshInstalledJVMVersions() {
+        var installed: Set<String> = []
+        for ver in allJVMVersions {
+            let dir = runtimeDir(for: ver)
+            if FileManager.default.fileExists(atPath: dir.path) {
+                installed.insert(ver)
+            }
+        }
+        installedJVMVersions = installed
+    }
+
+    func deleteInstalledJVMVersions(at offsets: IndexSet) {
+        for index in offsets {
+            guard index >= 0 && index < allJVMVersions.count else { continue }
+            let ver = allJVMVersions[index]
+            guard installedJVMVersions.contains(ver) else { continue }
+
+            let dir = runtimeDir(for: ver)
+            try? FileManager.default.removeItem(at: dir)
+        }
+
+        refreshInstalledJVMVersions()
+        refreshAvailableJavaVersions()
+    }
+
+    func deleteInstalledJVMVersion(_ ver: String) {
+        guard installedJVMVersions.contains(ver) else { return }
+        let dir = runtimeDir(for: ver)
+        try? FileManager.default.removeItem(at: dir)
+        refreshInstalledJVMVersions()
+        refreshAvailableJavaVersions()
+    }
+
+    private func runtimeDownloadURL(for version: String) -> URL? {
+        switch version {
+        case "8":
+            return URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre8-ios-aarch64.zip")
+        case "17":
+            return URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre17-ios-aarch64.zip")
+        case "21":
+            return URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre21-ios-aarch64.zip")
+        default:
+            return nil
+        }
+    }
+
+    private func postInstallFixPermissions(runtimeRoot: URL) {
+        let fm = FileManager.default
+        let bin = runtimeRoot.appendingPathComponent("bin", isDirectory: true)
+
+        if fm.fileExists(atPath: bin.path) {
+            if let en = fm.enumerator(at: bin, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles]) {
+                for case let url as URL in en {
+                    _ = chmod(url.path, 0o755)
+                }
+            }
+        }
+
+        let helper1 = runtimeRoot.appendingPathComponent("jspawnhelper", isDirectory: false)
+        let helper2 = runtimeRoot.appendingPathComponent("lib/jspawnhelper", isDirectory: false)
+        if fm.fileExists(atPath: helper1.path) { _ = chmod(helper1.path, 0o755) }
+        if fm.fileExists(atPath: helper2.path) { _ = chmod(helper2.path, 0o755) }
+    }
+
+    private func extractTar(_ tarPath: URL, to destDir: URL) throws {
+        let fm = FileManager.default
+        try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
+
+        let handle = try FileHandle(forReadingFrom: tarPath)
+        defer { try? handle.close() }
+
+        var reader = TarReader(fileHandle: handle)
+        var finished = false
+
+        while !finished {
+            finished = try reader.process { (entry: TarEntry?) -> Bool in
+                guard let entry else { return true }
+
+                var name = entry.info.name
+                if name.hasPrefix("./") { name.removeFirst(2) }
+                if name.hasPrefix("/") { name.removeFirst() }
+                if name.isEmpty || name == "." { return false }
+
+                let outURL = destDir.appendingPathComponent(name)
+
+                switch entry.info.type {
+                case .directory:
+                    try fm.createDirectory(at: outURL, withIntermediateDirectories: true)
+
+                case .symbolicLink:
+                    let parent = outURL.deletingLastPathComponent()
+                    try fm.createDirectory(at: parent, withIntermediateDirectories: true)
+                    if fm.fileExists(atPath: outURL.path) {
+                        try? fm.removeItem(at: outURL)
+                    }
+                    if !entry.info.linkName.isEmpty {
+                        try fm.createSymbolicLink(atPath: outURL.path, withDestinationPath: entry.info.linkName)
+                    }
+
+                default:
+                    let parent = outURL.deletingLastPathComponent()
+                    try fm.createDirectory(at: parent, withIntermediateDirectories: true)
+                    if fm.fileExists(atPath: outURL.path) {
+                        try? fm.removeItem(at: outURL)
+                    }
+                    if let data = entry.data {
+                        try data.write(to: outURL, options: [.atomic])
+                    } else {
+                        try Data().write(to: outURL, options: [.atomic])
+                    }
+
+                    if let perms = entry.info.permissions {
+                        try? fm.setAttributes([.posixPermissions: perms.rawValue], ofItemAtPath: outURL.path)
+                    }
+                }
+
+                return false
+            }
+        }
+    }
+
+    private func installOneRuntime(version: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        if isIOS26 && version == "8" {
+            completion(.failure(NSError(domain: "JESSI", code: 26, userInfo: [NSLocalizedDescriptionKey: "Java 8 is not supported on iOS 26+"])))
             return
         }
 
-        runtimelogger.log("Downloading Java \(version)…")
+        guard let url = runtimeDownloadURL(for: version) else {
+            completion(.failure(NSError(domain: "JESSI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown Java version: \(version)"])))
+            return
+        }
+
+        let fm = FileManager.default
+        let tmpRoot = fm.temporaryDirectory.appendingPathComponent("jessi-jvm-install", isDirectory: true)
+        let workDir = tmpRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let zipPath = workDir.appendingPathComponent("jre\(version).zip")
+        let unzipDir = workDir.appendingPathComponent("unzipped", isDirectory: true)
+        let tarXZPath = workDir.appendingPathComponent("runtime.tar.xz")
+        let tarPath = workDir.appendingPathComponent("runtime.tar")
 
         do {
-            try FileManager.default.createDirectory(at: runtimesdir, withIntermediateDirectories: true)
-
-            let zipPath = runtimesdir.appendingPathComponent("jre\(version).zip")
-            let (data, _) = try await URLSession.shared.data(from: url)
-            try data.write(to: zipPath)
-
-            let extractDir = runtimesdir.appendingPathComponent("jre\(version)")
-            try FileManager.default.createDirectory(at: extractDir, withIntermediateDirectories: true)
-
-            runtimelogger.log("Extracting Java \(version)…")
-            try extract(at: zipPath, to: extractDir)
-            
-            runtimelogger.log("Java \(version) installed successfully at \(extractDir.path)")
-            runtimelogger.divider()
-            
-            refreshAvailableJavaVersions()
+            try fm.createDirectory(at: unzipDir, withIntermediateDirectories: true)
         } catch {
-            runtimelogger.log("Error installing Java \(version): \(error.localizedDescription)")
-            runtimelogger.divider()
-        }
-    }
-
-    func fetchall() async {
-        var versions = ["17", "21"]
-        
-        if #unavailable(iOS 26.0) {
-            versions.append(contentsOf: ["8"])
-        }
-        
-        for version in versions {
-            await fetch(version: version)
-        }
-    }
-
-    private func extract(at zipPath: URL, to destDir: URL) throws {
-        guard let archive = Archive(url: zipPath, accessMode: .read) else {
-            throw NSError(domain: "ZIP", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to open ZIP archive"])
+            completion(.failure(error))
+            return
         }
 
-        for entry in archive {
-            let entryPath = destDir.appendingPathComponent(entry.path)
-            if entry.type == .directory {
-                try FileManager.default.createDirectory(at: entryPath, withIntermediateDirectories: true)
-            } else {
-                try archive.extract(entry, to: entryPath)
+        let task = URLSession.shared.downloadTask(with: url) { tempURL, _, error in
+            if let error {
+                completion(.failure(error))
+                return
             }
-        }
-    }
-    
-    func getRuntimeSize(version: String) -> String {
-        let runtimesdir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Runtimes/jre\(version)")
-        
-        guard FileManager.default.fileExists(atPath: runtimesdir.path) else {
-            return "--"
-        }
-        
-        do {
-            let enumerator = FileManager.default.enumerator(at: runtimesdir, includingPropertiesForKeys: [.fileSizeKey], options: [], errorHandler: nil)
-            var total: UInt64 = 0
-            for case let fileURL as URL in enumerator! {
-                let attrs = try fileURL.resourceValues(forKeys: [.fileSizeKey])
-                total += UInt64(attrs.fileSize ?? 0)
+            guard let tempURL else {
+                completion(.failure(NSError(domain: "JESSI", code: 2, userInfo: [NSLocalizedDescriptionKey: "Download failed"])))
+                return
             }
-            
-            let mb = Double(total) / (1024 * 1024)
-            return String(format: "%.1f MB", mb)
-        } catch {
-            return "--"
-        }
-    }
-    
-    func deleteRuntime(at offsets: IndexSet) {
-        for index in offsets {
-            let version = availableJavaVersions[index]
-            let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                .appendingPathComponent("Runtimes/jre\(version)")
-            
+
             do {
-                if FileManager.default.fileExists(atPath: dir.path) {
-                    try FileManager.default.removeItem(at: dir)
-                    runtimelogger.log("Deleted runtime for Java \(version)")
-                    runtimelogger.divider()
+                try fm.createDirectory(at: workDir, withIntermediateDirectories: true)
+                defer { try? fm.removeItem(at: workDir) }
+                if fm.fileExists(atPath: zipPath.path) { try? fm.removeItem(at: zipPath) }
+                try fm.moveItem(at: tempURL, to: zipPath)
+
+                let archive = try Archive(url: zipPath, accessMode: .read)
+                for entry in archive {
+                    let outURL = unzipDir.appendingPathComponent(entry.path)
+                    let parent = outURL.deletingLastPathComponent()
+                    try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
+                    if fm.fileExists(atPath: outURL.path) {
+                        try? fm.removeItem(at: outURL)
+                    }
+                    _ = try archive.extract(entry, to: outURL)
                 }
+
+                let enumerator = fm.enumerator(at: unzipDir, includingPropertiesForKeys: nil)
+                var foundTarXZ: URL? = nil
+                while let u = enumerator?.nextObject() as? URL {
+                    if u.pathExtension == "xz" && u.lastPathComponent.hasSuffix(".tar.xz") {
+                        foundTarXZ = u
+                        break
+                    }
+                }
+                guard let foundTarXZ else {
+                    throw NSError(domain: "JESSI", code: 3, userInfo: [NSLocalizedDescriptionKey: "Runtime archive did not contain a .tar.xz"])
+                }
+                if fm.fileExists(atPath: tarXZPath.path) { try? fm.removeItem(at: tarXZPath) }
+                try fm.copyItem(at: foundTarXZ, to: tarXZPath)
+
+                do {
+                    try autoreleasepool {
+                        let xzData = try Data(contentsOf: tarXZPath, options: .mappedIfSafe)
+                        let tarData = try XZArchive.unarchive(archive: xzData)
+                        try tarData.write(to: tarPath, options: [.atomic])
+                    }
+                } catch {
+                    completion(.failure(error))
+                    return
+                }
+
+                let finalDir = self.runtimeDir(for: version)
+                let staging = self.runtimesDir.appendingPathComponent("jre\(version).staging-\(UUID().uuidString)", isDirectory: true)
+                if fm.fileExists(atPath: staging.path) { try? fm.removeItem(at: staging) }
+
+                try self.extractTar(tarPath, to: staging)
+                self.postInstallFixPermissions(runtimeRoot: staging)
+
+                if fm.fileExists(atPath: finalDir.path) {
+                    let backup = self.runtimesDir.appendingPathComponent("jre\(version).backup-\(UUID().uuidString)", isDirectory: true)
+                    try? fm.removeItem(at: backup)
+                    try fm.moveItem(at: finalDir, to: backup)
+                    try? fm.removeItem(at: backup)
+                }
+                try fm.moveItem(at: staging, to: finalDir)
+
+                completion(.success(()))
             } catch {
-                runtimelogger.log("Failed to delete runtime \(version): \(error)")
-                runtimelogger.divider()
+                completion(.failure(error))
             }
         }
-        
-        availableJavaVersions.remove(atOffsets: offsets)
+
+        task.resume()
+    }
+
+    func installRuntimes(versions: [String],
+                         updateInProgress: @escaping (Bool) -> Void,
+                         updateQueueCSV: @escaping (String) -> Void,
+                         clearSelection: @escaping () -> Void) {
+        let filtered = versions.filter { !(isIOS26 && $0 == "8") }
+        guard !filtered.isEmpty else {
+            DispatchQueue.main.async {
+                self.installErrorMessage = "Nothing to install."
+                self.showInstallError = true
+            }
+            updateInProgress(false)
+            updateQueueCSV("")
+            clearSelection()
+            return
+        }
+
+        var remaining = filtered
+        func next() {
+            if remaining.isEmpty {
+                DispatchQueue.main.async {
+                    self.refreshInstalledJVMVersions()
+                    self.refreshAvailableJavaVersions()
+                }
+                updateQueueCSV("")
+                updateInProgress(false)
+                clearSelection()
+                return
+            }
+
+            let current = remaining.removeFirst()
+            updateQueueCSV(([current] + remaining).joined(separator: ","))
+
+            self.installOneRuntime(version: current) { result in
+                switch result {
+                case .success:
+                    DispatchQueue.main.async {
+                        self.refreshInstalledJVMVersions()
+                        self.refreshAvailableJavaVersions()
+                    }
+                    next()
+                case .failure(let error):
+                    DispatchQueue.main.async {
+                        self.installErrorMessage = error.localizedDescription
+                        self.showInstallError = true
+                    }
+                    updateQueueCSV("")
+                    updateInProgress(false)
+                }
+            }
+        }
+
+        updateInProgress(true)
+        updateQueueCSV(filtered.joined(separator: ","))
+        next()
     }
 }
 
 struct SettingsView: View {
     @StateObject private var model = SettingsModel()
-    @StateObject private var logger = runtimelogger
-    @State private var runtime: String = "21"
+
+    @State private var showInstallDropdown: Bool = false
+    @AppStorage("jessi.jvm.install.inProgress") private var installInProgress: Bool = false
+    @AppStorage("jessi.jvm.install.selection") private var installSelectionCSV: String = ""
+    @AppStorage("jessi.jvm.install.queue") private var installQueueCSV: String = ""
+
+    @State private var didAutoResumeInstall: Bool = false
+
+    private var installSelection: Set<String> {
+        Set(installSelectionCSV.split(separator: ",").map(String.init))
+    }
+
+    private func setInstallSelection(_ selection: Set<String>) {
+        installSelectionCSV = selection.sorted(by: { Int($0) ?? 0 < Int($1) ?? 0 }).joined(separator: ",")
+    }
+
+    private var installQueue: Set<String> {
+        Set(installQueueCSV.split(separator: ",").map(String.init))
+    }
+
+    private func toggleSelection(_ version: String) {
+        if model.installedJVMVersions.contains(version) { return }
+        if model.isIOS26 && version == "8" { return }
+        if installInProgress { return }
+        var next = installSelection
+        if next.contains(version) {
+            next.remove(version)
+        } else {
+            next.insert(version)
+        }
+        setInstallSelection(next)
+    }
 
     var body: some View {
         List {
-            Section(header: Text("Java")) {
+            Section {
                 HStack(alignment: .center, spacing: 12) {
                     Text("Version")
                     Spacer()
@@ -261,6 +533,94 @@ struct SettingsView: View {
                     model.applyAndSaveJavaVersion(newValue)
                 }
 
+                Button(action: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                        showInstallDropdown.toggle()
+                    }
+                }) {
+                    HStack(alignment: .center, spacing: 12) {
+                        Text("Install JVM")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.secondary)
+                            .rotationEffect(.degrees(showInstallDropdown ? 90 : 0))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                if showInstallDropdown {
+                    let nonInstalled = model.allJVMVersions.filter { !model.installedJVMVersions.contains($0) }
+                    let installed = model.allJVMVersions.filter { model.installedJVMVersions.contains($0) }
+
+                    ForEach(nonInstalled, id: \.self) { ver in
+                        InstallJVMRow(
+                            version: ver,
+                            isInstalled: false,
+                            isUnsupported: model.isIOS26 && ver == "8",
+                            isSelected: installSelection.contains(ver),
+                            isInstalling: installInProgress && installQueue.contains(ver),
+                            onToggle: { toggleSelection(ver) }
+                        )
+                        .disabled(installInProgress || (model.isIOS26 && ver == "8"))
+                    }
+
+                    ForEach(installed, id: \.self) { ver in
+                        InstallJVMRow(
+                            version: ver,
+                            isInstalled: true,
+                            isUnsupported: false,
+                            isSelected: false,
+                            isInstalling: false,
+                            onToggle: { }
+                        )
+                        .disabled(true)
+                    }
+                    .onDelete { offsets in
+                        for i in offsets {
+                            guard i >= 0 && i < installed.count else { continue }
+                            let ver = installed[i]
+                            model.deleteInstalledJVMVersion(ver)
+                            setInstallSelection(installSelection.subtracting([ver]))
+                        }
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+
+                    Button(action: {
+                        let selected = installSelection.subtracting(model.installedJVMVersions)
+                        guard !selected.isEmpty else { return }
+
+                        let ordered = selected.sorted(by: { Int($0) ?? 0 < Int($1) ?? 0 })
+                        model.installRuntimes(
+                            versions: ordered,
+                            updateInProgress: { installInProgress = $0 },
+                            updateQueueCSV: { installQueueCSV = $0 },
+                            clearSelection: { setInstallSelection([]) }
+                        )
+                    }) {
+                        HStack(spacing: 10) {
+                            if installInProgress {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                                    .accentColor(.white)
+                            }
+                            Text(installInProgress ? "Installing…" : "Install")
+                                .font(.system(size: 17, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background((installSelection.isEmpty || installInProgress) ? Color.gray.opacity(0.35) : Color.green)
+                        .foregroundColor(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(installSelection.isEmpty || installInProgress)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    .listRowBackground(Color(UIColor.secondarySystemBackground))
+                    .transition(.opacity)
+                }
+
                 HStack(alignment: .center, spacing: 12) {
                     Text("Launch Arguments")
                     Spacer()
@@ -272,72 +632,11 @@ struct SettingsView: View {
                 Text("Java")
             } footer: {
                 VStack(alignment: .leading) {
-                    if model.availableJavaVersions.isEmpty {
-                        Text("JESSI requires a Java Runtime to work. You can get one using the 'Fetch Runtimes' button.")
-                    }
+                    Text("JESSI requires Java to function. Please install a JVM in the menu above. If you're unsure which version to select, select Java 21.")
                     
                     if #available(iOS 26.0, *) {
                         Text("Java 8 is not supported on iOS 26 or later.")
                     }
-                }
-            }
-            
-            Section {
-                if model.availableJavaVersions.isEmpty {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(Color.yellow)
-                        Text("No runtimes found")
-                            .foregroundColor(Color.secondary)
-                            .bold()
-                    }
-                }
-                
-                ForEach(model.availableJavaVersions, id: \.self) { ver in
-                    HStack {
-                        Text("Java \(ver)")
-                        Spacer()
-                        Text(model.getRuntimeSize(version: ver))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .onDelete(perform: model.deleteRuntime)
-                
-                Picker("Runtime", selection: $runtime) {
-                    if #unavailable(iOS 26.0) {
-                        Text("Java 8").tag("8")
-                    }
-                    Text("Java 17").tag("17")
-                    Text("Java 21").tag("21")
-                    Text("All").tag("all")
-                }
-                
-                Button("Fetch Runtime") {
-                    Task {
-                        if runtime == "all" {
-                            await model.fetchall()
-                        } else {
-                            await model.fetch(version: runtime)
-                        }
-                    }
-                }
-            } header: {
-                Text("Runtimes")
-            } footer: {
-                if #available(iOS 26.0, *) {
-                    Text("Java 8 is not supported on iOS 26 or later.")
-                }
-            }
-        
-            if !logger.logs.isEmpty {
-                ForEach(logger.logs, id: \.self) { log in
-                    Text(log)
-                        .font(.system(.body, design: .monospaced))
-                        // .font(.system(size: 15))
-                        .onTapGesture {
-                            UIPasteboard.general.string = log
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }
                 }
             }
 
@@ -347,7 +646,7 @@ struct SettingsView: View {
                     Spacer()
                     DoneToolbarTextField(
                         text: $model.heapText,
-                        placeholder: "128-8192",
+                        placeholder: "128-\(model.heapMaxMB)",
                         keyboardType: .numberPad,
                         textAlignment: .right,
                         font: UIFont.systemFont(ofSize: 16, weight: .semibold),
@@ -369,7 +668,7 @@ struct SettingsView: View {
                             get: { Double(model.heapMB) },
                             set: { model.applyAndSaveHeap(Int($0)) }
                         ),
-                        in: 128...8192,
+                        in: 128...Double(model.heapMaxMB),
                         step: 64
                     )
                 }
@@ -394,7 +693,7 @@ struct SettingsView: View {
                 HStack {
                     Text("iOS Version")
                     Spacer()
-                    Text(model.isIOS26 ? "26+" : "< 26")
+                    Text(model.iOSVersionString)
                         .foregroundColor(.secondary)
                 }
                 HStack {
@@ -413,12 +712,38 @@ struct SettingsView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+        .alert(isPresented: $model.showInstallError) {
+            Alert(
+                title: Text("JVM Install Failed"),
+                message: Text(model.installErrorMessage ?? "Unknown error"),
+                dismissButton: .default(Text("OK"))
+            )
+        }
         .onAppear {
             let s = JessiSettings.shared()
             model.javaVersion = s.javaVersion
             model.heapMB = s.maxHeapMB
             model.heapText = String(s.maxHeapMB)
             model.iOS26JIT = s.iOS26JITSupport
+
+            model.refreshAvailableJavaVersions()
+            model.refreshInstalledJVMVersions()
+
+            setInstallSelection(installSelection.subtracting(model.installedJVMVersions))
+
+            if !didAutoResumeInstall, installInProgress {
+                didAutoResumeInstall = true
+                let queue = installQueue
+                if !queue.isEmpty {
+                    let ordered = queue.sorted(by: { Int($0) ?? 0 < Int($1) ?? 0 })
+                    model.installRuntimes(
+                        versions: ordered,
+                        updateInProgress: { installInProgress = $0 },
+                        updateQueueCSV: { installQueueCSV = $0 },
+                        clearSelection: { setInstallSelection([]) }
+                    )
+                }
+            }
         }
     }
 }

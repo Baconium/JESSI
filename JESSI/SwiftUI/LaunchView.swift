@@ -10,6 +10,8 @@ final class LaunchModel: NSObject, ObservableObject {
     @Published var consoleText: String = ""
     @Published var commandText: String = ""
     @Published var showJITAlert: Bool = false
+    @Published var showRuntimeAlert: Bool = false
+    @Published var runtimeAlertMessage: String = ""
 
     private let service: JessiServerService
 
@@ -41,6 +43,20 @@ final class LaunchModel: NSObject, ObservableObject {
 
     func start() {
         guard !selectedServer.isEmpty else { return }
+
+        let available = JessiSettings.availableJavaVersions()
+        if available.isEmpty {
+            runtimeAlertMessage = "Please install a JVM in settings before launching your server! If you're unsure of which version to install, pick Java 21."
+            showRuntimeAlert = true
+            return
+        }
+
+        let selectedJava = JessiSettings.shared().javaVersion
+        if !available.contains(selectedJava) {
+            runtimeAlertMessage = "Your selected Java version (Java \(selectedJava)) is not installed. Please install it or pick a different version in settings."
+            showRuntimeAlert = true
+            return
+        }
 
         if !isJITEnabledCheck() {
             showJITAlert = true
@@ -250,6 +266,13 @@ struct LaunchView: View {
                     model.startServer()
                 },
                 secondaryButton: .cancel(Text("Cancel"))
+            )
+        }
+        .alert(isPresented: $model.showRuntimeAlert) {
+            Alert(
+                title: Text("No JVM Installed"),
+                message: Text(model.runtimeAlertMessage),
+                dismissButton: .default(Text("OK"))
             )
         }
         .onChange(of: model.isRunning) { isRunning in

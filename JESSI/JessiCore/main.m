@@ -24,7 +24,6 @@ static NSString *const kJessiBundleId = @"com.baconmania.jessi";
 static NSString *(*gOrigBundleIdentifier)(id, SEL) = NULL;
 
 static NSString *jessi_bundleIdentifier(NSBundle *self, SEL _cmd) {
-    // Call original implementation.
     if (!gOrigBundleIdentifier) {
         return kJessiBundleId;
     }
@@ -34,7 +33,6 @@ static NSString *jessi_bundleIdentifier(NSBundle *self, SEL _cmd) {
         return bid;
     }
 
-    // Only provide a fallback for the main bundle.
     if (self == [NSBundle mainBundle]) {
         return kJessiBundleId;
     }
