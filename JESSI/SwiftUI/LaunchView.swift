@@ -3,15 +3,33 @@ import Combine
 import UIKit
 import Darwin
 
+enum LaunchAlert: Identifiable {
+    case noServer
+    case stopConfirm
+    case jitNotEnabled
+    case runtime(String)
+
+    var id: String {
+        switch self {
+        case .noServer:
+            return "noServer"
+        case .stopConfirm:
+            return "stopConfirm"
+        case .jitNotEnabled:
+            return "jitNotEnabled"
+        case .runtime(let message):
+            return "runtime:\(message)"
+        }
+    }
+}
+
 final class LaunchModel: NSObject, ObservableObject {
     @Published var servers: [String] = []
     @Published var selectedServer: String = ""
     @Published var isRunning: Bool = false
     @Published var consoleText: String = ""
     @Published var commandText: String = ""
-    @Published var showJITAlert: Bool = false
-    @Published var showRuntimeAlert: Bool = false
-    @Published var runtimeAlertMessage: String = ""
+    @Published var activeAlert: LaunchAlert? = nil
 
     private let service: JessiServerService
 
@@ -46,20 +64,18 @@ final class LaunchModel: NSObject, ObservableObject {
 
         let available = JessiSettings.availableJavaVersions()
         if available.isEmpty {
-            runtimeAlertMessage = "Please install a JVM in settings before launching your server! If you're unsure of which version to install, pick Java 21."
-            showRuntimeAlert = true
+            activeAlert = .runtime("Please install a JVM in settings before launching your server! If you're unsure of which version to install, pick Java 21.")
             return
         }
 
         let selectedJava = JessiSettings.shared().javaVersion
         if !available.contains(selectedJava) {
-            runtimeAlertMessage = "Your selected Java version (Java \(selectedJava)) is not installed. Please install it or pick a different version in settings."
-            showRuntimeAlert = true
+            activeAlert = .runtime("Your selected Java version (Java \(selectedJava)) is not installed. Please install it or pick a different version in settings.")
             return
         }
 
         if !isJITEnabledCheck() {
-            showJITAlert = true
+            activeAlert = .jitNotEnabled
             return
         }
 
@@ -114,8 +130,6 @@ extension LaunchModel: JessiServerServiceDelegate {
 
 struct LaunchView: View {
     @StateObject private var model = LaunchModel()
-    @State private var showNoServerAlert = false
-    @State private var showStopWillCloseAlert = false
     @State private var exitAfterStopRequested = false
 
     var body: some View {
@@ -147,7 +161,7 @@ struct LaunchView: View {
                 HStack(spacing: 12) {
                     Button(action: {
                         if model.selectedServer.isEmpty {
-                            showNoServerAlert = true
+                            model.activeAlert = .noServer
                         } else {
                             model.start()
                         }
@@ -163,7 +177,7 @@ struct LaunchView: View {
                     .disabled(model.isRunning)
 
                     Button(action: {
-                        showStopWillCloseAlert = true
+                        model.activeAlert = .stopConfirm
                     }) {
                         Text("Stop")
                             .font(.system(size: 17, weight: .semibold))
@@ -240,40 +254,40 @@ struct LaunchView: View {
         .background(Color(UIColor.systemBackground).ignoresSafeArea())
         .navigationTitle("Launch")
         .navigationBarTitleDisplayMode(.inline)
-        .alert(isPresented: $showNoServerAlert) {
-            Alert(
-                title: Text("No server selected"),
-                message: Text("Create a server in the Servers tab first."),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .alert(isPresented: $showStopWillCloseAlert) {
-            Alert(
-                title: Text("Stop server?"),
-                message: Text("Stopping will close JESSI after the server fully stops."),
-                primaryButton: .destructive(Text("Stop & Close")) {
-                    exitAfterStopRequested = true
-                    model.stop()
-                },
-                secondaryButton: .cancel(Text("Cancel"))
-            )
-        }
-        .alert(isPresented: $model.showJITAlert) {
-            Alert(
-                title: Text("JIT Not Enabled"),
-                message: Text("Just-In-Time compilation is not enabled. The app may crash if you start the server."),
-                primaryButton: .destructive(Text("Start Anyway")) {
-                    model.startServer()
-                },
-                secondaryButton: .cancel(Text("Cancel"))
-            )
-        }
-        .alert(isPresented: $model.showRuntimeAlert) {
-            Alert(
-                title: Text("No JVM Installed"),
-                message: Text(model.runtimeAlertMessage),
-                dismissButton: .default(Text("OK"))
-            )
+        .alert(item: $model.activeAlert) { alert in
+            switch alert {
+            case .noServer:
+                return Alert(
+                    title: Text("No server selected"),
+                    message: Text("Create a server in the Servers tab first."),
+                    dismissButton: .default(Text("OK"))
+                )
+            case .stopConfirm:
+                return Alert(
+                    title: Text("Stop server?"),
+                    message: Text("Stopping will close JESSI after the server fully stops."),
+                    primaryButton: .destructive(Text("Stop & Close")) {
+                        exitAfterStopRequested = true
+                        model.stop()
+                    },
+                    secondaryButton: .cancel(Text("Cancel"))
+                )
+            case .jitNotEnabled:
+                return Alert(
+                    title: Text("JIT Not Enabled"),
+                    message: Text("Just-In-Time compilation is not enabled. The app may crash if you start the server."),
+                    primaryButton: .destructive(Text("Start Anyway")) {
+                        model.startServer()
+                    },
+                    secondaryButton: .cancel(Text("Cancel"))
+                )
+            case .runtime(let message):
+                return Alert(
+                    title: Text("No JVM Installed"),
+                    message: Text(message),
+                    dismissButton: .default(Text("OK"))
+                )
+            }
         }
         .onChange(of: model.isRunning) { isRunning in
             guard !isRunning, exitAfterStopRequested else { return }
