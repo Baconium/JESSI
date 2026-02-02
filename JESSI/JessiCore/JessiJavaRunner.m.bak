@@ -23,6 +23,7 @@
 #import "../SwiftUI/JessiJITCheck.h"
 #import "MachExc/mach_excServer.h"
 
+// csops() / entitlements blob querying. Some iPhoneOS SDKs omit <sys/codesign.h>, so declare what we need.
 extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
 #ifndef CS_OPS_ENTITLEMENTS_BLOB
 #define CS_OPS_ENTITLEMENTS_BLOB 7
@@ -62,8 +63,8 @@ static BOOL jessi_is_ios18_or_earlier_core(void) {
 }
 
 static BOOL jessi_has_extended_va_entitlement(void) {
-    
-    
+    // iPhoneOS SDK does not expose SecTask APIs; use csops() to read the entitlements blob.
+    // If this fails, default to NO (safer address-space assumptions).
 
     pid_t pid = getpid();
     size_t cap = 4096;
@@ -104,12 +105,17 @@ static BOOL jessi_has_extended_va_entitlement(void) {
     id val = entitlements[@"com.apple.developer.kernel.extended-virtual-addressing"];
     if ([val respondsToSelector:@selector(boolValue)] && [val boolValue]) return YES;
 
-    
+    // Try the private-key variant as well; different tooling uses different names.
     val = entitlements[@"com.apple.private.kernel.extended-virtual-addressing"];
     if ([val respondsToSelector:@selector(boolValue)] && [val boolValue]) return YES;
 
     return NO;
 }
+
+// --- Mach-O platform patch (Amethyst-style) ---
+// Some externally-provisioned dylibs can carry an unexpected LC_BUILD_VERSION platform value.
+// On iOS 26 this can surface as JVM failing to load libjimage/libjvm with generic "Unable to load" errors.
+// Patch the platform to dyld's active platform before attempting to load.
 
 extern int dyld_get_active_platform(void);
 
@@ -133,7 +139,7 @@ static BOOL jessi_patch_macho_platform_for_slice(struct mach_header_64 *header) 
             char *dylibName = (char *)((uint8_t *)dylib + dylib->dylib.name.offset);
             char *verPtr = dylibName ? strstr(dylibName, "/Versions/") : NULL;
             if (verPtr) {
-                
+                // Remove "/Versions/X" (11 bytes), matching Amethyst.
                 int lastComponentLen = (int)strlen(dylibName) - (int)(verPtr - dylibName) - 11;
                 if (lastComponentLen >= 0) {
                     memmove(verPtr, verPtr + 11, (size_t)lastComponentLen);
@@ -220,7 +226,7 @@ static void jessi_patch_jvm_dylibs_if_needed(NSString *javaHome) {
     if (!javaHome.length) return;
     if (!jessi_is_ios26_or_later_core()) return;
 
-    
+    // Only patch downloaded runtimes (writable). Bundled runtimes are already consistent.
     if ([javaHome rangeOfString:@"/Library/Application Support/"].location == NSNotFound) return;
 
     NSArray<NSString *> *roots = @[
@@ -246,6 +252,7 @@ static void jessi_patch_jvm_dylibs_if_needed(NSString *javaHome) {
     }
 }
 
+// Forward decl (defined below in the iOS 26 HW-breakpoint section)
 static void *jessi_run_with_hw_breakpoints(void *(*fn)(void *), void *ctx);
 
 typedef struct {
@@ -262,7 +269,7 @@ static void *jessi_dlopen_trampoline(void *ctx) {
 static void jessi_preflight_dlopen_path(const char *label, const char *path) {
     if (!path || !path[0]) return;
 
-    
+    // Clear any prior dlerror state.
     (void)dlerror();
 
     JessiDlopenCtx dlCtx = { .path = path, .flags = RTLD_GLOBAL | RTLD_NOW };
@@ -280,8 +287,8 @@ static void jessi_preflight_jvm_dylibs_if_needed(NSString *javaHome) {
     if (!jessi_is_ios26_or_later_core()) return;
     if ([javaHome rangeOfString:@"/Library/Application Support/"].location == NSNotFound) return;
 
-    
-    
+    // Dlopen a broad set up-front under the HW-breakpoint dyld bypass so later System.loadLibrary()
+    // calls don't re-trigger code-signature validation for downloaded dylibs.
     NSString *libjimage = [javaHome stringByAppendingPathComponent:@"lib/libjimage.dylib"];
     NSString *libjvm = [javaHome stringByAppendingPathComponent:@"lib/server/libjvm.dylib"];
     NSString *libjava = [javaHome stringByAppendingPathComponent:@"lib/libjava.dylib"];
@@ -310,6 +317,10 @@ static void jessi_preflight_jvm_dylibs_if_needed(NSString *javaHome) {
     fprintf(stderr, "[JESSI] Preflight dlopen complete (%d dylib(s))\n", preflightCount);
 }
 
+// --- iOS 26 non-TXM support (hardware breakpoint redirect) ---
+// On iOS 26, patching code in the shared cache may be blocked on non-TXM devices. A workaround
+// is to use hardware breakpoints to redirect execution from dyld internal callsites to our hooks.
+
 static mach_port_t jessi_exc_port = MACH_PORT_NULL;
 static volatile uint64_t jessi_hw_redirect_orig[6] = {0};
 static volatile uint64_t jessi_hw_redirect_target[6] = {0};
@@ -318,7 +329,7 @@ static void *jessi_exc_server_thread(void *unused) {
     (void)unused;
     if (jessi_exc_port == MACH_PORT_NULL) return NULL;
 
-    
+    // This blocks forever.
     mach_msg_server(mach_exc_server,
                     sizeof(union __RequestUnion__catch_mach_exc_subsystem),
                     jessi_exc_port,
@@ -355,19 +366,19 @@ static BOOL jessi_register_hw_redirect(uint64_t orig, uint64_t target) {
 static void *jessi_run_with_hw_breakpoints(void *(*fn)(void *), void *ctx) {
     if (!fn) return NULL;
 
-    
+    // No redirects registered.
     if (jessi_hw_redirect_orig[0] == 0 || jessi_exc_port == MACH_PORT_NULL) {
         return fn(ctx);
     }
 
     mach_port_t thread = mach_thread_self();
 
-    
+    // Save prior debug state.
     arm_debug_state64_t origDebugState = {0};
     mach_msg_type_number_t origDebugCount = ARM_DEBUG_STATE64_COUNT;
     thread_get_state(thread, ARM_DEBUG_STATE64, (thread_state_t)&origDebugState, &origDebugCount);
 
-    
+    // Save prior exception ports for breakpoints.
     exception_mask_t masks[32];
     mach_msg_type_number_t masksCnt = 32;
     exception_handler_t handlers[32];
@@ -375,26 +386,26 @@ static void *jessi_run_with_hw_breakpoints(void *(*fn)(void *), void *ctx) {
     thread_state_flavor_t flavors[32];
     thread_get_exception_ports(thread, EXC_MASK_BREAKPOINT, masks, &masksCnt, handlers, behaviors, flavors);
 
-    
+    // Route breakpoint exceptions to our server.
     thread_set_exception_ports(thread, EXC_MASK_BREAKPOINT, jessi_exc_port,
                                EXCEPTION_STATE | MACH_EXCEPTION_CODES,
                                ARM_THREAD_STATE64);
 
-    
+    // Install HW breakpoints.
     arm_debug_state64_t hookDebugState = {0};
     for (int i = 0; i < 6 && jessi_hw_redirect_orig[i]; i++) {
         hookDebugState.__bvr[i] = (uint64_t)jessi_hw_redirect_orig[i];
-        
+        // 0x1e5 is a common configuration used to enable address match breakpoints.
         hookDebugState.__bcr[i] = 0x1e5;
     }
     thread_set_state(thread, ARM_DEBUG_STATE64, (thread_state_t)&hookDebugState, ARM_DEBUG_STATE64_COUNT);
 
     void *result = fn(ctx);
 
-    
+    // Restore debug state.
     thread_set_state(thread, ARM_DEBUG_STATE64, (thread_state_t)&origDebugState, ARM_DEBUG_STATE64_COUNT);
 
-    
+    // Restore exception ports.
     for (mach_msg_type_number_t i = 0; i < masksCnt; i++) {
         thread_set_exception_ports(thread, masks[i], handlers[i], behaviors[i], flavors[i]);
         mach_port_deallocate(mach_task_self(), handlers[i]);
@@ -405,6 +416,7 @@ static void *jessi_run_with_hw_breakpoints(void *(*fn)(void *), void *ctx) {
     return result;
 }
 
+// Mach exception handlers (used by mach_exc_server)
 kern_return_t catch_mach_exception_raise(mach_port_t exception_port,
                                         mach_port_t thread,
                                         mach_port_t task,
@@ -466,15 +478,21 @@ kern_return_t catch_mach_exception_raise_state_identity(mach_port_t exception_po
                                            flavor, old_state, old_stateCnt, new_state, new_stateCnt);
 }
 
+// --- Dyld library validation bypass (iOS 18 and earlier) ---
+// Goal: allow loading downloaded Mach-O dylibs (e.g. JVM) on jailed devices when JIT is enabled.
+// This is intentionally scoped to older iOS versions and only enabled when JIT is available.
+
+// A tiny absolute-branch stub for arm64: ldr x8, #16; br x8; (padding); [target ptr]
 static const uint8_t jessi_arm64_abs_branch_stub[24] = {
-    0x88, 0x00, 0x00, 0x58, 
-    0x00, 0x01, 0x1F, 0xD6, 
-    0x1F, 0x20, 0x03, 0xD5, 
-    0x1F, 0x20, 0x03, 0xD5, 
-    0x41, 0x41, 0x41, 0x41, 
-    0x41, 0x41, 0x41, 0x41  
+    0x88, 0x00, 0x00, 0x58, // ldr x8, #16
+    0x00, 0x01, 0x1F, 0xD6, // br x8
+    0x1F, 0x20, 0x03, 0xD5, // nop
+    0x1F, 0x20, 0x03, 0xD5, // nop
+    0x41, 0x41, 0x41, 0x41, // placeholder
+    0x41, 0x41, 0x41, 0x41  // placeholder
 };
 
+// Heuristic instruction signatures inside dyld (arm64) to find internal callsites.
 static const uint8_t jessi_dyld_mmap_sig[]  = {0xB0, 0x18, 0x80, 0xD2, 0x01, 0x10, 0x00, 0xD4};
 static const uint8_t jessi_dyld_fcntl_sig[] = {0x90, 0x0B, 0x80, 0xD2, 0x01, 0x10, 0x00, 0xD4};
 
@@ -495,7 +513,7 @@ static void *jessi_dyld_base(void) {
 static bool jessi_write_abs_branch_stub(void *patchAddr, void *target) {
     if (!patchAddr || !target) return false;
 
-    
+    // Temporarily make the page writable.
     vm_address_t page = (vm_address_t)patchAddr & ~((vm_address_t)getpagesize() - 1);
     kern_return_t kr = vm_protect(mach_task_self(), page, (vm_size_t)getpagesize(), false,
                                  VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
@@ -505,7 +523,7 @@ static bool jessi_write_abs_branch_stub(void *patchAddr, void *target) {
     *(void **)((uint8_t *)patchAddr + 16) = target;
     sys_icache_invalidate(patchAddr, sizeof(jessi_arm64_abs_branch_stub));
 
-    
+    // Restore execute permissions.
     kr = vm_protect(mach_task_self(), page, (vm_size_t)getpagesize(), false, VM_PROT_READ | VM_PROT_EXECUTE);
     return kr == KERN_SUCCESS;
 }
@@ -521,7 +539,7 @@ static uint8_t *jessi_find_signature(uint8_t *base, const uint8_t *sig, size_t s
 }
 
 static void* jessi_hooked_mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset) {
-    
+    // Avoid dyld code paths involving MAP_JIT; we don't want dyld to treat exec mappings as JIT mappings.
     if (flags & MAP_JIT) {
         errno = EINVAL;
         return MAP_FAILED;
@@ -529,8 +547,8 @@ static void* jessi_hooked_mmap(void *addr, size_t len, int prot, int flags, int 
 
     void *map = __mmap(addr, len, prot, flags, fd, offset);
     if (map == MAP_FAILED && fd > 0 && (prot & PROT_EXEC)) {
-        
-        
+        // Fallback: map executable segment from an anonymous mapping and copy bytes via a RW mirror.
+        // This avoids requiring W+X transitions on the executable mapping.
         map = __mmap(addr, len, prot, (flags | MAP_PRIVATE | MAP_ANON), 0, 0);
         if (map != MAP_FAILED) {
             void *fileMap = __mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, offset);
@@ -561,17 +579,17 @@ static int jessi_hooked_fcntl(int fildes, int cmd, void *param) {
 #endif
 
     if (cmd == F_CHECK_LV) {
-        
+        // Treat library validation checks as OK.
         return 0;
     }
 
     if (cmd == F_ADDFILESIGS_RETURN) {
-        
-        
+        // Let the underlying call run (best-effort), then relax bounds checks.
+        // This matches dyld's pattern where it probes signatures during load.
         (void)__fcntl(fildes, cmd, param);
         if (param) {
-            
-            
+            // fsignatures_t is an opaque struct here; we only need the first field used by dyld bounds checks.
+            // Layout is stable enough for this purpose on iOS 14-18.
             typedef struct {
                 uint32_t fs_file_start;
             } jessi_fsignatures_prefix_t;
@@ -605,12 +623,13 @@ static void jessi_init_dyld_validation_bypass_if_needed(void) {
         return;
     }
 
+
     uint8_t *base = (uint8_t *)dyld;
     uint8_t *mmapSite = jessi_find_signature(base, jessi_dyld_mmap_sig, sizeof(jessi_dyld_mmap_sig));
     uint8_t *fcntlSite = jessi_find_signature(base, jessi_dyld_fcntl_sig, sizeof(jessi_dyld_fcntl_sig));
 
     if (ios18OrEarlier) {
-        
+        // While patching dyld text, transient SIGBUS can occur on some devices.
         signal(SIGBUS, SIG_IGN);
 
         bool ok1 = false, ok2 = false;
@@ -629,7 +648,7 @@ static void jessi_init_dyld_validation_bypass_if_needed(void) {
     }
 
     if (ios26OrLater) {
-        
+        // Non-TXM iOS 26 path: use HW breakpoint redirection (no in-place patching).
         jessi_ensure_exc_server_started();
         BOOL any = NO;
         if (mmapSite) {
@@ -683,7 +702,7 @@ static NSArray<NSString *> *jessi_filter_extra_jvm_args(NSArray<NSString *> *arg
     for (NSString *arg in args) {
         if (arg.length == 0) continue;
 
-        
+        // Never allow iOS 26-specific JVM flags to leak onto older iOS versions.
         if (!ios26OrLater) {
             if ([arg rangeOfString:@"MirrorMappedCodeCache"].location != NSNotFound) continue;
             if ([arg isEqualToString:@"-Xverify:none"]) continue;
@@ -691,7 +710,7 @@ static NSArray<NSString *> *jessi_filter_extra_jvm_args(NSArray<NSString *> *arg
             if ([arg isEqualToString:@"-XX:-UseCompressedClassPointers"]) continue;
         }
 
-        
+        // Never allow MirrorMappedCodeCache on Java 8 (the bundled 8 runtime doesn't support it).
         if (!isJava17Plus && [arg rangeOfString:@"MirrorMappedCodeCache"].location != NSNotFound) {
             continue;
         }
@@ -718,7 +737,7 @@ static NSString *bundleJavaHomeForVersion(NSString *javaVersion) {
     NSString *generic = [bundleRoot stringByAppendingPathComponent:@"java"]; 
     if ([[NSFileManager defaultManager] fileExistsAtPath:generic]) return generic;
 
-    
+    // Also allow JVMs installed to Application Support (downloaded via Settings).
     NSURL *appSupport = [[[NSFileManager defaultManager] URLsForDirectory:NSApplicationSupportDirectory
                                                                inDomains:NSUserDomainMask] firstObject];
     NSString *runtimesRoot = [[appSupport URLByAppendingPathComponent:@"Runtimes" isDirectory:YES] path];
@@ -811,7 +830,7 @@ int jessi_server_main(int argc, char *argv[]) {
 
             jessi_patch_jvm_dylibs_if_needed(javaHome);
 
-            
+            // Ensure dyld bypass is initialized and breakpoints are registered before any JVM dlopen activity.
             jessi_init_dyld_validation_bypass_if_needed();
             jessi_preflight_jvm_dylibs_if_needed(javaHome);
 
@@ -852,13 +871,13 @@ int jessi_server_main(int argc, char *argv[]) {
                 heapMB = 768;
             }
 
-            
+            // Don't force a huge initial heap on iOS; let HotSpot grow up to -Xmx.
             NSInteger initialHeapMB = MIN(heapMB, 256);
             @try {
                 NSInteger configuredInitial = [[NSUserDefaults standardUserDefaults] integerForKey:@"jessi.initialHeapMB"];
                 if (configuredInitial > 0) initialHeapMB = configuredInitial;
             } @catch (__unused NSException *e) {
-                
+                // ignore
             }
             if (initialHeapMB <= 0) initialHeapMB = MIN(heapMB, 256);
             if (initialHeapMB > heapMB) initialHeapMB = heapMB;
@@ -881,26 +900,26 @@ int jessi_server_main(int argc, char *argv[]) {
 
             fprintf(stderr, "[JESSI] Launching JVM (iOS%ld, Java %s)\n", (long)iosMajor, javaVersionC);
 
-            
+            // Workaround random stack guard allocation crashes (matches Amethyst defaults).
             if (ios26OrLater) {
                 jargv[idx++] = "-XX:+UnlockExperimentalVMOptions";
                 jargv[idx++] = "-XX:+DisablePrimordialThreadGuardPages";
             }
 
-            
-            
+            // iOS 26 + Java 8: avoid HotSpot JIT codecache W^X crashes by forcing interpreter.
+            // This is a compatibility fallback (slow) until we can ship a Java 8 runtime patched like Amethyst's 17/21.
             if (ios26OrLater && !isJava17Plus) {
                 fprintf(stderr, "[JESSI] iOS 26 detected with Java 8; forcing interpreter-only mode (-Xint).\n");
                 jargv[idx++] = "-Xint";
                 jargv[idx++] = "-Djava.compiler=NONE";
             }
 
-            
-            
+            // On iOS 26, use mirror-mapped code cache by default for Java 17/21.
+            // This is required for stable JIT/codecache behavior on iOS 26.
             if (ios26OrLater && isJava17Plus) {
                 jargv[idx++] = "-XX:+MirrorMappedCodeCache";
 
-                
+                // If extended virtual addressing entitlement isn't present, allocating compressed class space/pointers can fail.
                 if (!jessi_has_extended_va_entitlement()) {
                     jargv[idx++] = "-XX:-UseCompressedClassPointers";
                 }
@@ -908,8 +927,8 @@ int jessi_server_main(int argc, char *argv[]) {
             
             jargv[idx++] = "-XX:+UseSerialGC";
 
-            
-            
+            // Java 17+ on older iOS versions can fail to reserve the default 1GiB compressed class space.
+            // If the user didn't override these in extra args, apply safer defaults.
             NSString *launchArgsPath = [workingDir stringByAppendingPathComponent:@"jessi-launch-args.txt"]; 
             NSMutableArray<NSString *> *extra = [[NSFileManager defaultManager] fileExistsAtPath:launchArgsPath] ? [readArgsFile(launchArgsPath) mutableCopy] : [NSMutableArray array];
             NSString *savedArgs = [JessiSettings shared].launchArguments ?: @"";
@@ -917,7 +936,7 @@ int jessi_server_main(int argc, char *argv[]) {
                 NSArray<NSString *> *parts = [savedArgs componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                 for (NSString *p in parts) if (p.length) [extra addObject:p];
             }
-            
+            // Strip iOS-26-only flags on older iOS versions, and strip MirrorMappedCodeCache on Java 8.
             NSMutableArray<NSString *> *filteredExtra = [[jessi_filter_extra_jvm_args(extra, ios26OrLater, isJava17Plus) mutableCopy] mutableCopy];
             if (filteredExtra) {
                 extra = filteredExtra;
@@ -925,8 +944,8 @@ int jessi_server_main(int argc, char *argv[]) {
 
             BOOL userSetCCS = jessi_args_contain_prefix(extra, @"-XX:CompressedClassSpaceSize=");
             BOOL userSetCodeCache = jessi_args_contain_prefix(extra, @"-XX:ReservedCodeCacheSize=");
-            
-            
+            // On iOS 18 and earlier, HotSpot can fail to reserve large default regions (notably class space).
+            // Apply safer defaults across Java 8/17/21 unless the user explicitly overrides them.
             if (!ios26OrLater && iosMajor <= 18) {
                 if (!userSetCCS) {
                     fprintf(stderr, "[JESSI] Applying -XX:CompressedClassSpaceSize=256M for iOS%ld\n", (long)iosMajor);
@@ -977,7 +996,7 @@ int jessi_server_main(int argc, char *argv[]) {
 
             int jargc = idx - 1;
 
-            
+            // Ensure JVM can install its own signal handlers.
             signal(SIGSEGV, SIG_DFL);
             signal(SIGPIPE, SIG_DFL);
             signal(SIGBUS, SIG_DFL);

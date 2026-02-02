@@ -8,33 +8,30 @@ APP_NAME="JESSI"
 DIST_DIR="$PROJECT_DIR/dist"
 PAYLOAD_DIR="$DIST_DIR/Payload"
 IPA_PATH="$DIST_DIR/${APP_NAME}.ipa"
+DERIVED_DATA_DIR="$PROJECT_DIR/build/DerivedData"
 
-# ensure that JRE's were downloaded
-for d in "$PROJECT_DIR/Runtimes/java" "$PROJECT_DIR/Runtimes/java17" "$PROJECT_DIR/Runtimes/java21"; do
-  if [[ ! -d "$d" ]]; then
-    echo "ERROR: Missing Java runtimes at: $d" >&2
-    echo "Run: $PROJECT_DIR/scripts/fetch-runtimes.sh" >&2
-    exit 1
-  fi
-done
+# Note: This script does not bundle Java runtimes into the .app by default.
 
 # build ipa
 cd "$PROJECT_DIR"
+
+rm -rf "$DERIVED_DATA_DIR"
 xcodebuild \
   -project "$PROJECT_DIR/JESSI.xcodeproj" \
   -scheme "$SCHEME" \
   -configuration "$CONFIGURATION" \
   -sdk iphoneos \
   -destination 'generic/platform=iOS' \
+  -derivedDataPath "$DERIVED_DATA_DIR" \
   build \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_STYLE=Manual \
   >/dev/null
 
-APP_DIR="$(find "$HOME/Library/Developer/Xcode/DerivedData" -path "*/Build/Products/${CONFIGURATION}-iphoneos/${APP_NAME}.app" -type d 2>/dev/null | head -n 1)"
-if [[ -z "$APP_DIR" || ! -d "$APP_DIR" ]]; then
-  echo "ERROR: Could not find built ${APP_NAME}.app in DerivedData." >&2
+APP_DIR="$DERIVED_DATA_DIR/Build/Products/${CONFIGURATION}-iphoneos/${APP_NAME}.app"
+if [[ ! -d "$APP_DIR" ]]; then
+  echo "ERROR: Could not find built ${APP_NAME}.app at: $APP_DIR" >&2
   exit 1
 fi
 

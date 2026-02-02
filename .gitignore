@@ -1,4 +1,4 @@
-# Xcode / Apple
+# apple shizzle
 .DS_Store
 xcuserdata/
 DerivedData/
@@ -7,16 +7,18 @@ DerivedData/
 *.xccheckout
 *.xcscmblueprint
 
-# Build outputs
+# binaries
 build/
 dist/
 *.ipa
-
-# Large bundled runtimes (fetched locally)
-Runtimes/
-
-# App packaging temp
 Payload/
 
-# Logs
+# this prolly doesnt even need to exist anymore
+Runtimes/
+
+# logs
 *.log
+
+# misc
+Amethyst-iOS/
+tools/

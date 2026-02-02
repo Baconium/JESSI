@@ -10,6 +10,10 @@
 		A6C5248F2F2873DF0030EE41 /* JESSI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JESSI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1C0F700A1B2C3D4E5F60001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60004 /* Bridging.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Bridging.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mach_excServer.c; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001D /* mach_excServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mach_excServer.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mach_excUser.c; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001F /* mach_excUser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mach_excUser.h; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateServerView.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoneToolbarTextField.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
@@ -34,6 +38,10 @@
 /* End PBXFileReference section */
 
 /* Begin PBXBuildFile section */
+		B1C0F700A1B2C3D4E5F60110 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = B1C0F700A1B2C3D4E5F60100 /* ZIPFoundation */; };
+		B1C0F700A1B2C3D4E5F60111 /* SWCompression in Frameworks */ = {isa = PBXBuildFile; productRef = B1C0F700A1B2C3D4E5F60101 /* SWCompression */; };
+		B1C0F700A1B2C3D4E5F60042 /* mach_excServer.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */; };
+		B1C0F700A1B2C3D4E5F60043 /* mach_excUser.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */; };
 		B1C0F700A1B2C3D4E5F60032 /* CreateServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */; };
 		B1C0F700A1B2C3D4E5F60033 /* DoneToolbarTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */; };
 		B1C0F700A1B2C3D4E5F60034 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */; };
@@ -57,6 +65,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B1C0F700A1B2C3D4E5F60110 /* ZIPFoundation in Frameworks */,
+				B1C0F700A1B2C3D4E5F60111 /* SWCompression in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -92,6 +102,7 @@
 		B1C0F700A1B2C3D4E5F60061 /* JessiCore */ = {
 			isa = PBXGroup;
 			children = (
+				B1C0F700A1B2C3D4E5F60063 /* MachExc */,
 				B1C0F700A1B2C3D4E5F60010 /* JessiAppDelegate.h */,
 				B1C0F700A1B2C3D4E5F60011 /* JessiAppDelegate.m */,
 				B1C0F700A1B2C3D4E5F60012 /* JessiJavaRunner.m */,
@@ -106,6 +117,17 @@
 				B1C0F700A1B2C3D4E5F6001B /* main.m */,
 			);
 			path = JessiCore;
+			sourceTree = "<group>";
+		};
+		B1C0F700A1B2C3D4E5F60063 /* MachExc */ = {
+			isa = PBXGroup;
+			children = (
+				B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */,
+				B1C0F700A1B2C3D4E5F6001D /* mach_excServer.h */,
+				B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */,
+				B1C0F700A1B2C3D4E5F6001F /* mach_excUser.h */,
+			);
+			path = MachExc;
 			sourceTree = "<group>";
 		};
 		B1C0F700A1B2C3D4E5F60062 /* SwiftUI */ = {
@@ -142,7 +164,6 @@
 			buildPhases = (
 				A6C5248B2F2873DF0030EE41 /* Sources */,
 				A6C5248C2F2873DF0030EE41 /* Frameworks */,
-				A6C5249D2F2875000030EE41 /* ShellScript */,
 				A6C5248D2F2873DF0030EE41 /* Resources */,
 			);
 			buildRules = (
@@ -151,6 +172,8 @@
 			);
 			name = JESSI;
 			packageProductDependencies = (
+				B1C0F700A1B2C3D4E5F60100 /* ZIPFoundation */,
+				B1C0F700A1B2C3D4E5F60101 /* SWCompression */,
 			);
 			productName = JESSI;
 			productReference = A6C5248F2F2873DF0030EE41 /* JESSI.app */;
@@ -180,6 +203,10 @@
 			);
 			mainGroup = A6C524862F2873DF0030EE41;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B1C0F700A1B2C3D4E5F60120 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+				B1C0F700A1B2C3D4E5F60121 /* XCRemoteSwiftPackageReference "SWCompression" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A6C524902F2873DF0030EE41 /* Products */;
 			projectDirPath = "";
@@ -189,6 +216,38 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B1C0F700A1B2C3D4E5F60120 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.0;
+			};
+		};
+		B1C0F700A1B2C3D4E5F60121 /* XCRemoteSwiftPackageReference "SWCompression" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tsolomko/SWCompression";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 4.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B1C0F700A1B2C3D4E5F60100 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1C0F700A1B2C3D4E5F60120 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+		B1C0F700A1B2C3D4E5F60101 /* SWCompression */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1C0F700A1B2C3D4E5F60121 /* XCRemoteSwiftPackageReference "SWCompression" */;
+			productName = SWCompression;
+		};
+/* End XCSwiftPackageProductDependency section */
 
 /* Begin PBXResourcesBuildPhase section */
 		A6C5248D2F2873DF0030EE41 /* Resources */ = {
@@ -201,37 +260,14 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		A6C5249D2F2875000030EE41 /* ShellScript */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/Runtimes/java",
-				"$(SRCROOT)/Runtimes/java17",
-				"$(SRCROOT)/Runtimes/java21",
-			);
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/java",
-				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/java17",
-				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/java21",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\nRES_SRC=\"${SRCROOT}/Runtimes\"\nDEST=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\n\ncopy_dir() {\n  name=\"$1\"\n  if [ -d \"${RES_SRC}/${name}\" ]; then\n    mkdir -p \"${DEST}/${name}\"\n    /usr/bin/rsync -a --delete \"${RES_SRC}/${name}/\" \"${DEST}/${name}/\"\n  fi\n}\n\ncopy_dir java\ncopy_dir java17\ncopy_dir java21\n\n# Ensure expected executables stay executable.\nfor name in java java17 java21; do\n  if [ -d \"${DEST}/${name}/bin\" ]; then\n    /usr/bin/find \"${DEST}/${name}/bin\" -type f -maxdepth 1 -print0 | /usr/bin/xargs -0 /bin/chmod 0755 || true\n  fi\n  if [ -f \"${DEST}/${name}/jspawnhelper\" ]; then\n    /bin/chmod 0755 \"${DEST}/${name}/jspawnhelper\" || true\n  fi\n  if [ -f \"${DEST}/${name}/lib/jspawnhelper\" ]; then\n    /bin/chmod 0755 \"${DEST}/${name}/lib/jspawnhelper\" || true\n  fi\n  if [ -f \"${DEST}/${name}/bin/java\" ]; then\n    /bin/chmod 0755 \"${DEST}/${name}/bin/java\" || true\n  fi\ndone\n\n# On real devices, every Mach-O must be individually signed. Xcode does NOT automatically\n# sign executables/dylibs buried in Resources.\nif [ \"${PLATFORM_NAME:-}\" = \"iphoneos\" ] && [ \"${CODE_SIGNING_ALLOWED:-NO}\" = \"YES\" ]; then\n  SIGN_ID=\"${EXPANDED_CODE_SIGN_IDENTITY:--}\"\n  for name in java java17 java21; do\n    ROOT=\"${DEST}/${name}\"\n    if [ -d \"${ROOT}\" ]; then\n      /usr/bin/find \"${ROOT}\" -type f 2>/dev/null | while IFS= read -r f; do\n        if /usr/bin/file -b \"$f\" | /usr/bin/grep -q \"Mach-O\"; then\n          /usr/bin/codesign --force --sign \"$SIGN_ID\" --timestamp=none \"$f\" >/dev/null 2>&1 || true\n        fi\n      done\n    fi\n  done\nfi\n";
-		};
-/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A6C5248B2F2873DF0030EE41 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B1C0F700A1B2C3D4E5F60042 /* mach_excServer.c in Sources */,
+				B1C0F700A1B2C3D4E5F60043 /* mach_excUser.c in Sources */,
 				B1C0F700A1B2C3D4E5F60040 /* main.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003A /* JessiAppDelegate.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003B /* JessiJavaRunner.m in Sources */,
