@@ -2,7 +2,7 @@
 //  ModsView.swift
 //  JESSI
 //
-//  Created by ruter on 01.02.26.
+//  Created by roooot on 01.02.26.
 //
 
 import Foundation
@@ -331,12 +331,12 @@ private struct Mod: View {
                 } else {
                     RemoteImage(url: url)
                         .frame(width: size, height: size)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
                 }
             } else {
                 Color.gray.opacity(0.3)
                     .frame(width: size, height: size)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
             }
 
             VStack(alignment: .leading, spacing: 4) {
