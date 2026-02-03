@@ -325,8 +325,8 @@ final class SettingsModel: ObservableObject {
             return
         }
 
-        let fm = FileManager.default
-        let tmpRoot = fm.temporaryDirectory.appendingPathComponent("jessi-jvm-install", isDirectory: true)
+        let outerFM = FileManager.default
+        let tmpRoot = outerFM.temporaryDirectory.appendingPathComponent("jessi-jvm-install", isDirectory: true)
         let workDir = tmpRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let zipPath = workDir.appendingPathComponent("jre\(version).zip")
         let unzipDir = workDir.appendingPathComponent("unzipped", isDirectory: true)
@@ -334,13 +334,14 @@ final class SettingsModel: ObservableObject {
         let tarPath = workDir.appendingPathComponent("runtime.tar")
 
         do {
-            try fm.createDirectory(at: unzipDir, withIntermediateDirectories: true)
+            try outerFM.createDirectory(at: unzipDir, withIntermediateDirectories: true)
         } catch {
             completion(.failure(error))
             return
         }
 
         let task = URLSession.shared.downloadTask(with: url) { tempURL, _, error in
+            let fm = FileManager.default
             if let error {
                 completion(.failure(error))
                 return
