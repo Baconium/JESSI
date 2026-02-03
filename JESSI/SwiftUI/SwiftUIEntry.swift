@@ -3,6 +3,11 @@ import SwiftUI
 import Combine
 import UIKit
 
+struct SheetItem: Identifiable {
+    let id = UUID()
+    let input: String
+}
+
 @objc public class JessiSwiftUIEntry: NSObject {
     @objc public static func makeRootTabViewController() -> UIViewController {
         let hosting = UIHostingController(rootView: RootTabView())
@@ -83,6 +88,8 @@ struct ServerManagerView: View {
     @State private var renameTarget: String? = nil
     @State private var renameText: String = ""
     @State private var showingRenameSheet: Bool = false
+    
+    @State private var modsSheetItem: SheetItem? = nil
 
     private enum ManagerAlert: Identifiable {
         case confirmDelete(String)
@@ -207,6 +214,11 @@ struct ServerManagerView: View {
                             }
                             .buttonStyle(.plain)
                             .contextMenu {
+                                Button {
+                                    modsSheetItem = SheetItem(input: f.name)
+                                } label: {
+                                    Label("Install Mods", systemImage: "wrench.and.screwdriver.fill")
+                                }
                                 Button(action: { beginRename(f.name) }) {
                                     Label("Rename", systemImage: "pencil")
                                 }
@@ -242,6 +254,11 @@ struct ServerManagerView: View {
             .cornerRadius(14)
             .padding(.horizontal, 16)
             .padding(.bottom, createButtonBottomPadding)
+        }
+        .sheet(item: $modsSheetItem) { item in
+            NavigationView {
+                ModsView(servername: item.input)
+            }
         }
         .sheet(isPresented: $showingCreateServer) {
             NavigationView {
