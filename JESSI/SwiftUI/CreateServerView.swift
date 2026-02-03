@@ -566,6 +566,19 @@ struct CreateServerView: View {
             try? out.write(toFile: p, atomically: true, encoding: .utf8)
         }
 
+        let config: [String: String] = [
+            "software": software.rawValue,
+            "minecraftVersion": mcVersion
+        ]
+        
+        let configurl = URL(fileURLWithPath: (dir as NSString).appendingPathComponent("jessiserverconfig.json"))
+        do {
+            let data = try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted])
+            try data.write(to: configurl, options: .atomic)
+        } catch {
+            print("Failed to write jessiserverconfig.json: \(error.localizedDescription)")
+        }
+
         if software == .customJar, let url = customJarURL {
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
