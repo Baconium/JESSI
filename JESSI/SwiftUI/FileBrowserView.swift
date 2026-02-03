@@ -14,6 +14,20 @@ struct FileBrowserView: View {
     
     @State private var modsSheetItem: SheetItem? = nil
 
+    private enum BrowserAlert: Identifiable {
+        case confirmDelete(FileItem)
+        case error(String)
+
+        var id: String {
+            switch self {
+            case .confirmDelete(let item): return "delete:\(item.path)"
+            case .error(let msg): return "error:\(msg)"
+            }
+        }
+    }
+
+    @State private var alert: BrowserAlert? = nil
+
     struct FileItem: Identifiable {
         let id = UUID()
         let name: String
@@ -42,8 +56,18 @@ struct FileBrowserView: View {
                             }
                         }
                     }
-                } footer: {
-                    Text("Deleting or modifing files may result in your server not working or not being able to install mods. Only do this if you know what youre doing.")
+                    .onDelete { indexSet in
+                        guard let idx = indexSet.first else { return }
+                        let current = sortedFiles
+                        guard idx < current.count else { return }
+
+                        let item = current[idx]
+                        if item.isDirectory {
+                            alert = .confirmDelete(item)
+                        } else {
+                            deleteItem(item)
+                        }
+                    }
                 }
             }
             .listStyle(InsetGroupedListStyle())
@@ -61,6 +85,7 @@ struct FileBrowserView: View {
             .foregroundColor(.white)
             .background(Color.green)
             .cornerRadius(14)
+            .shadow(color: Color.black.opacity(1.0), radius: 8, x: 0, y: 6)
             .padding(.horizontal, 16)
             .padding(.bottom, createButtonBottomPadding)
         }
@@ -85,6 +110,26 @@ struct FileBrowserView: View {
         .sheet(item: $modsSheetItem) { item in
             NavigationView {
                 ModsView(servername: item.input)
+            }
+        }
+        .alert(item: $alert) { a in
+            switch a {
+            case .confirmDelete(let item):
+                let isDirText = item.isDirectory ? "folder" : "file"
+                return Alert(
+                    title: Text("Delete \(isDirText)") ,
+                    message: Text("Delete \"\(item.name)\"? This cannot be undone."),
+                    primaryButton: .destructive(Text("Delete")) {
+                        deleteItem(item)
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .error(let msg):
+                return Alert(
+                    title: Text("Error"),
+                    message: Text(msg),
+                    dismissButton: .default(Text("OK"))
+                )
             }
         }
         .alert(isPresented: $showImportError) {
@@ -135,6 +180,16 @@ struct FileBrowserView: View {
             }
         }
         self.files = items
+    }
+
+    private func deleteItem(_ item: FileItem) {
+        let fm = FileManager.default
+        do {
+            try fm.removeItem(atPath: item.path)
+            reload()
+        } catch {
+            alert = .error(error.localizedDescription)
+        }
     }
 
     private func importPickedFiles(_ urls: [URL]) {

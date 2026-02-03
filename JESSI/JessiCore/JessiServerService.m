@@ -17,6 +17,7 @@ extern int jessi_server_main(int argc, char *argv[]);
 @property (nonatomic, strong) dispatch_queue_t logQueue;
 @property (nonatomic, strong) dispatch_source_t logTimer;
 @property (nonatomic) off_t logOffset;
+@property (nonatomic) off_t stdioOffset;
 @property (nonatomic, copy) NSString *activeServerDir;
 @property (nonatomic, copy) NSString *activeRconPassword;
 @property (nonatomic) int activeRconPort;
@@ -153,7 +154,11 @@ extern int jessi_server_main(int argc, char *argv[]);
     }
     self.logOffset = 0;
 
+    // Used as a fallback while modded servers bootstrap before latest.log exists.
+    self.stdioOffset = 0;
+
     NSString *logPath = [[dir stringByAppendingPathComponent:@"logs"] stringByAppendingPathComponent:@"latest.log"]; 
+    NSString *stdioPath = [dir stringByAppendingPathComponent:@"jessi-stdio.log"]; 
 
     dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, self.logQueue);
     dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, (uint64_t)(250 * NSEC_PER_MSEC), (uint64_t)(50 * NSEC_PER_MSEC));
@@ -164,33 +169,45 @@ extern int jessi_server_main(int argc, char *argv[]);
         if (!strongSelf || !strongSelf.isRunning) return;
 
         NSFileManager *fm = [NSFileManager defaultManager];
-        if (![fm fileExistsAtPath:logPath]) return;
 
-        NSDictionary *attrs = [fm attributesOfItemAtPath:logPath error:nil];
+        // Prefer the Minecraft log file once it exists; otherwise, show stdio output.
+        // Fabric/Forge bootstraps often print to stdout/stderr before latest.log is created.
+        BOOL hasLatest = [fm fileExistsAtPath:logPath];
+        NSString *pathToTail = hasLatest ? logPath : stdioPath;
+        off_t *offsetPtr = hasLatest ? &strongSelf->_logOffset : &strongSelf->_stdioOffset;
+
+        if (![fm fileExistsAtPath:pathToTail]) return;
+
+        NSDictionary *attrs = [fm attributesOfItemAtPath:pathToTail error:nil];
         unsigned long long size = [attrs fileSize];
-        if ((unsigned long long)strongSelf.logOffset > size) strongSelf.logOffset = 0;
-        if ((unsigned long long)strongSelf.logOffset == size) return;
+        if ((unsigned long long)(*offsetPtr) > size) *offsetPtr = 0;
+        if ((unsigned long long)(*offsetPtr) == size) return;
 
-        NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:logPath];
+        NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:pathToTail];
         if (!fh) return;
         @try {
-            [fh seekToFileOffset:(unsigned long long)strongSelf.logOffset];
+            [fh seekToFileOffset:(unsigned long long)(*offsetPtr)];
             NSData *data = [fh readDataToEndOfFile];
-            strongSelf.logOffset = (off_t)[fh offsetInFile];
+            *offsetPtr = (off_t)[fh offsetInFile];
+
             if (data.length) {
                 NSString *s = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
                 if (s.length) {
-                    NSMutableArray *filteredLines = [NSMutableArray array];
-                    for (NSString *line in [s componentsSeparatedByString:@"\n"]) {
-                        if ([line containsString:@"RCON"] || 
-                            [line containsString:@"Rcon"] || 
-                            [line containsString:@"remote control"]) {
-                            continue;
+                    if (hasLatest) {
+                        NSMutableArray *filteredLines = [NSMutableArray array];
+                        for (NSString *line in [s componentsSeparatedByString:@"\n"]) {
+                            if ([line containsString:@"RCON"] ||
+                                [line containsString:@"Rcon"] ||
+                                [line containsString:@"remote control"]) {
+                                continue;
+                            }
+                            [filteredLines addObject:line];
                         }
-                        [filteredLines addObject:line];
+                        NSString *filtered = [filteredLines componentsJoinedByString:@"\n"];
+                        if (filtered.length) [strongSelf emitConsole:filtered];
+                    } else {
+                        [strongSelf emitConsole:s];
                     }
-                    NSString *filtered = [filteredLines componentsJoinedByString:@"\n"];
-                    if (filtered.length) [strongSelf emitConsole:filtered];
                 }
             }
         } @catch (__unused NSException *e) {

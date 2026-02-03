@@ -16,6 +16,11 @@ DERIVED_DATA_DIR="$PROJECT_DIR/build/DerivedData"
 cd "$PROJECT_DIR"
 
 rm -rf "$DERIVED_DATA_DIR"
+XCODEBUILD_LOG="$PROJECT_DIR/build/xcodebuild.log"
+mkdir -p "$(dirname "$XCODEBUILD_LOG")"
+rm -f "$XCODEBUILD_LOG"
+
+set +e
 xcodebuild \
   -project "$PROJECT_DIR/JESSI.xcodeproj" \
   -scheme "$SCHEME" \
@@ -27,7 +32,16 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGN_STYLE=Manual \
-  >/dev/null
+  2>&1 | tee "$XCODEBUILD_LOG"
+XCODEBUILD_STATUS=${PIPESTATUS[0]}
+set -e
+
+if [[ $XCODEBUILD_STATUS -ne 0 ]]; then
+  echo "ERROR: xcodebuild failed (exit $XCODEBUILD_STATUS). Log: $XCODEBUILD_LOG" >&2
+  echo "--- Last 200 lines ---" >&2
+  tail -n 200 "$XCODEBUILD_LOG" >&2 || true
+  exit "$XCODEBUILD_STATUS"
+fi
 
 APP_DIR="$DERIVED_DATA_DIR/Build/Products/${CONFIGURATION}-iphoneos/${APP_NAME}.app"
 if [[ ! -d "$APP_DIR" ]]; then

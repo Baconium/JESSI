@@ -475,7 +475,7 @@ private struct Mod: View {
                 modlogger.enclosedlog("installed \(mod.title) to \(modpath.path)")
                 modlogger.flushdivider()
 
-                await MainActor.run {
+                _ = await MainActor.run {
                     model.installedmods[mod.id] = file.filename
                     model.saveinstalledmods()
                     model.installingmods.remove(mod.id)
@@ -484,7 +484,7 @@ private struct Mod: View {
             } catch {
                 modlogger.enclosedlog("Error installing mod \(mod.title): \(error)")
                 modlogger.flushdivider()
-                await MainActor.run {
+                _ = await MainActor.run {
                     model.installingmods.remove(mod.id)
                 }
             }

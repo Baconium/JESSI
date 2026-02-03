@@ -10,6 +10,9 @@
 		B1C0F700A1B2C3D4E5F60032 /* CreateServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */; };
 		B1C0F700A1B2C3D4E5F60033 /* DoneToolbarTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */; };
 		B1C0F700A1B2C3D4E5F60034 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */; };
+		B1C0F700A1B2C3D4E5F60045 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60021 /* Logger.swift */; };
+		B1C0F700A1B2C3D4E5F60044 /* ModsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60020 /* ModsView.swift */; };
+		B1C0F700A1B2C3D4E5F60046 /* RemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60022 /* RemoteImage.swift */; };
 		B1C0F700A1B2C3D4E5F60035 /* JessiJITCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */; };
 		B1C0F700A1B2C3D4E5F60036 /* LaunchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */; };
 		B1C0F700A1B2C3D4E5F60037 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6000B /* RootTabView.swift */; };
@@ -36,6 +39,9 @@
 		B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateServerView.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DoneToolbarTextField.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60020 /* ModsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModsView.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60021 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60022 /* RemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImage.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60008 /* JessiJITCheck.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiJITCheck.h; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiJITCheck.m; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchView.swift; sourceTree = "<group>"; };
@@ -137,6 +143,9 @@
 				B1C0F700A1B2C3D4E5F60008 /* JessiJITCheck.h */,
 				B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */,
 				B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */,
+				B1C0F700A1B2C3D4E5F60021 /* Logger.swift */,
+				B1C0F700A1B2C3D4E5F60020 /* ModsView.swift */,
+				B1C0F700A1B2C3D4E5F60022 /* RemoteImage.swift */,
 				B1C0F700A1B2C3D4E5F6000B /* RootTabView.swift */,
 				B1C0F700A1B2C3D4E5F6000C /* SettingsView.swift */,
 				B1C0F700A1B2C3D4E5F6000D /* SwiftUIEntry.swift */,
@@ -247,6 +256,9 @@
 				B1C0F700A1B2C3D4E5F60033 /* DoneToolbarTextField.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60034 /* FileBrowserView.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60036 /* LaunchView.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60045 /* Logger.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60044 /* ModsView.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60046 /* RemoteImage.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60037 /* RootTabView.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60038 /* SettingsView.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60039 /* SwiftUIEntry.swift in Sources */,

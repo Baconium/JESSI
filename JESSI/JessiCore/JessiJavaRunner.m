@@ -745,6 +745,8 @@ static void redirect_stdio_to(NSString *path) {
         dup2(fd, STDOUT_FILENO);
         dup2(fd, STDERR_FILENO);
     }
+    setvbuf(stdout, NULL, _IOLBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
 }
 
 static NSArray<NSString *> *readArgsFile(NSString *path) {
@@ -886,24 +888,13 @@ int jessi_server_main(int argc, char *argv[]) {
                 jargv[idx++] = "-XX:+UnlockExperimentalVMOptions";
                 jargv[idx++] = "-XX:+DisablePrimordialThreadGuardPages";
             }
-
-            
-            
-            if (ios26OrLater && !isJava17Plus) {
-                fprintf(stderr, "[JESSI] iOS 26 detected with Java 8; forcing interpreter-only mode (-Xint).\n");
-                jargv[idx++] = "-Xint";
-                jargv[idx++] = "-Djava.compiler=NONE";
-            }
-
-            
             
             if (ios26OrLater && isJava17Plus) {
                 jargv[idx++] = "-XX:+MirrorMappedCodeCache";
-
-                
-                if (!jessi_has_extended_va_entitlement()) {
-                    jargv[idx++] = "-XX:-UseCompressedClassPointers";
-                }
+            }
+            
+            if (isJava17Plus && !jessi_has_extended_va_entitlement()) {
+                jargv[idx++] = "-XX:-UseCompressedClassPointers";
             }
             
             jargv[idx++] = "-XX:+UseSerialGC";
@@ -923,17 +914,11 @@ int jessi_server_main(int argc, char *argv[]) {
                 extra = filteredExtra;
             }
 
-            BOOL userSetCCS = jessi_args_contain_prefix(extra, @"-XX:CompressedClassSpaceSize=");
             BOOL userSetCodeCache = jessi_args_contain_prefix(extra, @"-XX:ReservedCodeCacheSize=");
             
-            
             if (!ios26OrLater && iosMajor <= 18) {
-                if (!userSetCCS) {
-                    fprintf(stderr, "[JESSI] Applying -XX:CompressedClassSpaceSize=256M for iOS%ld\n", (long)iosMajor);
-                    jargv[idx++] = "-XX:CompressedClassSpaceSize=256M";
-                }
                 if (!userSetCodeCache) {
-                    jargv[idx++] = "-XX:ReservedCodeCacheSize=96M";
+                    jargv[idx++] = "-XX:ReservedCodeCacheSize=64M";
                 }
             }
 
@@ -945,14 +930,6 @@ int jessi_server_main(int argc, char *argv[]) {
                 jargv[idx++] = "-Djna.nounpack=true";
             }
             jargv[idx++] = "-XX:MaxGCPauseMillis=50";
-
-            if (flagNettyNoNative) {
-                jargv[idx++] = "-Dio.netty.transport.noNative=true";
-            }
-            if (flagJnaNoSys) {
-                jargv[idx++] = "-Djna.nosys=true";
-                jargv[idx++] = "-Djna.nounpack=true";
-            }
             jargv[idx++] = userDirArg.UTF8String;
             jargv[idx++] = userHomeArg.UTF8String;
             jargv[idx++] = javaHomeArg.UTF8String;

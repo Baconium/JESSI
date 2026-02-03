@@ -184,62 +184,53 @@ struct ServerManagerView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            ScrollView {
-                VStack(spacing: 0) {
-                    VStack(spacing: 0) {
-                        ForEach(Array(model.folders.enumerated()), id: \.element.id) { idx, f in
-                            NavigationLink(
-                                destination: FileBrowserView(
-                                    directory: getServersRoot().appending("/").appending(f.name),
-                                    title: f.name
-                                )
-                            ) {
-                                HStack(spacing: 12) {
-                                    serverIconView(for: f.name)
-                                        .frame(width: 44, height: 44)
-                                        .background(Color.clear)
+            List {
+                Section {
+                    ForEach(model.folders) { f in
+                        NavigationLink(
+                            destination: FileBrowserView(
+                                directory: getServersRoot().appending("/").appending(f.name),
+                                title: f.name
+                            )
+                        ) {
+                            HStack(spacing: 12) {
+                                serverIconView(for: f.name)
+                                    .frame(width: 44, height: 44)
+                                    .background(Color.clear)
 
-                                    Text(f.name)
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundColor(.primary)
+                                Text(f.name)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundColor(.primary)
 
-                                    Spacer()
+                                Spacer()
 
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 16)
-                                .contentShape(Rectangle())
+                                Image(systemName: "chevron.right")
+                                    .foregroundColor(.secondary)
                             }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button {
-                                    modsSheetItem = SheetItem(input: f.name)
-                                } label: {
-                                    Label("Install Mods", systemImage: "wrench.and.screwdriver.fill")
-                                }
-                                Button(action: { beginRename(f.name) }) {
-                                    Label("Rename", systemImage: "pencil")
-                                }
-                                Button(action: { beginDelete(f.name) }) {
-                                    Label("Delete", systemImage: "trash")
-                                }
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                        }
+                        .contextMenu {
+                            Button {
+                                modsSheetItem = SheetItem(input: f.name)
+                            } label: {
+                                Label("Install Mods", systemImage: "wrench.and.screwdriver.fill")
                             }
-
-                            if idx != model.folders.count - 1 {
-                                Divider()
-                                    .padding(.horizontal, 16)
+                            Button(action: { beginRename(f.name) }) {
+                                Label("Rename", systemImage: "pencil")
+                            }
+                            Button(action: { beginDelete(f.name) }) {
+                                Label("Delete", systemImage: "trash")
                             }
                         }
                     }
-                    .background(Color(UIColor.secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
+                    .onDelete { indexSet in
+                        guard let idx = indexSet.first, idx < model.folders.count else { return }
+                        beginDelete(model.folders[idx].name)
+                    }
                 }
-                .padding(.bottom, 140)
             }
+            .listStyle(InsetGroupedListStyle())
             .navigationTitle("Server Manager")
             .navigationBarTitleDisplayMode(.inline)
 
@@ -252,6 +243,7 @@ struct ServerManagerView: View {
             .foregroundColor(.white)
             .background(Color.green)
             .cornerRadius(14)
+            .shadow(color: Color.black.opacity(1.0), radius: 8, x: 0, y: 6)
             .padding(.horizontal, 16)
             .padding(.bottom, createButtonBottomPadding)
         }

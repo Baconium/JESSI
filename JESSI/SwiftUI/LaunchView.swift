@@ -292,7 +292,6 @@ struct LaunchView: View {
         .onChange(of: model.isRunning) { isRunning in
             guard !isRunning, exitAfterStopRequested else { return }
             exitAfterStopRequested = false
-            // yeah this shit doesnt work lmao
             UIApplication.shared.perform(#selector(NSXPCConnection.suspend))
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 exit(0)
