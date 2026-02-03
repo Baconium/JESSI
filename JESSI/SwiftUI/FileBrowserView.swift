@@ -13,7 +13,7 @@ struct FileBrowserView: View {
     @State private var showImportError: Bool = false
     
     @State private var modsSheetItem: SheetItem? = nil
-
+    
     private enum BrowserAlert: Identifiable {
         case confirmDelete(FileItem)
         case error(String)
@@ -259,6 +259,9 @@ struct TextEditorView: View {
     @State private var content: String = ""
     @State private var isSaving: Bool = false
     @State private var errorMsg: String? = nil
+    
+    @State private var ogcontent: String = ""
+    @State private var showDiscardConfirm = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -275,7 +278,11 @@ struct TextEditorView: View {
 
             HStack {
                 Button("Discard") {
-
+                    if content != ogcontent {
+                        showDiscardConfirm = true
+                    } else {
+                        discardchanges()
+                    }
                 }
                 .foregroundColor(.red)
 
@@ -297,6 +304,21 @@ struct TextEditorView: View {
         }
         .navigationBarTitle(title, displayMode: .inline)
         .onAppear { loadFile() }
+        .alert(isPresented: $showDiscardConfirm) {
+            Alert(
+                title: Text("Discard Changes?"),
+                message: Text("Your unsaved edits will be lost."),
+                primaryButton: .destructive(Text("Discard")) {
+                    discardchanges()
+                },
+                secondaryButton: .cancel()
+            )
+        }
+    }
+    
+    private func discardchanges() {
+        errorMsg = nil
+        loadFile()
     }
 
     private func loadFile() {
@@ -305,7 +327,8 @@ struct TextEditorView: View {
             errorMsg = "Failed to load file"
             return
         }
-        self.content = text
+        content = text
+        ogcontent = text
     }
 
     private func save() {
