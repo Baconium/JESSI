@@ -22,3 +22,4 @@ Runtimes/
 # misc
 Amethyst-iOS/
 tools/
+*.bak

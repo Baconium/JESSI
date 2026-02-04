@@ -5,6 +5,7 @@
 #import <stdint.h>
 #import <string.h>
 #import <unistd.h>
+#import <dirent.h>
 #import <signal.h>
 #import <errno.h>
 #import <fcntl.h>
@@ -27,6 +28,43 @@ extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
 #ifndef CS_OPS_ENTITLEMENTS_BLOB
 #define CS_OPS_ENTITLEMENTS_BLOB 7
 #endif
+
+#ifndef CS_OPS_STATUS
+#define CS_OPS_STATUS 0
+#endif
+
+#ifndef CS_DEBUGGED
+#define CS_DEBUGGED 0x10000000
+#endif
+
+static BOOL jessi_is_cs_debugged(void) {
+    int flags = 0;
+    if (csops(getpid(), CS_OPS_STATUS, &flags, sizeof(flags)) != 0) return NO;
+    return (flags & CS_DEBUGGED) != 0;
+}
+
+static BOOL jessi_task_has_breakpoint_exception_handler(void) {
+    exception_mask_t masks[32];
+    mach_msg_type_number_t masksCnt = 32;
+    exception_handler_t handlers[32];
+    exception_behavior_t behaviors[32];
+    thread_state_flavor_t flavors[32];
+
+    kern_return_t kr = task_get_exception_ports(mach_task_self(), EXC_MASK_BREAKPOINT,
+                                                masks, &masksCnt, handlers, behaviors, flavors);
+    if (kr != KERN_SUCCESS) return NO;
+
+    BOOL hasHandler = NO;
+    for (mach_msg_type_number_t i = 0; i < masksCnt; i++) {
+        if ((masks[i] & EXC_MASK_BREAKPOINT) && handlers[i] != MACH_PORT_NULL) {
+            hasHandler = YES;
+        }
+        if (handlers[i] != MACH_PORT_NULL) {
+            mach_port_deallocate(mach_task_self(), handlers[i]);
+        }
+    }
+    return hasHandler;
+}
 
 typedef int jint;
 typedef unsigned char jboolean;
@@ -109,6 +147,138 @@ static BOOL jessi_has_extended_va_entitlement(void) {
     if ([val respondsToSelector:@selector(boolValue)] && [val boolValue]) return YES;
 
     return NO;
+}
+
+__attribute__((noinline,optnone,naked))
+static void *jessi_jit26_prepare_region(void *addr, size_t len) {
+    __asm__(
+        "mov x16, #1 \n"
+        "brk #0xf00d \n"
+        "ret"
+    );
+}
+
+__attribute__((noinline,optnone,naked))
+static void jessi_jit26_break_send_script(char *script, size_t len) {
+    __asm__(
+        "mov x16, #2 \n"
+        "brk #0xf00d \n"
+        "ret"
+    );
+}
+
+__attribute__((noinline,optnone,naked))
+static void jessi_jit26_set_detach_after_first_br(BOOL value) {
+    __asm__(
+        "mov x16, #3 \n"
+        "brk #0xf00d \n"
+        "ret"
+    );
+}
+
+__attribute__((noinline,optnone,naked))
+static void jessi_jit26_prepare_region_for_patching(void *addr, size_t size) {
+    __asm__(
+        "mov x16, #4 \n"
+        "brk #0xf00d \n"
+        "ret"
+    );
+}
+
+static BOOL jessi_device_requires_txm_workaround(void) {
+    static int cached = -1;
+    if (cached != -1) return cached == 1;
+
+    if (!jessi_is_ios26_or_later_core()) {
+        cached = 0;
+        return NO;
+    }
+
+    DIR *d = opendir("/private/preboot");
+    if (!d) {
+        cached = 0;
+        return NO;
+    }
+
+    struct dirent *dir;
+    char txmPath[PATH_MAX] = {0};
+    while ((dir = readdir(d)) != NULL) {
+        if (strlen(dir->d_name) == 96) {
+            snprintf(txmPath, sizeof(txmPath), "/private/preboot/%s/usr/standalone/firmware/FUD/Ap,TrustedExecutionMonitor.img4", dir->d_name);
+            break;
+        }
+    }
+    closedir(d);
+
+    cached = (txmPath[0] != 0 && access(txmPath, F_OK) == 0) ? 1 : 0;
+    return cached == 1;
+}
+
+static BOOL jessi_txm_jit26_ready = NO;
+
+static NSString *jessi_find_jit26_extension_script(NSString *workingDir) {
+    if (workingDir.length) {
+        NSString *fromWorkdir = [workingDir stringByAppendingPathComponent:@"UniversalJIT26Extension.js"];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:fromWorkdir]) {
+            return fromWorkdir;
+        }
+    }
+
+    NSString *fromBundle = [[NSBundle mainBundle] pathForResource:@"UniversalJIT26Extension" ofType:@"js"];
+    if (fromBundle.length && [[NSFileManager defaultManager] fileExistsAtPath:fromBundle]) {
+        return fromBundle;
+    }
+
+    return nil;
+}
+
+static BOOL jessi_txm_skip_dyld_bypass = NO;
+
+static void jessi_ios26_txm_setup_if_needed(NSString *workingDir) {
+    static BOOL didSetup = NO;
+    if (didSetup) return;
+
+    if (!jessi_is_ios26_or_later_core()) return;
+    if (!jessi_device_requires_txm_workaround()) return;
+
+    if (![JessiSettings shared].iOS26JITSupport) {
+        fprintf(stderr, "[JESSI] TXM device detected; TXM Support is OFF (Settings).\n");
+        return;
+    }
+
+    NSString *scriptPath = jessi_find_jit26_extension_script(workingDir);
+    if (!scriptPath.length) {
+        fprintf(stderr, "[JESSI] TXM Support enabled but UniversalJIT26Extension.js not found.\n");
+        fprintf(stderr, "[JESSI] Relying on external StikDebug handler for JIT.\n");
+        BOOL hasHandler = jessi_task_has_breakpoint_exception_handler();
+        fprintf(stderr, "[JESSI] TXM setup: CS_DEBUGGED=%d, hasBreakpointHandler=%d\n", jessi_is_cs_debugged() ? 1 : 0, hasHandler ? 1 : 0);
+        if (!hasHandler) {
+            fprintf(stderr, "[JESSI] TXM setup skipped (no breakpoint handler)\n");
+            return;
+        }
+
+        didSetup = YES;
+        fprintf(stderr, "[JESSI] TXM setup: external handler active, skipping dyld bypass (Amethyst-style)\n");
+        jessi_txm_skip_dyld_bypass = YES;
+        return;
+    }
+
+    NSError *err = nil;
+    NSString *script = [NSString stringWithContentsOfFile:scriptPath encoding:NSUTF8StringEncoding error:&err];
+    if (!script.length || err) {
+        fprintf(stderr, "[JESSI] Failed to read UniversalJIT26Extension.js: %s\n", err.localizedDescription.UTF8String ?: "unknown");
+        return;
+    }
+
+    didSetup = YES;
+    fprintf(stderr, "[JESSI] TXM setup: sending UniversalJIT26Extension (%s)\n", scriptPath.lastPathComponent.UTF8String);
+    jessi_jit26_break_send_script((char *)script.UTF8String, (size_t)script.length);
+    jessi_txm_jit26_ready = YES;
+    jessi_jit26_set_detach_after_first_br(NO);
+    kern_return_t kr = task_set_exception_ports(mach_task_self(), EXC_MASK_BAD_ACCESS, 0, EXCEPTION_DEFAULT, MACHINE_THREAD_STATE);
+    if (kr != KERN_SUCCESS) {
+        fprintf(stderr, "[JESSI] TXM setup: task_set_exception_ports(EXC_MASK_BAD_ACCESS) failed: %d\n", kr);
+    }
 }
 
 extern int dyld_get_active_platform(void);
@@ -510,6 +680,30 @@ static bool jessi_write_abs_branch_stub(void *patchAddr, void *target) {
     return kr == KERN_SUCCESS;
 }
 
+static bool jessi_write_abs_branch_stub_mirrored(void *patchAddr, void *target, BOOL prepareForPatching) {
+    if (!patchAddr || !target) return false;
+
+    if (prepareForPatching) {
+        jessi_jit26_prepare_region_for_patching(patchAddr, sizeof(jessi_arm64_abs_branch_stub));
+    }
+
+    vm_address_t mirrored = 0;
+    vm_prot_t curProt = 0, maxProt = 0;
+    kern_return_t ret = vm_remap(mach_task_self(), &mirrored, (vm_size_t)sizeof(jessi_arm64_abs_branch_stub), 0, VM_FLAGS_ANYWHERE,
+                                 mach_task_self(), (vm_address_t)patchAddr, false, &curProt, &maxProt, VM_INHERIT_SHARE);
+    if (ret != KERN_SUCCESS) return false;
+
+    mirrored += ((vm_address_t)patchAddr & PAGE_MASK);
+    vm_protect(mach_task_self(), mirrored, (vm_size_t)sizeof(jessi_arm64_abs_branch_stub), NO, VM_PROT_READ | VM_PROT_WRITE);
+
+    memcpy((void *)mirrored, jessi_arm64_abs_branch_stub, sizeof(jessi_arm64_abs_branch_stub));
+    *(void **)((uint8_t *)mirrored + 16) = target;
+    sys_icache_invalidate(patchAddr, sizeof(jessi_arm64_abs_branch_stub));
+
+    vm_deallocate(mach_task_self(), mirrored, (vm_size_t)sizeof(jessi_arm64_abs_branch_stub));
+    return true;
+}
+
 static uint8_t *jessi_find_signature(uint8_t *base, const uint8_t *sig, size_t sigLen) {
     if (!base || !sig || sigLen == 0) return NULL;
     for (size_t off = 0; off + sigLen < 0x80000; off += 4) {
@@ -533,6 +727,9 @@ static void* jessi_hooked_mmap(void *addr, size_t len, int prot, int flags, int 
         
         map = __mmap(addr, len, prot, (flags | MAP_PRIVATE | MAP_ANON), 0, 0);
         if (map != MAP_FAILED) {
+            if (jessi_txm_jit26_ready && jessi_is_ios26_or_later_core() && jessi_device_requires_txm_workaround() && [JessiSettings shared].iOS26JITSupport) {
+                (void)jessi_jit26_prepare_region(map, len);
+            }
             void *fileMap = __mmap(NULL, len, PROT_READ, MAP_PRIVATE, fd, offset);
             if (fileMap != MAP_FAILED) {
                 vm_address_t mirrored = 0;
@@ -586,13 +783,22 @@ static int jessi_hooked_fcntl(int fildes, int cmd, void *param) {
 static void jessi_init_dyld_validation_bypass_if_needed(void) {
     static BOOL didInit = NO;
     if (didInit) return;
-    didInit = YES;
 
     BOOL ios26OrLater = jessi_is_ios26_or_later_core();
     BOOL ios18OrEarlier = jessi_is_ios18_or_earlier_core();
     if (!ios18OrEarlier && !ios26OrLater) {
         return;
     }
+
+    if (jessi_txm_skip_dyld_bypass) {
+        fprintf(stderr, "[JESSI] Dyld bypass skipped (TXM with external handler)\n");
+        didInit = YES;
+        return;
+    }
+
+    didInit = YES;
+
+    BOOL txmEnabled = ios26OrLater && jessi_txm_jit26_ready && jessi_device_requires_txm_workaround() && [JessiSettings shared].iOS26JITSupport;
 
     if (!jessi_check_jit_enabled() && !ios26OrLater) {
         fprintf(stderr, "[JESSI] Dyld bypass skipped (JIT not enabled)\n");
@@ -629,7 +835,24 @@ static void jessi_init_dyld_validation_bypass_if_needed(void) {
     }
 
     if (ios26OrLater) {
-        
+        if (txmEnabled) {
+            signal(SIGBUS, SIG_IGN);
+
+            bool ok1 = false, ok2 = false;
+            if (mmapSite) {
+                ok1 = jessi_write_abs_branch_stub_mirrored(mmapSite, (void *)jessi_hooked_mmap, YES);
+                fprintf(stderr, "[JESSI] Dyld bypass mmap %s at %p (TXM mirrored)\n", ok1 ? "hooked" : "failed", mmapSite);
+            }
+            if (fcntlSite) {
+                ok2 = jessi_write_abs_branch_stub_mirrored(fcntlSite, (void *)jessi_hooked_fcntl, YES);
+                fprintf(stderr, "[JESSI] Dyld bypass fcntl %s at %p (TXM mirrored)\n", ok2 ? "hooked" : "failed", fcntlSite);
+            }
+            if (!(ok1 || ok2)) {
+                fprintf(stderr, "[JESSI] Dyld bypass did not hook any targets (TXM)\n");
+            }
+            return;
+        }
+
         jessi_ensure_exc_server_started();
         BOOL any = NO;
         if (mmapSite) {
@@ -806,6 +1029,7 @@ int jessi_server_main(int argc, char *argv[]) {
             setenv("JESSI_SERVER_WORKDIR", workingDirC, 1);
 
             chdir(workingDirC);
+            jessi_ios26_txm_setup_if_needed(workingDir);
 
             NSString *libjliPath8 = [javaHome stringByAppendingPathComponent:@"lib/jli/libjli.dylib"];
             NSString *libjliPath11 = [javaHome stringByAppendingPathComponent:@"lib/libjli.dylib"];
@@ -1035,6 +1259,8 @@ int jessi_tool_main(int argc, char *argv[]) {
             if (argsPathC) setenv("JESSI_TOOL_ARGS_PATH", argsPathC, 1);
 
             chdir(workingDirC);
+
+            jessi_ios26_txm_setup_if_needed(workingDir);
 
             NSString *libjliPath8 = [javaHome stringByAppendingPathComponent:@"lib/jli/libjli.dylib"];
             NSString *libjliPath11 = [javaHome stringByAppendingPathComponent:@"lib/libjli.dylib"];
