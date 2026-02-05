@@ -10,6 +10,10 @@
 
 extern int jessi_server_main(int argc, char *argv[]);
 
+static NSString *const JessiServerRunningKey = @"jessi.server.running";
+static NSString *const JessiServerRunningChanged = @"JessiServerRunningChanged";
+static BOOL g_serverRunning = NO;
+
 @interface JessiServerService ()
 @property (nonatomic, readwrite, getter=isRunning) BOOL running;
 @property (nonatomic, strong) NSMutableString *console;
@@ -33,8 +37,29 @@ extern int jessi_server_main(int argc, char *argv[]);
         _logQueue = dispatch_queue_create("com.baconmania.jessi.log", DISPATCH_QUEUE_SERIAL);
         _activeRconPort = 25575;
         [JessiPaths ensureBaseDirectories];
+        [[NSUserDefaults standardUserDefaults] setBool:g_serverRunning forKey:JessiServerRunningKey];
     }
     return self;
+}
+
+- (BOOL)isRunning {
+    @synchronized([JessiServerService class]) {
+        return g_serverRunning;
+    }
+}
+
+- (void)setRunning:(BOOL)running {
+    BOOL changed = NO;
+    @synchronized([JessiServerService class]) {
+        if (g_serverRunning != running) {
+            g_serverRunning = running;
+            changed = YES;
+        }
+    }
+    if (changed) {
+        [[NSUserDefaults standardUserDefaults] setBool:running forKey:JessiServerRunningKey];
+        [[NSNotificationCenter defaultCenter] postNotificationName:JessiServerRunningChanged object:nil];
+    }
 }
 
 - (NSString *)serversRoot { return [JessiPaths serversRoot]; }
