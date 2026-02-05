@@ -51,6 +51,7 @@ static NSString *const kJessiIOS26JIT = @"jessi.jit.ios26";
         }
     }
 
+    // If a single generic "java" folder exists, infer which version it is.
     if (!isIOS26OrLater && ![available containsObject:@"8"] && ![available containsObject:@"17"] && ![available containsObject:@"21"]) {
         NSString *genericPath = nil;
         for (NSString *root in roots) {
@@ -75,6 +76,7 @@ static NSString *const kJessiIOS26JIT = @"jessi.jit.ios26";
         }
     }
 
+    // Also include downloaded runtimes stored in Application Support.
     NSURL *appSupport = [[fm URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask] firstObject];
     NSString *runtimesRoot = [[appSupport URLByAppendingPathComponent:@"Runtimes" isDirectory:YES] path];
     if (runtimesRoot.length) {
@@ -114,6 +116,7 @@ static NSString *const kJessiIOS26JIT = @"jessi.jit.ios26";
             self.javaVersion = pickBestAvailable() ?: @"21";
         }
     } else {
+        // No bundled runtimes detected. Keep the saved value if present, otherwise default to 21.
         self.javaVersion = savedVersion.length ? savedVersion : @"21";
     }
     
