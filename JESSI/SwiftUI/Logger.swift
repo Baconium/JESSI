@@ -10,6 +10,7 @@ import Combine
 import SwiftUI
 
 let modlogger = Logger()
+let tunnelinglogger = Logger()
 
 class Logger: ObservableObject {
     @Published var logs: [String] = []
@@ -73,7 +74,7 @@ class Logger: ObservableObject {
     }
 }
 
-struct LogsView: View {
+struct LogsViewSheet: View {
     @ObservedObject var logger: Logger
     @Environment(\.presentationMode) private var presentationMode
 
@@ -106,3 +107,5 @@ struct LogsView: View {
         }
     }
 }
+
+
