@@ -22,6 +22,15 @@ struct RootTabView: View {
 			.tabItem {
 				Label("Launch", systemImage: "play")
 			}
+            
+            NavigationView {
+                TunnelingView()
+            }
+            .navigationViewStyle(StackNavigationViewStyle())
+            .tag(1)
+            .tabItem {
+                Label("Tunneling", systemImage: "network")
+            }
 
 			NavigationView {
 				SettingsView()
