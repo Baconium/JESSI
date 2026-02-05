@@ -598,7 +598,7 @@ struct ModsView: View {
             }
         }
         .sheet(isPresented: $showlogs) {
-            LogsView(logger: modlogger)
+            LogsViewSheet(logger: modlogger)
                 .background(Color(UIColor.systemBackground).ignoresSafeArea())
         }
         .background(Color(UIColor.systemBackground).ignoresSafeArea())
