@@ -26,6 +26,8 @@
 		B1C0F700A1B2C3D4E5F6003F /* JessiSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */; };
 		B1C0F700A1B2C3D4E5F60040 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001B /* main.m */; };
 		B1C0F700A1B2C3D4E5F60041 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60001 /* Assets.xcassets */; };
+		B1C0F700A1B2C3D4E5F60042 /* mach_excServer.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */; };
+		B1C0F700A1B2C3D4E5F60043 /* mach_excUser.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */; };
 		B1C0F700A1B2C3D4E5F60110 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = B1C0F700A1B2C3D4E5F60100 /* ZIPFoundation */; };
 		B1C0F700A1B2C3D4E5F60111 /* SWCompression in Frameworks */ = {isa = PBXBuildFile; productRef = B1C0F700A1B2C3D4E5F60101 /* SWCompression */; };
 /* End PBXBuildFile section */
@@ -58,6 +60,10 @@
 		B1C0F700A1B2C3D4E5F60019 /* JessiSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiSettings.h; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiSettings.m; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F6001B /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mach_excServer.c; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001D /* mach_excServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mach_excServer.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mach_excUser.c; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F6001F /* mach_excUser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mach_excUser.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +116,7 @@
 		B1C0F700A1B2C3D4E5F60061 /* JessiCore */ = {
 			isa = PBXGroup;
 			children = (
+				B1C0F700A1B2C3D4E5F60063 /* MachExc */,
 				B1C0F700A1B2C3D4E5F60010 /* JessiAppDelegate.h */,
 				B1C0F700A1B2C3D4E5F60011 /* JessiAppDelegate.m */,
 				B1C0F700A1B2C3D4E5F60012 /* JessiJavaRunner.m */,
@@ -144,6 +151,17 @@
 				B1C0F700A1B2C3D4E5F6000D /* SwiftUIEntry.swift */,
 			);
 			path = SwiftUI;
+			sourceTree = "<group>";
+		};
+		B1C0F700A1B2C3D4E5F60063 /* MachExc */ = {
+			isa = PBXGroup;
+			children = (
+				B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */,
+				B1C0F700A1B2C3D4E5F6001D /* mach_excServer.h */,
+				B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */,
+				B1C0F700A1B2C3D4E5F6001F /* mach_excUser.h */,
+			);
+			path = MachExc;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -224,6 +242,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B1C0F700A1B2C3D4E5F60042 /* mach_excServer.c in Sources */,
+				B1C0F700A1B2C3D4E5F60043 /* mach_excUser.c in Sources */,
 				B1C0F700A1B2C3D4E5F60040 /* main.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003A /* JessiAppDelegate.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003B /* JessiJavaRunner.m in Sources */,
