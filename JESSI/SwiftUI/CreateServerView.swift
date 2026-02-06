@@ -13,7 +13,6 @@ enum ServerSoftwareSwift: String, CaseIterable, Identifiable {
 }
 
 struct CreateServerView: View {
-
     @State private var software: ServerSoftwareSwift = .vanilla
     @State private var serverName: String = ""
 
