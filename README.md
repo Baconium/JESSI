@@ -12,9 +12,11 @@ To enable JIT on iOS 17.4-18.7.4, you must first install [LocalDevVPN](https://a
 
 To enable JIT on iOS 26+, first follow all of the steps for iOS 17.4-18.7.4. If you have an A13-A14/M1 device, you're done! if you have an A15+/M2+ device, then in StikDebug set the default script to Amethyst-MeloNX.js (or assign that script to JESSI), and then launch JESSI via StikDebug. if you did it correctly, it should open a PIP window with a bunch of logs. Then in settings, enable the "TXM Support" option.
 
-JESSI also works inside of [LiveContainer](https://github.com/LiveContainer/LiveContainer). To do that, first install the app as normal. If you don't know how to do that, click [here](https://github.com/LiveContainer/LiveContainer?tab=readme-ov-file#installing-apps). You're also going to need to launch this app with JIT. To do that, double tap on the app's banner in LiveContainer (or long press and click 'Settings') and find the "Launch with JIT" toggle. Make sure this is turned on. Then, when you try to launch JESSI, LiveContainer will attempt to acquire JIT for the app.
-
 **Note: Make sure to install a JVM in settings. If you don't know which version to select, select Java 21.**
+
+# LiveContainer
+
+JESSI also works inside of [LiveContainer](https://github.com/LiveContainer/LiveContainer). Make sure to launch the app with JIT. To do this, long press on JESSI after installing it in LiveContainer, then go into the settings of it, then toggle on Launch with JIT. JESSI should now always launch with JIT! (assuming you have LiveContainer set up with JIT properly).
 
 # Features
 
