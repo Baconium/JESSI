@@ -71,6 +71,7 @@ final class SettingsModel: ObservableObject {
     
     @Published var showClearCacheAlert: Bool = false
     @Published var showClearCacheSuccess: Bool = false
+    @Published var showClearCacheError: Bool = false
     @Published var clearCacheErrorMessage: String? = nil
 
     let allJVMVersions: [String] = ["8", "17", "21"]
@@ -577,49 +578,44 @@ final class SettingsModel: ObservableObject {
     func clearCache() {
         clearCacheErrorMessage = nil
         
-        do {
-            let fm = FileManager.default
-            let defaults = UserDefaults.standard
-            
-            // Clear Playit-related UserDefaults keys
-            let playitKeys = [
-                "jessi.playit.claimurl",
-                "jessi.playit.secretkey",
-                "jessi.playit.lastaddress",
-                "jessi.playit.status",
-                "jessi.playit.lasterror"
-            ]
-            
-            for key in playitKeys {
-                defaults.removeObject(forKey: key)
-            }
-            
-            // Clear caches directory
-            if let cachesDir = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
-                let contents = try? fm.contentsOfDirectory(at: cachesDir, includingPropertiesForKeys: nil)
-                if let contents = contents {
-                    for itemURL in contents {
-                        try? fm.removeItem(at: itemURL)
-                    }
+        let fm = FileManager.default
+        let defaults = UserDefaults.standard
+        
+        // Clear Playit-related UserDefaults keys
+        let playitKeys = [
+            "jessi.playit.claimurl",
+            "jessi.playit.secretkey",
+            "jessi.playit.lastaddress",
+            "jessi.playit.status",
+            "jessi.playit.lasterror"
+        ]
+        
+        for key in playitKeys {
+            defaults.removeObject(forKey: key)
+        }
+        
+        // Clear caches directory
+        if let cachesDir = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
+            let contents = try? fm.contentsOfDirectory(at: cachesDir, includingPropertiesForKeys: nil)
+            if let contents = contents {
+                for itemURL in contents {
+                    try? fm.removeItem(at: itemURL)
                 }
             }
-            
-            // Clear temporary installation directories
-            let tmpDir = fm.temporaryDirectory
-            let jessiTunnelingDir = tmpDir.appendingPathComponent("jessi-tunneling-install", isDirectory: true)
-            let jessiJVMDir = tmpDir.appendingPathComponent("jessi-jvm-install", isDirectory: true)
-            
-            try? fm.removeItem(at: jessiTunnelingDir)
-            try? fm.removeItem(at: jessiJVMDir)
-            
-            // Synchronize UserDefaults
-            defaults.synchronize()
-            
-            showClearCacheSuccess = true
-            
-        } catch {
-            clearCacheErrorMessage = "Failed to clear cache: \(error.localizedDescription)"
         }
+        
+        // Clear temporary installation directories
+        let tmpDir = fm.temporaryDirectory
+        let jessiTunnelingDir = tmpDir.appendingPathComponent("jessi-tunneling-install", isDirectory: true)
+        let jessiJVMDir = tmpDir.appendingPathComponent("jessi-jvm-install", isDirectory: true)
+        
+        try? fm.removeItem(at: jessiTunnelingDir)
+        try? fm.removeItem(at: jessiJVMDir)
+        
+        // Synchronize UserDefaults
+        defaults.synchronize()
+        
+        showClearCacheSuccess = true
     }
 }
 
@@ -886,7 +882,14 @@ struct SettingsView: View {
         .alert(isPresented: $model.showClearCacheSuccess) {
             Alert(
                 title: Text("Cache Cleared"),
-                message: Text(model.clearCacheErrorMessage ?? "Cache has been cleared successfully."),
+                message: Text("Cache has been cleared successfully."),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .alert(isPresented: $model.showClearCacheError) {
+            Alert(
+                title: Text("Error"),
+                message: Text(model.clearCacheErrorMessage ?? "Failed to clear cache."),
                 dismissButton: .default(Text("OK"))
             )
         }
