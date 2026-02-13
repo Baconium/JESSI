@@ -577,6 +577,8 @@ final class SettingsModel: ObservableObject {
     
     func clearCache() {
         clearCacheErrorMessage = nil
+        var hasErrors = false
+        var errors: [String] = []
         
         let fm = FileManager.default
         let defaults = UserDefaults.standard
@@ -596,11 +598,19 @@ final class SettingsModel: ObservableObject {
         
         // Clear caches directory
         if let cachesDir = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            let contents = try? fm.contentsOfDirectory(at: cachesDir, includingPropertiesForKeys: nil)
-            if let contents = contents {
+            do {
+                let contents = try fm.contentsOfDirectory(at: cachesDir, includingPropertiesForKeys: nil)
                 for itemURL in contents {
-                    try? fm.removeItem(at: itemURL)
+                    do {
+                        try fm.removeItem(at: itemURL)
+                    } catch {
+                        hasErrors = true
+                        errors.append("Failed to remove \(itemURL.lastPathComponent): \(error.localizedDescription)")
+                    }
                 }
+            } catch {
+                hasErrors = true
+                errors.append("Failed to read caches directory: \(error.localizedDescription)")
             }
         }
         
@@ -609,13 +619,30 @@ final class SettingsModel: ObservableObject {
         let jessiTunnelingDir = tmpDir.appendingPathComponent("jessi-tunneling-install", isDirectory: true)
         let jessiJVMDir = tmpDir.appendingPathComponent("jessi-jvm-install", isDirectory: true)
         
-        try? fm.removeItem(at: jessiTunnelingDir)
-        try? fm.removeItem(at: jessiJVMDir)
+        if fm.fileExists(atPath: jessiTunnelingDir.path) {
+            do {
+                try fm.removeItem(at: jessiTunnelingDir)
+            } catch {
+                hasErrors = true
+                errors.append("Failed to remove tunneling temp dir: \(error.localizedDescription)")
+            }
+        }
         
-        // Synchronize UserDefaults
-        defaults.synchronize()
+        if fm.fileExists(atPath: jessiJVMDir.path) {
+            do {
+                try fm.removeItem(at: jessiJVMDir)
+            } catch {
+                hasErrors = true
+                errors.append("Failed to remove JVM temp dir: \(error.localizedDescription)")
+            }
+        }
         
-        showClearCacheSuccess = true
+        if hasErrors {
+            clearCacheErrorMessage = errors.joined(separator: "\n")
+            showClearCacheError = true
+        } else {
+            showClearCacheSuccess = true
+        }
     }
 }
 
