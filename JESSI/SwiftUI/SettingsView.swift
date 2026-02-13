@@ -68,6 +68,10 @@ final class SettingsModel: ObservableObject {
 
     @Published var installErrorMessage: String? = nil
     @Published var showInstallError: Bool = false
+    
+    @Published var showClearCacheAlert: Bool = false
+    @Published var showClearCacheSuccess: Bool = false
+    @Published var clearCacheErrorMessage: String? = nil
 
     let allJVMVersions: [String] = ["8", "17", "21"]
 
@@ -569,6 +573,54 @@ final class SettingsModel: ObservableObject {
         updateQueueCSV(filtered.joined(separator: ","))
         next()
     }
+    
+    func clearCache() {
+        clearCacheErrorMessage = nil
+        
+        do {
+            let fm = FileManager.default
+            let defaults = UserDefaults.standard
+            
+            // Clear Playit-related UserDefaults keys
+            let playitKeys = [
+                "jessi.playit.claimurl",
+                "jessi.playit.secretkey",
+                "jessi.playit.lastaddress",
+                "jessi.playit.status",
+                "jessi.playit.lasterror"
+            ]
+            
+            for key in playitKeys {
+                defaults.removeObject(forKey: key)
+            }
+            
+            // Clear caches directory
+            if let cachesDir = fm.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                let contents = try? fm.contentsOfDirectory(at: cachesDir, includingPropertiesForKeys: nil)
+                if let contents = contents {
+                    for itemURL in contents {
+                        try? fm.removeItem(at: itemURL)
+                    }
+                }
+            }
+            
+            // Clear temporary installation directories
+            let tmpDir = fm.temporaryDirectory
+            let jessiTunnelingDir = tmpDir.appendingPathComponent("jessi-tunneling-install", isDirectory: true)
+            let jessiJVMDir = tmpDir.appendingPathComponent("jessi-jvm-install", isDirectory: true)
+            
+            try? fm.removeItem(at: jessiTunnelingDir)
+            try? fm.removeItem(at: jessiJVMDir)
+            
+            // Synchronize UserDefaults
+            defaults.synchronize()
+            
+            showClearCacheSuccess = true
+            
+        } catch {
+            clearCacheErrorMessage = "Failed to clear cache: \(error.localizedDescription)"
+        }
+    }
 }
 
 struct SettingsView: View {
@@ -796,6 +848,18 @@ struct SettingsView: View {
                     Spacer()
                     Text(model.freeRAM)
                 }
+                
+                Button(action: {
+                    model.showClearCacheAlert = true
+                }) {
+                    HStack {
+                        Text("Clear Cache")
+                        Spacer()
+                        Image(systemName: "trash")
+                            .foregroundColor(.red)
+                    }
+                }
+                .foregroundColor(.primary)
 
             }
         }
@@ -806,6 +870,23 @@ struct SettingsView: View {
             Alert(
                 title: Text("JVM Install Failed"),
                 message: Text(model.installErrorMessage ?? "Unknown error"),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .alert(isPresented: $model.showClearCacheAlert) {
+            Alert(
+                title: Text("Clear Cache"),
+                message: Text("This will clear all cached data, including Playit connection settings and temporary files. This action cannot be undone."),
+                primaryButton: .destructive(Text("Clear")) {
+                    model.clearCache()
+                },
+                secondaryButton: .cancel()
+            )
+        }
+        .alert(isPresented: $model.showClearCacheSuccess) {
+            Alert(
+                title: Text("Cache Cleared"),
+                message: Text(model.clearCacheErrorMessage ?? "Cache has been cleared successfully."),
                 dismissButton: .default(Text("OK"))
             )
         }
