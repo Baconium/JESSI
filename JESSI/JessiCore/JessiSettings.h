@@ -7,8 +7,6 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *javaVersion;
 @property (nonatomic) NSInteger maxHeapMB;
 
-@property (nonatomic) BOOL txmSupport;
-
 @property (nonatomic) BOOL flagNettyNoNative;
 @property (nonatomic) BOOL flagJnaNoSys;
 
@@ -18,6 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)save;
 
 @property (nonatomic, copy) NSString *launchArguments;
+@property (nonatomic, copy) NSString *curseForgeAPIKey;
 
 @end
 
