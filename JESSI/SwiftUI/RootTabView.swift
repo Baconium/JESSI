@@ -3,6 +3,18 @@ import SwiftUI
 struct RootTabView: View {
 	@State private var selectedTab: Int = 1
 
+    init() {
+        _selectedTab = State(initialValue: 1)
+        
+        let appearance = UITabBarAppearance()
+        appearance.configureWithDefaultBackground()
+        
+        UITabBar.appearance().standardAppearance = appearance
+        if #available(iOS 15.0, *) {
+            UITabBar.appearance().scrollEdgeAppearance = appearance
+        }
+    }
+
 	var body: some View {
 		TabView(selection: $selectedTab) {
 			NavigationView {

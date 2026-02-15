@@ -7,7 +7,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *javaVersion;
 @property (nonatomic) NSInteger maxHeapMB;
 
-@property (nonatomic) BOOL txmSupport; // iOS 26 TXM devices (A15+/M2+)
+@property (nonatomic) BOOL txmSupport;
 
 @property (nonatomic) BOOL flagNettyNoNative;
 @property (nonatomic) BOOL flagJnaNoSys;

@@ -1,6 +1,6 @@
 //
 //  Logger.swift
-//  mobilegewalt
+//  mowiwewgewawt
 //
 //  Created by roooot on 15.11.25.
 //

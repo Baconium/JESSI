@@ -6,6 +6,7 @@
 #import <UIKit/UIKit.h>
 #import <sys/socket.h>
 #import <netinet/in.h>
+#import <sys/time.h>
 #import <unistd.h>
 
 extern int jessi_server_main(int argc, char *argv[]);
@@ -310,6 +311,49 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
     NSData *cmd = packet(reqId + 1, 2, command);
     if (!jessi_write_all(fd, cmd.bytes, cmd.length)) { close(fd); return NO; }
 
+    NSMutableString *responseText = [NSMutableString string];
+    while (1) {
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(fd, &rfds);
+
+        struct timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 300000;
+
+        int ready = select(fd + 1, &rfds, NULL, NULL, &tv);
+        if (ready <= 0) break;
+
+        int32_t outLen = 0;
+        ssize_t n = recv(fd, &outLen, 4, MSG_WAITALL);
+        if (n != 4) break;
+        if (outLen < 10 || outLen > 65536) break;
+
+        NSMutableData *out = [NSMutableData dataWithLength:(NSUInteger)outLen];
+        n = recv(fd, out.mutableBytes, (size_t)outLen, MSG_WAITALL);
+        if (n != outLen) break;
+
+        int32_t outId = 0;
+        memcpy(&outId, out.bytes, 4);
+        if (outId == -1) break;
+
+        NSUInteger payloadLen = (NSUInteger)outLen - 10;
+        if (payloadLen == 0) break;
+
+        NSData *payloadData = [out subdataWithRange:NSMakeRange(8, payloadLen)];
+        NSString *payload = [[NSString alloc] initWithData:payloadData encoding:NSUTF8StringEncoding];
+        if (payload.length) {
+            [responseText appendString:payload];
+        }
+    }
+
+    if (responseText.length > 0) {
+        if (![responseText hasSuffix:@"\n"]) {
+            [responseText appendString:@"\n"]; 
+        }
+        [self emitConsole:responseText];
+    }
+
     close(fd);
     return YES;
 }
@@ -322,8 +366,18 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
 
     NSString *dir = [self.serversRoot stringByAppendingPathComponent:serverName];
 
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *consoleLogPath = [dir stringByAppendingPathComponent:@"console.log"]; 
+    NSString *stdioLogPath = [dir stringByAppendingPathComponent:@"jessi-stdio.log"]; 
+    if ([fm fileExistsAtPath:consoleLogPath]) {
+        [fm removeItemAtPath:consoleLogPath error:nil];
+    }
+    if ([fm fileExistsAtPath:stdioLogPath]) {
+        [fm removeItemAtPath:stdioLogPath error:nil];
+    }
+
     NSString *launchArgsPath = [dir stringByAppendingPathComponent:@"jessi-launch-args.txt"]; 
-    BOOL hasLaunchArgs = [[NSFileManager defaultManager] fileExistsAtPath:launchArgsPath];
+    BOOL hasLaunchArgs = [fm fileExistsAtPath:launchArgsPath];
 
     NSString *jar = nil;
     if (hasLaunchArgs) {

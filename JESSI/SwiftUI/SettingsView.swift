@@ -61,6 +61,7 @@ final class SettingsModel: ObservableObject {
     @Published var launchArgs: String = ""
     @Published var isIOS26: Bool = false
     @Published var iOSVersionString: String = ""
+    @Published var deviceString: String = ""
 
     @Published var installedJVMVersions: Set<String> = []
 
@@ -103,7 +104,30 @@ final class SettingsModel: ObservableObject {
         isIOS26 = jessi_is_ios26_or_later()
         txmSupport = s.txmSupport
 
+        deviceString = deviceDisplayString(isIOS26: isIOS26)
+
         refreshInstalledJVMVersions()
+    }
+
+    private func deviceDisplayString(isIOS26: Bool) -> String {
+        let modelId = deviceModelIdentifier()
+        var base = JessiDeviceMarketingNames.marketingName(for: modelId) ?? (modelId.isEmpty ? UIDevice.current.model : modelId)
+        if isIOS26 && jessi_is_txm_device() {
+            base += " (TXM)"
+        }
+        return base
+    }
+
+    private func deviceModelIdentifier() -> String {
+        var u = utsname()
+        uname(&u)
+
+        let machine = withUnsafePointer(to: &u.machine) { ptr -> String in
+            let rawPtr = UnsafeRawPointer(ptr).assumingMemoryBound(to: CChar.self)
+            return String(cString: rawPtr)
+        }
+
+        return machine
     }
 
     func applyAndSaveJavaVersion(_ ver: String) {
@@ -320,10 +344,6 @@ final class SettingsModel: ObservableObject {
     }
 
     private func isMachOMagic(_ magicLE: UInt32) -> Bool {
-        // Little-endian constants for common Mach-O magics.
-        // 0xfeedfacf -> 64-bit Mach-O
-        // 0xcafebabe -> FAT (universal) Mach-O
-        // Note: when reading little-endian UInt32 directly from bytes, these appear as below.
         return magicLE == 0xFEEDFACF || magicLE == 0xCAFEBABE || magicLE == 0xBEBAFECA
     }
 
@@ -769,6 +789,12 @@ struct SettingsView: View {
 
             Section(header: Text("System")) {
                 HStack {
+                    Text("Device")
+                    Spacer()
+                    Text(model.deviceString)
+                }
+
+                HStack {
                     Text("JIT Enabled")
                     Spacer()
                     Text(model.isJITEnabled ? "Yes" : "No")
@@ -784,7 +810,6 @@ struct SettingsView: View {
                     Text("iOS Version")
                     Spacer()
                     Text(model.iOSVersionString)
-                        .foregroundColor(.secondary)
                 }
                 HStack {
                     Text("Total RAM")

@@ -1992,7 +1992,6 @@ struct ConnectionSectionView: View {
 
     private var upnpTestRow: some View {
         Button(action: {
-            upnpmodel.enablePorts(parsePorts())
             upnpmodel.test()
         }) {
             HStack(spacing: 10) {

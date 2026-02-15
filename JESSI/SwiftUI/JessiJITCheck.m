@@ -3,6 +3,10 @@
 #import <Foundation/Foundation.h>
 #import <unistd.h>
 #import <sys/utsname.h>
+#import <dirent.h>
+#import <limits.h>
+#import <stdio.h>
+#import <string.h>
 #if __has_include(<sys/codesign.h>)
 #import <sys/codesign.h>
 #else
@@ -15,13 +19,18 @@ int csops(pid_t pid, int ops, void *useraddr, size_t nbytes);
 
 #import <dlfcn.h>
 
+#if __has_include(<Security/SecTask.h>)
+#import <Security/SecTask.h>
+#else
+typedef const struct __SecTask *SecTaskRef;
+SecTaskRef SecTaskCreateFromSelf(CFAllocatorRef allocator);
+CFTypeRef SecTaskCopyValueForEntitlement(SecTaskRef task, CFStringRef entitlement, CFErrorRef *error);
+#endif
+
 #define CS_DEBUGGED 0x10000000
 
-CFTypeRef SecTaskCopyValueForEntitlement(void *task, CFStringRef entitlement, CFErrorRef *error);
-void *SecTaskCreateFromSelf(CFAllocatorRef allocator);
-
 static BOOL getEntitlementValue(NSString *key) {
-    void *task = SecTaskCreateFromSelf(NULL);
+    SecTaskRef task = SecTaskCreateFromSelf(NULL);
     if (!task) return NO;
 
     CFTypeRef value = SecTaskCopyValueForEntitlement(task, (__bridge CFStringRef)key, NULL);
@@ -55,4 +64,23 @@ BOOL jessi_is_ios26_or_later(void) {
         return YES;
     }
     return NO;
+}
+
+BOOL jessi_is_txm_device(void) {
+    if (!jessi_is_ios26_or_later()) return NO;
+
+    DIR *d = opendir("/private/preboot");
+    if (!d) return NO;
+
+    struct dirent *dir = NULL;
+    char txmPath[PATH_MAX] = {0};
+    while ((dir = readdir(d)) != NULL) {
+        if (strlen(dir->d_name) == 96) {
+            snprintf(txmPath, sizeof(txmPath), "/private/preboot/%s/usr/standalone/firmware/FUD/Ap,TrustedExecutionMonitor.img4", dir->d_name);
+            break;
+        }
+    }
+    closedir(d);
+
+    return txmPath[0] != '\0' && access(txmPath, F_OK) == 0;
 }

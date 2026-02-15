@@ -223,8 +223,12 @@ struct ServerManagerView: View {
 
                                 Spacer()
 
-                                Image(systemName: "chevron.right")
-                                    .foregroundColor(.secondary)
+                                if #available(iOS 18.0, *) {
+                                    EmptyView()
+                                } else {
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                }
                             }
                             .padding(.vertical, 6)
                             .contentShape(Rectangle())
