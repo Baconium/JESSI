@@ -1,3 +1,34 @@
+<div align="center">
+  <br>
+  <a href="https://discord.gg/aZ9HbYXKur"><img src="https://raw.githubusercontent.com/rooootdev/JESSI/main/gay2_electricboogaloo.png" alt="JESSI Logo" width="200"></a>
+  <br>
+  <h1>JESSI</h1>
+</div>
+
+<h4 align="center">Java Edition Servers Suck on iOS</h4>
+
+<p align="center">
+  <a href="https://discord.gg/aZ9HbYXKur">
+    <img src="https://img.shields.io/badge/Discord-Join%20Server-7289DA.svg" alt="Discord">
+  </a>
+  <a href="https://github.com/baconium/JESSI/stargazers">
+    <img src="https://img.shields.io/github/stars/baconium/JESSI?style=social" alt="GitHub stars">
+  </a>
+  <a href="https://github.com/baconium/JESSI/issues">
+    <img src="https://img.shields.io/github/issues/baconium/JESSI" alt="GitHub issues">
+  </a>
+  <a href="https://github.com/baconium/JESSI/releases">
+    <img src="https://img.shields.io/github/v/release/baconium/JESSI" alt="Release">
+  </a>
+</p>
+
+<p align="center">
+  <a href="#basic-information">Basic Information</a> •
+  <a href="#livecontainer">LiveContainer</a> •
+  <a href="#features">Features</a> •
+  <a href="#buildingmiscellaneous-extra-info">Build / Misc</a>
+</p>
+
 If you would like support, want to request a feature, or just talk to other JESSI users you should join the discord: https://discord.gg/aZ9HbYXKur
 
 # Basic Information
