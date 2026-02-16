@@ -34,6 +34,25 @@ struct ModrinthResponse: Decodable {
     let hits: [ModrinthMod]
 }
 
+enum ModProvider: String, CaseIterable, Identifiable {
+    case modrinth
+    case curseForge = "curseforge"
+
+    var id: String { rawValue }
+}
+
+struct ModSearchItem: Identifiable {
+    let id: String
+    let provider: ModProvider
+    let providerID: String
+    let title: String
+    let description: String
+    let downloads: Int
+    let iconURL: String?
+    let author: String?
+    let follows: Int
+}
+
 struct ModrinthMod: Decodable, Identifiable {
     let id: String
     let slug: String
@@ -71,18 +90,54 @@ struct ModrinthFile: Decodable {
     let primary: Bool
 }
 
+struct CurseForgeSearchResponse: Decodable {
+    let data: [CurseForgeMod]
+}
+
+struct CurseForgeMod: Decodable {
+    let id: Int
+    let name: String
+    let summary: String
+    let downloadCount: Int
+    let logo: CurseForgeLogo?
+    let authors: [CurseForgeAuthor]
+}
+
+struct CurseForgeLogo: Decodable {
+    let url: String?
+}
+
+struct CurseForgeAuthor: Decodable {
+    let name: String
+}
+
+struct CurseForgeFilesResponse: Decodable {
+    let data: [CurseForgeFile]
+}
+
+struct CurseForgeFile: Decodable {
+    let id: Int
+    let fileName: String
+}
+
+struct CurseForgeDownloadURLResponse: Decodable {
+    let data: String
+}
+
 @MainActor
 final class ModsVM: ObservableObject {
     @Published var query: String = ""
-    @Published var mods: [ModrinthMod] = []
+    @Published var mods: [ModSearchItem] = []
     @Published var isloading = false
     @Published var errmsg: String?
     @Published var initialload = false
     @Published var extraload = false
     @Published var installedmods: [String: String] = [:]
     @Published var installingmods: Set<String> = []
+    @Published var provider: ModProvider = .modrinth
     
-    private let baseurl = "https://api.modrinth.com/v2/search"
+    private let modrinthBaseURL = "https://api.modrinth.com/v2/search"
+    private let curseForgeBaseURL = "https://api.curseforge.com/v1"
     private var offset = 0
     private let limit = 20
     private var canload = true
@@ -144,6 +199,29 @@ final class ModsVM: ObservableObject {
         }
     }
 
+    var curseForgeAPIKey: String? {
+        let saved = JessiSettings.shared().curseForgeAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !saved.isEmpty {
+            return saved
+        }
+        return Bundle.main.object(forInfoDictionaryKey: "CURSEFORGE_API_KEY") as? String
+    }
+
+    func curseForgeModLoaderType() -> Int? {
+        switch parsedserversoft() {
+        case .forge:
+            return 1
+        case .fabric:
+            return 4
+        case .quilt:
+            return 5
+        case .neoforge:
+            return 6
+        default:
+            return nil
+        }
+    }
+
     
     private func readconfig(for server: String) {
         let fm = FileManager.default
@@ -189,62 +267,135 @@ final class ModsVM: ObservableObject {
         errmsg = nil
         
         do {
-            var components = URLComponents(string: baseurl)!
-            let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            var queryitems: [URLQueryItem] = [
-                URLQueryItem(name: "limit", value: "\(limit)"),
-                URLQueryItem(name: "offset", value: "\(offset)")
-            ]
-            
-            if !trimmed.isEmpty {
-                queryitems.append(URLQueryItem(name: "query", value: trimmed))
+            let newItems: [ModSearchItem]
+            switch provider {
+            case .modrinth:
+                newItems = try await searchModrinth()
+            case .curseForge:
+                newItems = try await searchCurseForge()
             }
-            
-            if let software = parsedserversoft() {
-                if software == .custom { } else {
-                    var facets: [[String]] = [
-                        ["project_type:mod"],
-                        ["server_side:required", "server_side:optional"]
-                    ]
 
-                    if let version = serverver {
-                        facets.insert(["versions:\(version)"], at: 0)
-                    }
+            modlogger.log("received \(newItems.count) mods from \(provider.rawValue)")
 
-                    if let loader = loaderFacet(for: software) {
-                        facets.append([loader])
-                    }
-
-                    if let facetsdata = try? JSONSerialization.data(withJSONObject: facets, options: []),
-                       let facetsstring = String(data: facetsdata, encoding: .utf8) {
-                        queryitems.append(URLQueryItem(name: "facets", value: facetsstring))
-                    }
-                }
-            }
-            
-            components.queryItems = queryitems
-            let url = components.url!
-            modlogger.log("request: \(url.absoluteString)")
-            
-            var request = URLRequest(url: url)
-            request.setValue("JESSI :3", forHTTPHeaderField: "User-Agent")
-            
-            let (data, _) = try await URLSession.shared.data(for: request)
-            let decoded = try JSONDecoder().decode(ModrinthResponse.self, from: data)
-            modlogger.log("received \(decoded.hits.count) mods")
-            
-            if decoded.hits.count < limit { canload = false }
-            
-            mods.append(contentsOf: decoded.hits)
-            offset += decoded.hits.count
-            
+            if newItems.count < limit { canload = false }
+            mods.append(contentsOf: newItems)
+            offset += newItems.count
             modlogger.divider()
         } catch {
             errmsg = error.localizedDescription
         }
         
         if initial { initialload = false } else { extraload = false }
+    }
+
+    private func searchModrinth() async throws -> [ModSearchItem] {
+        var components = URLComponents(string: modrinthBaseURL)!
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var queryitems: [URLQueryItem] = [
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "offset", value: "\(offset)")
+        ]
+
+        if !trimmed.isEmpty {
+            queryitems.append(URLQueryItem(name: "query", value: trimmed))
+        }
+
+        if let software = parsedserversoft(), software != .custom {
+            var facets: [[String]] = [
+                ["project_type:mod"],
+                ["server_side:required", "server_side:optional"]
+            ]
+
+            if let version = serverver {
+                facets.insert(["versions:\(version)"], at: 0)
+            }
+
+            if let loader = loaderFacet(for: software) {
+                facets.append([loader])
+            }
+
+            if let facetsdata = try? JSONSerialization.data(withJSONObject: facets, options: []),
+               let facetsstring = String(data: facetsdata, encoding: .utf8) {
+                queryitems.append(URLQueryItem(name: "facets", value: facetsstring))
+            }
+        }
+
+        components.queryItems = queryitems
+        let url = components.url!
+        modlogger.log("request: \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.setValue("JESSI :3", forHTTPHeaderField: "User-Agent")
+
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let decoded = try JSONDecoder().decode(ModrinthResponse.self, from: data)
+        return decoded.hits.map {
+            ModSearchItem(
+                id: "\(ModProvider.modrinth.rawValue):\($0.id)",
+                provider: .modrinth,
+                providerID: $0.id,
+                title: $0.title,
+                description: $0.description,
+                downloads: $0.downloads,
+                iconURL: $0.iconURL,
+                author: $0.author,
+                follows: $0.follows
+            )
+        }
+    }
+
+    private func searchCurseForge() async throws -> [ModSearchItem] {
+        guard let key = curseForgeAPIKey, !key.isEmpty else {
+            throw NSError(
+                domain: "Missing CurseForge API key in Settings or Info.plist",
+                code: 0
+            )
+        }
+
+        var components = URLComponents(string: "\(curseForgeBaseURL)/mods/search")!
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "gameId", value: "432"),
+            URLQueryItem(name: "classId", value: "6"),
+            URLQueryItem(name: "pageSize", value: "\(limit)"),
+            URLQueryItem(name: "index", value: "\(offset)")
+        ]
+
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            items.append(URLQueryItem(name: "searchFilter", value: trimmed))
+        }
+
+        if let version = serverver, !version.isEmpty {
+            items.append(URLQueryItem(name: "gameVersion", value: version))
+        }
+
+        if let loaderType = curseForgeModLoaderType() {
+            items.append(URLQueryItem(name: "modLoaderType", value: "\(loaderType)"))
+        }
+
+        components.queryItems = items
+        let url = components.url!
+        modlogger.log("request: \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.setValue(key, forHTTPHeaderField: "x-api-key")
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let decoded = try JSONDecoder().decode(CurseForgeSearchResponse.self, from: data)
+
+        return decoded.data.map { mod in
+            ModSearchItem(
+                id: "\(ModProvider.curseForge.rawValue):\(mod.id)",
+                provider: .curseForge,
+                providerID: "\(mod.id)",
+                title: mod.name,
+                description: mod.summary,
+                downloads: Int(mod.downloadCount),
+                iconURL: mod.logo?.url,
+                author: mod.authors.first?.name,
+                follows: 0
+            )
+        }
     }
     
     private func locatemodsregistry() -> URL? {
@@ -306,6 +457,20 @@ final class ModsVM: ObservableObject {
 
         saveinstalledmods()
     }
+
+    func installedKey(for mod: ModSearchItem) -> String? {
+        if installedmods[mod.id] != nil {
+            return mod.id
+        }
+        if mod.provider == .modrinth, installedmods[mod.providerID] != nil {
+            return mod.providerID
+        }
+        return nil
+    }
+
+    func isInstalled(_ mod: ModSearchItem) -> Bool {
+        installedKey(for: mod) != nil
+    }
 }
 
 
@@ -313,7 +478,7 @@ private struct Mod: View {
     @EnvironmentObject var model: ModsVM
     
     let servername: String
-    let mod: ModrinthMod
+    let mod: ModSearchItem
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -351,7 +516,7 @@ private struct Mod: View {
                             .progressViewStyle(CircularProgressViewStyle())
                             .frame(width: 15, height: 15)
                             .scaleEffect(15 / 20)
-                    } else if model.installedmods.keys.contains(mod.id) {
+                    } else if model.isInstalled(mod) {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 13))
                             .foregroundColor(.green)
@@ -364,6 +529,7 @@ private struct Mod: View {
                 
                 // disgusting
                 // I think its beautiful <3
+                // thanks man :)
                 (
                     Text("by ")
                         .foregroundColor(.secondary)
@@ -391,14 +557,16 @@ private struct Mod: View {
                             .foregroundColor(.secondary)
                     }
                     
-                    HStack(spacing: 2.5) {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                        
-                        Text("\(mod.follows.compact)")
-                            .font(.system(size: 12))
-                            .foregroundColor(.secondary)
+                    if mod.follows > 0 {
+                        HStack(spacing: 2.5) {
+                            Image(systemName: "heart.fill")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                            
+                            Text("\(mod.follows.compact)")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
@@ -429,55 +597,19 @@ private struct Mod: View {
 
         Task {
             do {
-                guard let versionsurl = URL(string: "https://api.modrinth.com/v2/project/\(mod.id)/version") else {
-                    throw NSError(domain: "invalid modrinth version URL", code: 0)
+                let installedFilename: String
+                switch mod.provider {
+                case .modrinth:
+                    installedFilename = try await installFromModrinth()
+                case .curseForge:
+                    installedFilename = try await installFromCurseForge()
                 }
-
-                let (data, _) = try await URLSession.shared.data(from: versionsurl)
-                let versions = try JSONDecoder().decode([ModrinthVersion].self, from: data)
-
-                guard let mcversion = model.serverver else {
-                    throw NSError(domain: "no server Minecraft version configured", code: 0)
-                }
-
-                let loader = modloader()
-                
-                guard let matching = versions.first(where: { version in
-                    version.game_versions.contains(mcversion) &&
-                    (loader == nil || version.loaders.contains(loader!))
-                }) else {
-                    throw NSError(domain: "no compatible version found", code: 0)
-                }
-
-                guard let file = matching.files.first(where: { $0.primary }) ?? matching.files.first else {
-                    throw NSError(domain: "no downloadable file found", code: 0)
-                }
-
-                guard let fileurl = URL(string: file.url) else {
-                    throw NSError(domain: "invalid file URL", code: 0)
-                }
-
-                let (moddata, _) = try await URLSession.shared.data(from: fileurl)
-
-                let fm = FileManager.default
-                guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
-                let modsDir = docs
-                    .appendingPathComponent("servers")
-                    .appendingPathComponent(servername)
-                    .appendingPathComponent("mods")
-
-                if !fm.fileExists(atPath: modsDir.path) {
-                    try fm.createDirectory(at: modsDir, withIntermediateDirectories: true)
-                }
-
-                let modpath = modsDir.appendingPathComponent(file.filename)
-                try moddata.write(to: modpath)
-
-                modlogger.enclosedlog("installed \(mod.title) to \(modpath.path)")
-                modlogger.flushdivider()
 
                 _ = await MainActor.run {
-                    model.installedmods[mod.id] = file.filename
+                    if mod.provider == .modrinth {
+                        model.installedmods.removeValue(forKey: mod.providerID)
+                    }
+                    model.installedmods[mod.id] = installedFilename
                     model.saveinstalledmods()
                     model.installingmods.remove(mod.id)
                 }
@@ -490,6 +622,110 @@ private struct Mod: View {
                 }
             }
         }
+    }
+
+    private func installFromModrinth() async throws -> String {
+        guard let versionsurl = URL(string: "https://api.modrinth.com/v2/project/\(mod.providerID)/version") else {
+            throw NSError(domain: "invalid modrinth version URL", code: 0)
+        }
+
+        let (data, _) = try await URLSession.shared.data(from: versionsurl)
+        let versions = try JSONDecoder().decode([ModrinthVersion].self, from: data)
+
+        guard let mcversion = model.serverver else {
+            throw NSError(domain: "no server Minecraft version configured", code: 0)
+        }
+
+        let loader = modloader()
+
+        guard let matching = versions.first(where: { version in
+            version.game_versions.contains(mcversion) &&
+            (loader == nil || version.loaders.contains(loader!))
+        }) else {
+            throw NSError(domain: "no compatible version found", code: 0)
+        }
+
+        guard let file = matching.files.first(where: { $0.primary }) ?? matching.files.first else {
+            throw NSError(domain: "no downloadable file found", code: 0)
+        }
+
+        guard let fileurl = URL(string: file.url) else {
+            throw NSError(domain: "invalid file URL", code: 0)
+        }
+
+        let (moddata, _) = try await URLSession.shared.data(from: fileurl)
+        try writeModFile(data: moddata, filename: file.filename)
+        return file.filename
+    }
+
+    private func installFromCurseForge() async throws -> String {
+        guard let key = model.curseForgeAPIKey, !key.isEmpty else {
+            throw NSError(domain: "Missing CurseForge API key in Settings or Info.plist", code: 0)
+        }
+
+        guard let mcversion = model.serverver else {
+            throw NSError(domain: "no server Minecraft version configured", code: 0)
+        }
+
+        guard let modID = Int(mod.providerID) else {
+            throw NSError(domain: "invalid CurseForge mod id", code: 0)
+        }
+
+        var filesComponents = URLComponents(string: "https://api.curseforge.com/v1/mods/\(modID)/files")!
+        var queryItems = [
+            URLQueryItem(name: "pageSize", value: "50"),
+            URLQueryItem(name: "index", value: "0"),
+            URLQueryItem(name: "gameVersion", value: mcversion)
+        ]
+        if let loader = model.curseForgeModLoaderType() {
+            queryItems.append(URLQueryItem(name: "modLoaderType", value: "\(loader)"))
+        }
+        filesComponents.queryItems = queryItems
+
+        var filesRequest = URLRequest(url: filesComponents.url!)
+        filesRequest.setValue(key, forHTTPHeaderField: "x-api-key")
+        let (filesData, _) = try await URLSession.shared.data(for: filesRequest)
+        let files = try JSONDecoder().decode(CurseForgeFilesResponse.self, from: filesData).data
+
+        guard let selectedFile = files.first else {
+            throw NSError(domain: "no compatible CurseForge file found", code: 0)
+        }
+
+        let downloadURL = URL(string: "https://api.curseforge.com/v1/mods/\(modID)/files/\(selectedFile.id)/download-url")!
+        var downloadRequest = URLRequest(url: downloadURL)
+        downloadRequest.setValue(key, forHTTPHeaderField: "x-api-key")
+        let (downloadData, _) = try await URLSession.shared.data(for: downloadRequest)
+        let downloadPath = try JSONDecoder().decode(CurseForgeDownloadURLResponse.self, from: downloadData).data
+
+        guard let fileURL = URL(string: downloadPath) else {
+            throw NSError(domain: "invalid CurseForge file URL", code: 0)
+        }
+
+        let (moddata, _) = try await URLSession.shared.data(from: fileURL)
+        try writeModFile(data: moddata, filename: selectedFile.fileName)
+        return selectedFile.fileName
+    }
+
+    private func writeModFile(data: Data, filename: String) throws {
+        let fm = FileManager.default
+        guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            throw NSError(domain: "documents directory not found", code: 0)
+        }
+
+        let modsDir = docs
+            .appendingPathComponent("servers")
+            .appendingPathComponent(servername)
+            .appendingPathComponent("mods")
+
+        if !fm.fileExists(atPath: modsDir.path) {
+            try fm.createDirectory(at: modsDir, withIntermediateDirectories: true)
+        }
+
+        let modpath = modsDir.appendingPathComponent(filename)
+        try data.write(to: modpath)
+
+        modlogger.enclosedlog("installed \(mod.title) to \(modpath.path)")
+        modlogger.flushdivider()
     }
 }
 
@@ -509,7 +745,7 @@ struct ModsView: View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
                 if #available(iOS 15.0, *) {
-                    TextField("Search Modrinth", text: $model.query)
+                    TextField(model.provider == .modrinth ? "Search Modrinth" : "Search CurseForge", text: $model.query)
                         .textFieldStyle(.plain)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
@@ -525,6 +761,16 @@ struct ModsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 16)
+            
+            Picker("", selection: $model.provider) {
+                Text("Modrinth").tag(ModProvider.modrinth)
+                Text("CurseForge").tag(ModProvider.curseForge)
+            }
+            .pickerStyle(SegmentedPickerStyle())
+            .padding(.horizontal, 16)
+            .onChange(of: model.provider) { _ in
+                Task { await model.reset() }
+            }
 
             Group {
                 if model.isloading {
@@ -545,9 +791,11 @@ struct ModsView: View {
                                 Mod(servername: servername, mod: mod)
                                     .environmentObject(model)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        if model.installedmods.keys.contains(mod.id) {
+                                        if model.isInstalled(mod) {
                                             Button(role: .destructive) {
-                                                model.deleteinstalledmod(ids: [mod.id])
+                                                if let key = model.installedKey(for: mod) {
+                                                    model.deleteinstalledmod(ids: [key])
+                                                }
                                             } label: {
                                                 Label("Delete", systemImage: "trash")
                                             }
@@ -575,7 +823,7 @@ struct ModsView: View {
                             .onDelete { offsets in
                                 let mod = offsets.compactMap { index -> String? in
                                     let mod = model.mods[index]
-                                    return model.installedmods.keys.contains(mod.id) ? mod.id : nil
+                                    return model.installedKey(for: mod)
                                 }
                                 
                                 model.deleteinstalledmod(ids: mod)

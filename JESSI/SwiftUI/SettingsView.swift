@@ -54,14 +54,13 @@ final class SettingsModel: ObservableObject {
     @Published var heapMB: Int = 768
     @Published var flagNettyNoNative: Bool = true
     @Published var flagJnaNoSys: Bool = false
-    @Published var txmSupport: Bool = true
     @Published var isJITEnabled: Bool = false
     @Published var totalRAM: String = ""
     @Published var freeRAM: String = ""
     @Published var launchArgs: String = ""
+    @Published var curseForgeAPIKey: String = ""
     @Published var isIOS26: Bool = false
     @Published var iOSVersionString: String = ""
-    @Published var deviceString: String = ""
 
     @Published var installedJVMVersions: Set<String> = []
 
@@ -101,33 +100,10 @@ final class SettingsModel: ObservableObject {
         totalRAM = formatRAM(ProcessInfo.processInfo.physicalMemory)
         refreshSystemStats()
         launchArgs = s.launchArguments
+        curseForgeAPIKey = s.curseForgeAPIKey
         isIOS26 = jessi_is_ios26_or_later()
-        txmSupport = s.txmSupport
-
-        deviceString = deviceDisplayString(isIOS26: isIOS26)
 
         refreshInstalledJVMVersions()
-    }
-
-    private func deviceDisplayString(isIOS26: Bool) -> String {
-        let modelId = deviceModelIdentifier()
-        var base = JessiDeviceMarketingNames.marketingName(for: modelId) ?? (modelId.isEmpty ? UIDevice.current.model : modelId)
-        if isIOS26 && jessi_is_txm_device() {
-            base += " (TXM)"
-        }
-        return base
-    }
-
-    private func deviceModelIdentifier() -> String {
-        var u = utsname()
-        uname(&u)
-
-        let machine = withUnsafePointer(to: &u.machine) { ptr -> String in
-            let rawPtr = UnsafeRawPointer(ptr).assumingMemoryBound(to: CChar.self)
-            return String(cString: rawPtr)
-        }
-
-        return machine
     }
 
     func applyAndSaveJavaVersion(_ ver: String) {
@@ -142,9 +118,9 @@ final class SettingsModel: ObservableObject {
         s.save()
     }
 
-    func applyAndSaveTxmSupport() {
+    func applyAndSaveCurseForgeAPIKey() {
         let s = JessiSettings.shared()
-        s.txmSupport = txmSupport
+        s.curseForgeAPIKey = curseForgeAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
         s.save()
     }
 
@@ -331,42 +307,6 @@ final class SettingsModel: ObservableObject {
         if fm.fileExists(atPath: helper2.path) { _ = chmod(helper2.path, 0o755) }
     }
 
-    private func readFileMagic(_ url: URL) throws -> UInt32 {
-        let handle = try FileHandle(forReadingFrom: url)
-        defer { try? handle.close() }
-        let data = try handle.read(upToCount: 4) ?? Data()
-        if data.count < 4 {
-            return 0
-        }
-        return data.withUnsafeBytes { raw in
-            raw.load(as: UInt32.self)
-        }
-    }
-
-    private func isMachOMagic(_ magicLE: UInt32) -> Bool {
-        return magicLE == 0xFEEDFACF || magicLE == 0xCAFEBABE || magicLE == 0xBEBAFECA
-    }
-
-    private func validateInstalledRuntime(at runtimeRoot: URL, version: String) throws {
-        let fm = FileManager.default
-        let releaseFile = runtimeRoot.appendingPathComponent("release", isDirectory: false)
-        guard fm.fileExists(atPath: releaseFile.path) else {
-            throw NSError(domain: "JESSI", code: 40, userInfo: [NSLocalizedDescriptionKey: "JRE\(version) install looks incomplete (missing release file). Try reinstalling."])
-        }
-
-        let candidate1 = runtimeRoot.appendingPathComponent("lib/jli/libjli.dylib", isDirectory: false)
-        let candidate2 = runtimeRoot.appendingPathComponent("lib/libjli.dylib", isDirectory: false)
-        let libjli = fm.fileExists(atPath: candidate1.path) ? candidate1 : candidate2
-        guard fm.fileExists(atPath: libjli.path) else {
-            throw NSError(domain: "JESSI", code: 41, userInfo: [NSLocalizedDescriptionKey: "JRE\(version) install looks incomplete (missing libjli.dylib). Try reinstalling."])
-        }
-
-        let magic = try readFileMagic(libjli)
-        guard isMachOMagic(magic) else {
-            throw NSError(domain: "JESSI", code: 42, userInfo: [NSLocalizedDescriptionKey: String(format: "JRE%@ install appears corrupted (libjli magic=0x%08x). Delete and reinstall the JVM.", version, magic)])
-        }
-    }
-
     private func extractTar(_ tarPath: URL, to destDir: URL) throws {
         let fm = FileManager.default
         try fm.createDirectory(at: destDir, withIntermediateDirectories: true)
@@ -517,13 +457,6 @@ final class SettingsModel: ObservableObject {
                     try? fm.removeItem(at: backup)
                 }
                 try fm.moveItem(at: staging, to: finalDir)
-
-                do {
-                    try self.validateInstalledRuntime(at: finalDir, version: version)
-                } catch {
-                    try? fm.removeItem(at: finalDir)
-                    throw error
-                }
 
                 completion(.success(()))
             } catch {
@@ -758,6 +691,20 @@ struct SettingsView: View {
                 }
             }
 
+            Section {
+                HStack(alignment: .center, spacing: 12) {
+                    CurseForgeField()
+                    .frame(maxWidth: 420)
+                    .onChange(of: model.curseForgeAPIKey) { _ in
+                        model.applyAndSaveCurseForgeAPIKey()
+                    }
+                }
+            } header: {
+                Text("Mods")
+            } footer: {
+                CurseForgeFooter()
+            }
+
             Section(header: Text("Memory"), footer: Text(model.heapDescription)) {
                 HStack(spacing: 12) {
                     Text("RAM")
@@ -789,27 +736,16 @@ struct SettingsView: View {
 
             Section(header: Text("System")) {
                 HStack {
-                    Text("Device")
-                    Spacer()
-                    Text(model.deviceString)
-                }
-
-                HStack {
                     Text("JIT Enabled")
                     Spacer()
                     Text(model.isJITEnabled ? "Yes" : "No")
                         .foregroundColor(model.isJITEnabled ? .green : .red)
                 }
-
-                if model.isIOS26 {
-                    Toggle("TXM Support (A15+/M2+)", isOn: $model.txmSupport)
-                        .onChange(of: model.txmSupport) { _ in model.applyAndSaveTxmSupport() }
-                }
-
                 HStack {
                     Text("iOS Version")
                     Spacer()
                     Text(model.iOSVersionString)
+                        .foregroundColor(.secondary)
                 }
                 HStack {
                     Text("Total RAM")
@@ -839,8 +775,7 @@ struct SettingsView: View {
             model.javaVersion = s.javaVersion
             model.heapMB = s.maxHeapMB
             model.heapText = String(s.maxHeapMB)
-
-            model.txmSupport = s.txmSupport
+            model.curseForgeAPIKey = s.curseForgeAPIKey
 
             model.refreshSystemStats()
 
@@ -864,4 +799,64 @@ struct SettingsView: View {
             }
         }
     }
+}
+
+struct CurseForgeField: View {
+    @ObservedObject var model = SettingsModel()
+    @State private var isSecure: Bool = true
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Group {
+                if isSecure {
+                    SecureField("CurseForge API Key", text: $model.curseForgeAPIKey)
+                } else {
+                    TextField("CurseForge API Key", text: $model.curseForgeAPIKey)
+                }
+            }
+            .frame(maxWidth: 420)
+            .onChange(of: model.curseForgeAPIKey) { _ in
+                model.applyAndSaveCurseForgeAPIKey()
+            }
+
+            Button(action: { isSecure.toggle() }) {
+                Image(systemName: isSecure ? "eye.slash" : "eye")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+}
+
+struct CurseForgeFooter: View {
+    @State private var safariurl: URL?
+    private let cfURL = URL(string: "https://console.curseforge.com/#/api-keys")!
+    
+    var body: some View {
+        Group {
+            if #available(iOS 15, *) {
+                Text("Installing Mods via CurseForge requires an API key. Create one [here.](https://console.curseforge.com/#/api-keys)")
+                    .environment(\.openURL, OpenURLAction { tappedurl in
+                        safariurl = cfURL
+                        return .handled
+                    })
+                    .sheet(item: $safariurl) { SafariView(url: $0) }
+            } else {
+                HStack(spacing: 0) {
+                    Text("Installing Mods via CurseForge requires an API key. Create one ")
+                    Button("here.") {
+                        UIApplication.shared.open(cfURL)
+                    }
+                }
+            }
+        }
+        .font(.footnote)
+        .foregroundColor(.secondary)
+        .multilineTextAlignment(.leading)
+    }
+}
+
+@available(iOS 15, *)
+extension URL: Identifiable {
+    public var id: String { absoluteString }
 }

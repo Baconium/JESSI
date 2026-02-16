@@ -1694,13 +1694,13 @@ struct TunnelingView: View {
     }
 }
 
-private struct SafariView: UIViewControllerRepresentable {
+struct SafariView: UIViewControllerRepresentable {
     let url: URL
-
+    
     func makeUIViewController(context: Context) -> SFSafariViewController {
         SFSafariViewController(url: url)
     }
-
+    
     func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
@@ -1992,6 +1992,7 @@ struct ConnectionSectionView: View {
 
     private var upnpTestRow: some View {
         Button(action: {
+            upnpmodel.enablePorts(parsePorts())
             upnpmodel.test()
         }) {
             HStack(spacing: 10) {
