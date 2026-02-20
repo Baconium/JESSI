@@ -1,0 +1,167 @@
+name: build ipa and release
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  SCHEME: JESSI
+  CONFIGURATION: Release
+  APP_NAME: JESSI
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: select xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "latest"
+
+      - name: verify xcode
+        run: xcodebuild -version
+        
+      - name: install ldid
+        run: |
+          brew update
+          brew install ldid || true
+
+      - name: build ipa
+        run: |
+          set -euo pipefail
+
+          PROJECT_DIR="$GITHUB_WORKSPACE"
+          DIST_DIR="$PROJECT_DIR/dist"
+          PAYLOAD_DIR="$DIST_DIR/Payload"
+          IPA_PATH="$DIST_DIR/${APP_NAME}-${GITHUB_RUN_NUMBER}.ipa"
+          DERIVED_DATA_DIR="$PROJECT_DIR/build/DerivedData"
+
+          JESSI_LDID_SIGN="${JESSI_LDID_SIGN:-0}"
+          JESSI_LDID_ENTITLEMENTS="${JESSI_LDID_ENTITLEMENTS:-$PROJECT_DIR/Config/JESSI.trollstore.entitlements}"
+
+          cd "$PROJECT_DIR"
+
+          rm -rf "$DERIVED_DATA_DIR"
+          mkdir -p build
+
+          set +e
+          xcodebuild \
+            -project "$PROJECT_DIR/JESSI.xcodeproj" \
+            -scheme "$SCHEME" \
+            -configuration "$CONFIGURATION" \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED_DATA_DIR" \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_STYLE=Manual \
+            2>&1 | tee build/xcodebuild.log
+          STATUS=${PIPESTATUS[0]}
+          set -e
+
+          if [[ $STATUS -ne 0 ]]; then
+            tail -n 200 build/xcodebuild.log
+            exit $STATUS
+          fi
+
+          APP_DIR="$DERIVED_DATA_DIR/Build/Products/${CONFIGURATION}-iphoneos/${APP_NAME}.app"
+
+          mkdir -p "$PAYLOAD_DIR"
+          DEST_APP="$PAYLOAD_DIR/${APP_NAME}.app"
+
+          rsync -aL --delete "$APP_DIR/" "$DEST_APP/"
+
+          rm -rf \
+            "$DEST_APP/_CodeSignature" \
+            "$DEST_APP/embedded.mobileprovision" || true
+
+          if [[ "$JESSI_LDID_SIGN" == "1" ]]; then
+            ldid -S"$JESSI_LDID_ENTITLEMENTS" "$DEST_APP/$APP_NAME"
+          fi
+
+          mkdir -p "$DIST_DIR"
+          cd "$DIST_DIR"
+          /usr/bin/zip -qr "$IPA_PATH" Payload
+
+          echo "IPA_PATH=$IPA_PATH" >> $GITHUB_ENV
+
+      - name: generate changelog
+        id: changelog
+        run: |
+          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+          git log -20 --pretty=format:"- %s (%h)" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: update super beta release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: super-beta
+          name: "super beta build"
+          prerelease: true
+          make_latest: false
+          body: |
+            ## latest beta build
+
+            automatically built from `main`.
+
+            **commit:** ${{ github.sha }}
+            **run:** #${{ github.run_number }}
+
+            ### changes
+            ${{ env.CHANGELOG }}
+
+            ---
+            ### install
+
+            **trollstore**
+            ```
+            https://github.com/${{ github.repository }}/releases/download/super-beta/${{ env.APP_NAME }}-${{ github.run_number }}.ipa
+            ```
+
+            **altstore or any other sideloading platform**
+            import the IPA directly from this release page.
+          files: ${{ env.IPA_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: create version release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          name: "release ${{ github.ref_name }}"
+          tag_name: ${{ github.ref_name }}
+          body: |
+            ## ${{ github.ref_name }}
+
+            ### changes
+            ${{ env.CHANGELOG }}
+
+            ---
+            ### install
+
+            **trollstore**
+            ```
+            https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.APP_NAME }}-${{ github.run_number }}.ipa
+            ```
+
+            **altstore or any other sideloading platform**
+            download IPA and sideload normally.
+          files: ${{ env.IPA_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
