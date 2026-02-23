@@ -383,6 +383,23 @@ final class PlayitModel: ObservableObject {
         setError(nil)
     }
 
+    func clearCache() {
+        resetlink()
+        
+        let fm = FileManager.default
+        let home = NSHomeDirectory()
+        let configDir = home + "/.config/playit"
+        try? fm.removeItem(atPath: configDir)
+        
+        let appSupport = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let playitAppSupport = appSupport.appendingPathComponent("playit")
+        try? fm.removeItem(at: playitAppSupport)
+        
+        let documents = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let playitDocuments = documents.appendingPathComponent("playit")
+        try? fm.removeItem(at: playitDocuments)
+    }
+
     func startstatuspolling() {
         if statustimer != nil { return }
         statustimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
@@ -1542,6 +1559,12 @@ struct TunnelingView: View {
                 .disabled(!playitmodel.linked)
                 .foregroundColor(.red)
                 .buttonStyle(PlainButtonStyle())
+                
+                Button("Clear Playit Cache") {
+                    playitmodel.clearCache()
+                }
+                .foregroundColor(.red)
+                .buttonStyle(PlainButtonStyle())
             } header: {
                 Text("Playit")
             } footer: {
@@ -1757,6 +1780,7 @@ struct ConnectionSectionView: View {
 
                         linkRow
                         resetRow
+                        clearCacheRow
                         startRow
                     } else {
                         installStatusRow
@@ -1945,6 +1969,14 @@ struct ConnectionSectionView: View {
             playitmodel.resetlink()
         }
         .disabled(!playitmodel.linked)
+        .foregroundColor(.red)
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private var clearCacheRow: some View {
+        Button("Clear Playit Cache") {
+            playitmodel.clearCache()
+        }
         .foregroundColor(.red)
         .buttonStyle(PlainButtonStyle())
     }
