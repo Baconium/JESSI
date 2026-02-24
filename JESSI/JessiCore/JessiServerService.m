@@ -9,6 +9,9 @@
 #import <sys/time.h>
 #import <unistd.h>
 
+#import <spawn.h>
+#import "../SwiftUI/JessiJITCheck.h"
+
 extern int jessi_server_main(int argc, char *argv[]);
 
 static NSString *const JessiServerRunningKey = @"jessi.server.running";
@@ -26,6 +29,7 @@ static BOOL g_serverRunning = NO;
 @property (nonatomic, copy) NSString *activeServerDir;
 @property (nonatomic, copy) NSString *activeRconPassword;
 @property (nonatomic) int activeRconPort;
+@property (nonatomic) UIBackgroundTaskIdentifier bgTask;
 @end
 
 @implementation JessiServerService
@@ -37,6 +41,7 @@ static BOOL g_serverRunning = NO;
         _runQueue = dispatch_queue_create("com.baconmania.jessi.run", DISPATCH_QUEUE_SERIAL);
         _logQueue = dispatch_queue_create("com.baconmania.jessi.log", DISPATCH_QUEUE_SERIAL);
         _activeRconPort = 25575;
+        _bgTask = UIBackgroundTaskInvalid;
         [JessiPaths ensureBaseDirectories];
         [[NSUserDefaults standardUserDefaults] setBool:g_serverRunning forKey:JessiServerRunningKey];
     }
@@ -407,6 +412,13 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
     JessiSettings *settings = [JessiSettings shared];
     NSString *javaVersion = settings.javaVersion ?: @"8";
 
+    if ([JessiSettings shared].runInBackground) {
+        self.bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+            [[UIApplication sharedApplication] endBackgroundTask:self.bgTask];
+            self.bgTask = UIBackgroundTaskInvalid;
+        }];
+    }
+
     dispatch_async(self.runQueue, ^{
         char *argv0 = strdup("--server");
         char *argv1 = strdup([jar fileSystemRepresentation]);
@@ -416,7 +428,32 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
 
         int code = 0;
         @try {
-            code = jessi_server_main(4, argvv);
+            if (jessi_is_trollstore_installed()) {
+                pid_t pid;
+                NSString *executablePath = [[NSBundle mainBundle] executablePath];
+                char *execPathC = strdup([executablePath fileSystemRepresentation]);
+                char *spawnArgv[] = { execPathC, argv0, argv1, argv2, argv3, NULL };
+                
+                extern char **environ;
+                
+                int ret = posix_spawn(&pid, execPathC, NULL, NULL, spawnArgv, environ);
+                
+                if (ret == 0) {
+                    int status;
+                    waitpid(pid, &status, 0);
+                    if (WIFEXITED(status)) {
+                        code = WEXITSTATUS(status);
+                    } else {
+                        code = 252;
+                    }
+                } else {
+                    code = 253;
+                    [self emitConsole:[NSString stringWithFormat:@"\nFailed to spawn JVM process: %s\n", strerror(ret)]];
+                }
+                free(execPathC);
+            } else {
+                code = jessi_server_main(4, argvv);
+            }
         } @catch (NSException *e) {
             code = 251;
             [self emitConsole:[NSString stringWithFormat:@"\nJVM threw exception: %@\n%@\n", e.reason ?: @"(no reason)", e.callStackSymbols ?: @[]]];
@@ -432,6 +469,11 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
         dispatch_async(dispatch_get_main_queue(), ^{
             [self emitConsole:[NSString stringWithFormat:@"\nServer exited with code: %d\n", code]];
             [self.delegate serverServiceDidChangeRunning:NO];
+            
+            if (self.bgTask != UIBackgroundTaskInvalid) {
+                [[UIApplication sharedApplication] endBackgroundTask:self.bgTask];
+                self.bgTask = UIBackgroundTaskInvalid;
+            }
         });
     });
 }

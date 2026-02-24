@@ -7,6 +7,7 @@ static NSString *const kJessiFlagJnaNoSys = @"jessi.jvm.flagJnaNoSys";
 static NSString *const kJessiLaunchArgs = @"jessi.jvm.launchArgs";
 static NSString *const kJessiTXMSupport = @"jessi.txmSupport";
 static NSString *const kJessiCurseForgeAPIKey = @"jessi.mods.curseforgeApiKey";
+static NSString *const kJessiRunInBackground = @"jessi.runInBackground";
 
 @implementation JessiSettings
 
@@ -139,6 +140,12 @@ static NSString *const kJessiCurseForgeAPIKey = @"jessi.mods.curseforgeApiKey";
         self.flagJnaNoSys = [d boolForKey:kJessiFlagJnaNoSys];
     }
 
+    if ([d objectForKey:kJessiRunInBackground] == nil) {
+        self.runInBackground = NO;
+    } else {
+        self.runInBackground = [d boolForKey:kJessiRunInBackground];
+    }
+
     NSString *args = [d stringForKey:kJessiLaunchArgs];
     if (args) self.launchArguments = args; else self.launchArguments = @"";
 
@@ -153,6 +160,7 @@ static NSString *const kJessiCurseForgeAPIKey = @"jessi.mods.curseforgeApiKey";
 
     [d setBool:self.flagNettyNoNative forKey:kJessiFlagNettyNoNative];
     [d setBool:self.flagJnaNoSys forKey:kJessiFlagJnaNoSys];
+    [d setBool:self.runInBackground forKey:kJessiRunInBackground];
     [d setObject:self.launchArguments ?: @"" forKey:kJessiLaunchArgs];
     [d setBool:self.txmSupport forKey:kJessiTXMSupport];
     [d setObject:self.curseForgeAPIKey ?: @"" forKey:kJessiCurseForgeAPIKey];

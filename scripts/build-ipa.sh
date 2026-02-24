@@ -14,7 +14,7 @@ DERIVED_DATA_DIR="$PROJECT_DIR/build/DerivedData"
 # Usage:
 #   JESSI_LDID_SIGN=1 ./scripts/build-ipa.sh
 #   JESSI_LDID_ENTITLEMENTS=Config/JESSI.trollstore.entitlements JESSI_LDID_SIGN=1 ./scripts/build-ipa.sh
-JESSI_LDID_SIGN="${JESSI_LDID_SIGN:-0}"
+JESSI_LDID_SIGN="${JESSI_LDID_SIGN:-1}"
 JESSI_LDID_ENTITLEMENTS="${JESSI_LDID_ENTITLEMENTS:-$PROJECT_DIR/Config/JESSI.trollstore.entitlements}"
 
 # build ipa
@@ -77,7 +77,7 @@ if [[ "$JESSI_LDID_SIGN" == "1" ]]; then
     echo "ERROR: Entitlements file not found: $JESSI_LDID_ENTITLEMENTS" >&2
     exit 1
   fi
-  echo "Signing $APP_NAME with ldid entitlements: $JESSI_LDID_ENTITLEMENTS"
+  echo "Signing $APP_NAME executable with ldid entitlements: $JESSI_LDID_ENTITLEMENTS"
   ldid -S"$JESSI_LDID_ENTITLEMENTS" "$DEST_APP/$APP_NAME"
 fi
 

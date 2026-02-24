@@ -48,7 +48,7 @@ jobs:
           IPA_PATH="$DIST_DIR/${APP_NAME}-${GITHUB_RUN_NUMBER}.ipa"
           DERIVED_DATA_DIR="$PROJECT_DIR/build/DerivedData"
 
-          JESSI_LDID_SIGN="${JESSI_LDID_SIGN:-0}"
+          JESSI_LDID_SIGN="1"
           JESSI_LDID_ENTITLEMENTS="${JESSI_LDID_ENTITLEMENTS:-$PROJECT_DIR/Config/JESSI.trollstore.entitlements}"
 
           cd "$PROJECT_DIR"

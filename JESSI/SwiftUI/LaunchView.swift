@@ -510,7 +510,11 @@ struct LaunchView: View {
                         .disabled(model.isRunning)
 
                         Button(action: {
-                            model.activeAlert = .stopConfirm
+                            if jessi_is_trollstore_installed() {
+                                model.stop()
+                            } else {
+                                model.activeAlert = .stopConfirm
+                            }
                         }) {
                             Text("Stop")
                                 .font(.system(size: 17, weight: .semibold))
@@ -606,7 +610,7 @@ struct LaunchView: View {
             case .stopConfirm:
                 return Alert(
                     title: Text("Stop server?"),
-                    message: Text("Stopping will close JESSI after the server fully stops."),
+                    message: Text("Stopping the server will close JESSI. Are you sure you want to stop it?"),
                     primaryButton: .destructive(Text("Stop & Close")) {
                         exitAfterStopRequested = true
                         model.stop()

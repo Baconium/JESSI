@@ -59,8 +59,10 @@ final class SettingsModel: ObservableObject {
     @Published var freeRAM: String = ""
     @Published var launchArgs: String = ""
     @Published var curseForgeAPIKey: String = ""
+    @Published var runInBackground: Bool = false
     @Published var isIOS26: Bool = false
     @Published var iOSVersionString: String = ""
+    @Published var isTrollStore: Bool = false
 
     @Published var installedJVMVersions: Set<String> = []
 
@@ -101,7 +103,9 @@ final class SettingsModel: ObservableObject {
         refreshSystemStats()
         launchArgs = s.launchArguments
         curseForgeAPIKey = s.curseForgeAPIKey
+        runInBackground = s.runInBackground
         isIOS26 = jessi_is_ios26_or_later()
+        isTrollStore = jessi_is_trollstore_installed()
 
         refreshInstalledJVMVersions()
     }
@@ -141,6 +145,7 @@ final class SettingsModel: ObservableObject {
         let s = JessiSettings.shared()
         s.flagNettyNoNative = flagNettyNoNative
         s.flagJnaNoSys = flagJnaNoSys
+        s.runInBackground = runInBackground
         s.save()
     }
 
@@ -695,6 +700,11 @@ struct SettingsView: View {
 
             Section(header: Text("Miscellaneous"), footer: Text(model.heapDescription)) {
                 
+                if model.isTrollStore {
+                    Toggle("Run in Background", isOn: $model.runInBackground)
+                        .onChange(of: model.runInBackground) { _ in model.applyAndSaveFlags() }
+                }
+
                 HStack(alignment: .center, spacing: 12) {
                     CurseForgeField(model: model)
                     .frame(maxWidth: 420)
@@ -735,7 +745,11 @@ struct SettingsView: View {
                     Text("JIT Enabled")
                     Spacer()
                     Text(model.isJITEnabled ? "Yes" : "No")
-                        .foregroundColor(model.isJITEnabled ? .green : .red)
+                }
+                HStack {
+                    Text("TrollStore Detected")
+                    Spacer()
+                    Text(model.isTrollStore ? "Yes" : "No")
                 }
                 HStack {
                     Text("iOS Version")

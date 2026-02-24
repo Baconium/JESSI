@@ -1536,8 +1536,23 @@ struct CreateServerView: View {
         }
 
         let javaVersion = JessiSettings.shared().javaVersion
+        
+        var bgTask: UIBackgroundTaskIdentifier = .invalid
+        if JessiSettings.shared().runInBackground {
+            bgTask = UIApplication.shared.beginBackgroundTask {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+        }
+        
         DispatchQueue.global(qos: .userInitiated).async {
             let code = self.runJavaTool(jarPath: installerJar.path, javaVersion: javaVersion, workingDir: serverDir.path, argsPath: argsPath.path)
+            
+            if bgTask != .invalid {
+                UIApplication.shared.endBackgroundTask(bgTask)
+                bgTask = .invalid
+            }
+            
             if code != 0 {
                 completeOnMain(.failure(InstallerError.message("Installer failed with exit code \(code). Try a different Java version in Settings.")))
                 return
@@ -1583,16 +1598,26 @@ struct CreateServerView: View {
             if let a4 = a4 { free(a4) }
         }
 
+        let isTrollStore = jessi_is_trollstore_installed()
+
         if let a4 = a4 {
             var argv: [UnsafeMutablePointer<CChar>?] = [a0, a1, a2, a3, a4, nil]
             return argv.withUnsafeMutableBufferPointer { buf in
-                Int32(jessi_tool_main(5, buf.baseAddress))
+                if isTrollStore {
+                    return Int32(jessi_spawn_tool(5, buf.baseAddress))
+                } else {
+                    return Int32(jessi_tool_main(5, buf.baseAddress))
+                }
             }
         }
 
         var argv: [UnsafeMutablePointer<CChar>?] = [a0, a1, a2, a3, nil]
         return argv.withUnsafeMutableBufferPointer { buf in
-            Int32(jessi_tool_main(4, buf.baseAddress))
+            if isTrollStore {
+                return Int32(jessi_spawn_tool(4, buf.baseAddress))
+            } else {
+                return Int32(jessi_tool_main(4, buf.baseAddress))
+            }
         }
     }
 }

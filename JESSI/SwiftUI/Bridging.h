@@ -6,6 +6,7 @@
 extern "C" {
 #endif
 int jessi_tool_main(int argc, char *argv[]);
+int jessi_spawn_tool(int argc, char *argv[]);
 
 
 #ifdef __cplusplus

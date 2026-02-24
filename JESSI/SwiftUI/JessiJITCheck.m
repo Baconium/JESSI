@@ -47,7 +47,7 @@ static BOOL getEntitlementValue(NSString *key) {
 
 BOOL jessi_check_jit_enabled(void) {
 
-    if (getEntitlementValue(@"dynamic-codesigning")) {
+    if (getEntitlementValue(@"dynamic-codesigning") || getEntitlementValue(@"com.apple.private.security.no-sandbox")) {
         return YES;
     }
 
@@ -86,24 +86,6 @@ BOOL jessi_is_txm_device(void) {
 }
 
 BOOL jessi_is_trollstore_installed(void) {
-    NSFileManager *fm = [NSFileManager defaultManager];
-
-    NSArray<NSString *> *roots = @[@"/var/containers/Bundle/Application",
-                                   @"/private/var/containers/Bundle/Application",
-                                   @"/var/mobile/Containers/Bundle/Application"];
-
-    for (NSString *root in roots) {
-        BOOL isDir = NO;
-        if (![fm fileExistsAtPath:root isDirectory:&isDir] || !isDir) continue;
-
-        NSDirectoryEnumerator *enumerator = [fm enumeratorAtPath:root];
-        NSString *relativePath;
-        while ((relativePath = [enumerator nextObject])) {
-            if ([relativePath rangeOfString:@"TrollStore.app"].location != NSNotFound) {
-                return YES;
-            }
-        }
-    }
-
-    return NO;
+    NSString *tsPath = [NSString stringWithFormat:@"%@/../_TrollStore", NSBundle.mainBundle.bundlePath];
+    return access(tsPath.UTF8String, F_OK) == 0;
 }

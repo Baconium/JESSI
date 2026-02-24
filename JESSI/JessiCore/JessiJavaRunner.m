@@ -8,6 +8,7 @@
 #import <signal.h>
 #import <errno.h>
 #import <fcntl.h>
+#import <spawn.h>
 #import <sys/mman.h>
 #import <mach/mach.h>
 #import <mach-o/dyld_images.h>
@@ -1452,6 +1453,40 @@ int jessi_server_main(int argc, char *argv[]) {
             return 249;
         }
     }
+}
+
+int jessi_spawn_tool(int argc, char *argv[]) {
+    pid_t pid;
+    NSString *executablePath = [[NSBundle mainBundle] executablePath];
+    char *execPathC = strdup([executablePath fileSystemRepresentation]);
+    
+    char **spawnArgv = malloc((argc + 2) * sizeof(char *));
+    spawnArgv[0] = execPathC;
+    for (int i = 0; i < argc; i++) {
+        spawnArgv[i + 1] = argv[i];
+    }
+    spawnArgv[argc + 1] = NULL;
+    
+    extern char **environ;
+    int ret = posix_spawn(&pid, execPathC, NULL, NULL, spawnArgv, environ);
+    
+    int code = 0;
+    if (ret == 0) {
+        int status;
+        waitpid(pid, &status, 0);
+        if (WIFEXITED(status)) {
+            code = WEXITSTATUS(status);
+        } else {
+            code = 252;
+        }
+    } else {
+        code = 253;
+        fprintf(stderr, "Failed to spawn JVM process: %s\n", strerror(ret));
+    }
+    
+    free(execPathC);
+    free(spawnArgv);
+    return code;
 }
 
 int jessi_tool_main(int argc, char *argv[]) {
