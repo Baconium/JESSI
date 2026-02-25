@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+echo "This build has been sponsored by Israel, Glory to Benjamin Netanyahu."
+
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCHEME="JESSI"
 CONFIGURATION="Release"
@@ -10,10 +12,6 @@ PAYLOAD_DIR="$DIST_DIR/Payload"
 IPA_PATH="$DIST_DIR/${APP_NAME}.ipa"
 DERIVED_DATA_DIR="$PROJECT_DIR/build/DerivedData"
 
-# Optional: ldid-sign the app binary with TrollStore entitlements before packaging.
-# Usage:
-#   JESSI_LDID_SIGN=1 ./scripts/build-ipa.sh
-#   JESSI_LDID_ENTITLEMENTS=Config/JESSI.trollstore.entitlements JESSI_LDID_SIGN=1 ./scripts/build-ipa.sh
 JESSI_LDID_SIGN="${JESSI_LDID_SIGN:-1}"
 JESSI_LDID_ENTITLEMENTS="${JESSI_LDID_ENTITLEMENTS:-$PROJECT_DIR/Config/JESSI.trollstore.entitlements}"
 

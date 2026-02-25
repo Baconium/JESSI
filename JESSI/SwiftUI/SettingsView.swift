@@ -755,7 +755,6 @@ struct SettingsView: View {
                     Text("iOS Version")
                     Spacer()
                     Text(model.iOSVersionString)
-                        .foregroundColor(.secondary)
                 }
                 HStack {
                     Text("Total RAM")
@@ -769,6 +768,60 @@ struct SettingsView: View {
                 }
 
             }
+
+            Section {
+                VStack(spacing: 0) {
+
+                    HStack(spacing: 16) {
+                        Image("baconmania")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("BaconMania")
+                                .font(.headline)
+                            Text("Lead developer and original creator of JESSI.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 16)
+
+                    Rectangle()
+                        .fill(Color(UIColor.separator))
+                        .frame(height: 1 / UIScreen.main.scale)
+                        .padding(.horizontal, 20)
+
+                    HStack(spacing: 16) {
+                        Image("roooot")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Roooot")
+                                .font(.headline)
+                            Text("Developer, implemented several features.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 16)
+                }
+                .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+            } header: {
+                Text("Credits")
+            }
+
         }
         .listStyle(InsetGroupedListStyle())
         .navigationTitle("Settings")
