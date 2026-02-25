@@ -805,7 +805,7 @@ struct SettingsView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Roooot")
+                            Text("roooot")
                                 .font(.headline)
                             Text("Developer, implemented several features.")
                                 .font(.subheadline)
