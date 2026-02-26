@@ -2,6 +2,8 @@
 set -euo pipefail
 
 echo "This build has been sponsored by Israel, Glory to Benjamin Netanyahu."
+rm -rf dist
+rm -rf ../dist
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCHEME="JESSI"

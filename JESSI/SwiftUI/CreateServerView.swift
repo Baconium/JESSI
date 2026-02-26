@@ -271,7 +271,7 @@ struct CreateServerView: View {
                         isPresented: $showSoftwareMenu,
                         anchorFrame: softwareAnchorFrame,
                         items: softwareDropdownItems,
-                        maxVisibleRows: 5
+                        maxVisibleRows: 5.5
                     )
                 }
                 if showVersionMenu {
@@ -279,7 +279,7 @@ struct CreateServerView: View {
                         isPresented: $showVersionMenu,
                         anchorFrame: versionAnchorFrame,
                         items: versionDropdownItems,
-                        maxVisibleRows: 5
+                        maxVisibleRows: 5.5
                     )
                 }
             }
@@ -614,7 +614,7 @@ struct CreateServerView: View {
         @Binding var isPresented: Bool
         let anchorFrame: CGRect
         let items: [DropdownItem]
-        let maxVisibleRows: Int
+        let maxVisibleRows: Double
 
         @State private var menuVisible: Bool = false
 
@@ -713,7 +713,7 @@ struct CreateServerView: View {
                                 .buttonStyle(PlainButtonStyle())
                                 .disabled(!item.isEnabled)
 
-                                Divider().opacity(0.28)
+                                Divider().background(Color(UIColor.separator))
                             }
                         }
                     }
