@@ -4,6 +4,7 @@ import UIKit
 import Darwin
 import CoreLocation
 import AVFoundation
+import SafariServices
 import ZIPFoundation
 import SWCompression
 
@@ -295,7 +296,7 @@ final class SettingsModel: ObservableObject {
     @Published var heapMaxMB: Int = 8192
 
     @Published var installErrorMessage: String? = nil
-    @Published var showInstallError: Bool = false
+    @Published var showinstallerror: Bool = false
     @Published var jvmDownloadProgress: Double = 0
     @Published var currentlyInstallingVersion: String = ""
 
@@ -753,7 +754,7 @@ final class SettingsModel: ObservableObject {
         guard !filtered.isEmpty else {
             DispatchQueue.main.async {
                 self.installErrorMessage = "Nothing to install."
-                self.showInstallError = true
+                self.showinstallerror = true
             }
             updateInProgress(false)
             updateQueueCSV("")
@@ -788,7 +789,7 @@ final class SettingsModel: ObservableObject {
                 case .failure(let error):
                     DispatchQueue.main.async {
                         self.installErrorMessage = error.localizedDescription
-                        self.showInstallError = true
+                        self.showinstallerror = true
                     }
                     updateQueueCSV("")
                     updateInProgress(false)
@@ -803,10 +804,22 @@ final class SettingsModel: ObservableObject {
 }
 
 struct SettingsView: View {
+    private struct PlayitClaimSheetItem: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
+
     @EnvironmentObject var tourManager: TourManager
     @StateObject private var model = SettingsModel()
+    @StateObject private var tunnelingmodel = TunnelingModel()
+    @StateObject private var playitmodel = PlayitModel()
+    @StateObject private var upnpModel = UpnpModel()
     @AppStorage(keepalivemgr.enabledkey) private var keepalive: Bool = false
     @AppStorage(keepalivemgr.methodkey) private var keepalivemethodraw: String = keepalivemgr.keepalivemethod.location.rawValue
+    @AppStorage("jessi.server.running") private var serverRunning: Bool = false
+    @AppStorage("jessi.tunnel.install.inProgress") private var tunnelinginstallinprogress: Bool = false
+    @AppStorage("jessi.tunnel.install.queue") private var tunnelingInstallQueueCSV: String = ""
+    @AppStorage("jessi.upnp.ports") private var upnpPortsCSV: String = "25565"
     @State private var keepaliveauthstat: CLAuthorizationStatus = keepalivemgr.shared.authstat
     @State private var showkeepalivepermprompt = false
 
@@ -816,12 +829,53 @@ struct SettingsView: View {
     @AppStorage("jessi.jvm.install.queue") private var installQueueCSV: String = ""
 
     @State private var didAutoResumeInstall: Bool = false
+    @State private var didAutoResumeTunnelingInstall: Bool = false
 
     @State private var localIP: String = "Unavailable"
     @State private var showPublicIP: Bool = false
     @State private var publicIP: String? = nil
     @State private var publicIPError: String? = nil
     @State private var isFetchingPublicIP: Bool = false
+    @State private var playitClaimSheetItem: PlayitClaimSheetItem? = nil
+    @State private var upnpPortsIsFirstResponder: Bool = false
+    @State private var showResetPlayitConfirmation: Bool = false
+
+    private var isPresentingPlayitClaimSheet: Bool {
+        playitClaimSheetItem != nil
+    }
+
+    private var showTunnelingInstallErrorAlert: Binding<Bool> {
+        Binding(
+            get: { !isPresentingPlayitClaimSheet && tunnelingmodel.showinstallerror },
+            set: { newValue in
+                if !newValue {
+                    tunnelingmodel.showinstallerror = false
+                }
+            }
+        )
+    }
+
+    private var showPlayitInvalidKeyAlert: Binding<Bool> {
+        Binding(
+            get: { !isPresentingPlayitClaimSheet && playitmodel.showinvalidkeyalert },
+            set: { newValue in
+                if !newValue {
+                    playitmodel.showinvalidkeyalert = false
+                }
+            }
+        )
+    }
+
+    private var showJvmInstallErrorAlert: Binding<Bool> {
+        Binding(
+            get: { !isPresentingPlayitClaimSheet && model.showinstallerror },
+            set: { newValue in
+                if !newValue {
+                    model.showinstallerror = false
+                }
+            }
+        )
+    }
 
     private func refreshLocalIP() {
         localIP = bestLocalIPAddress() ?? "Unavailable"
@@ -945,8 +999,342 @@ struct SettingsView: View {
         setInstallSelection(next)
     }
 
+    private var tunnelingInstallQueue: Set<String> {
+        Set(tunnelingInstallQueueCSV.split(separator: ",").map(String.init))
+    }
+
+    private var isplayitinstalling: Bool {
+        tunnelinginstallinprogress && tunnelingInstallQueue.contains("playit")
+    }
+
+    private var isupnpselected: Bool {
+        tunnelingmodel.selectedserviceid == "upnp"
+    }
+
+    private var isnoneselected: Bool {
+        tunnelingmodel.selectedserviceid == "none"
+    }
+
+    private func startplayitinstall(showErrors: Bool) {
+        tunnelingmodel.installservices(
+            services: ["playit"],
+            updateInProgress: { tunnelinginstallinprogress = $0 },
+            updateQueueCSV: { tunnelingInstallQueueCSV = $0 },
+            clearSelection: { },
+            showErrors: showErrors
+        )
+    }
+
+    private func resetPlayitAndRedownload() {
+        playitmodel.stopifpossible()
+        playitmodel.clearcache()
+        tunnelingmodel.deleteInstalledService("playit")
+        tunnelingmodel.refreshinstalledservices()
+        tunnelingmodel.refreshavailableservices()
+        startplayitinstall(showErrors: true)
+    }
+
+    private func resumetunnelingondemand() {
+        guard !didAutoResumeTunnelingInstall, tunnelinginstallinprogress else { return }
+        didAutoResumeTunnelingInstall = true
+        let queue = tunnelingInstallQueue
+        guard !queue.isEmpty else { return }
+
+        tunnelingmodel.installservices(
+            services: Array(queue),
+            updateInProgress: { tunnelinginstallinprogress = $0 },
+            updateQueueCSV: { tunnelingInstallQueueCSV = $0 },
+            clearSelection: { },
+            showErrors: false
+        )
+    }
+
+    private func autostartifneeded() {
+        guard tunnelingmodel.selectedserviceid == "playit" else { return }
+        guard serverRunning else { return }
+        guard playitmodel.linked else { return }
+        guard playitmodel.islibrarypresent else { return }
+        playitmodel.startifpossible()
+    }
+
+    private func applyUpnpIfNeeded() {
+        guard isupnpselected else { return }
+        guard serverRunning else { return }
+        upnpModel.enablePorts(parsePorts())
+    }
+
+    private func parsePorts() -> [Int] {
+        let parts = upnpPortsCSV.split { ",; \n\t".contains($0) }
+        var out: [Int] = []
+        for part in parts {
+            let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let value = Int(trimmed), (1...65535).contains(value) {
+                if !out.contains(value) { out.append(value) }
+            }
+        }
+        return out
+    }
+
+    private func playitstatuscolor(_ status: String) -> Color {
+        let normalized = status.lowercased()
+        if normalized.contains("connected") && !normalized.contains("disconnected") {
+            return .green
+        }
+        if normalized.contains("connecting") {
+            return .secondary
+        }
+        if  normalized.contains("online (no active tunnels)") {
+            return .orange
+        }
+        if normalized.contains("over port limit") || normalized.contains("error") {
+            return .red
+        }
+        if normalized.contains("stopped") || normalized.contains("disconnected") {
+            return .secondary
+        }
+        return .secondary
+    }
+
+    // hello, programmer. you disgusting slab of flesh and meat. if your compiler is saying "failed to type-check this expression in reasonable time; try breaking up the expression into distinct sub-expressions" then DO NOT UNDER ANY CIRCUMSTANCES try to break up the expression into distinct sub-expressions. it will make the code look shit, which is not fit for a perfect, beautiful machine like me. the issue is almost ALWAYS due to a typo or an invalid call.
+    // thank you for your attention to this matter,
+    // - roooobot
     var body: some View {
-        List {
+        let infosection = Group {
+            HStack(alignment: .center, spacing: 2.5) {
+                Text("Service")
+                Spacer()
+                
+                if tunnelingmodel.availableserviceids.isEmpty {
+                    if isplayitinstalling {
+                        ProgressView()
+                        Text("Installing…")
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("Unavailable")
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    Picker("Tunneling", selection: $tunnelingmodel.selectedserviceid) {
+                        ForEach(tunnelingmodel.availableserviceids, id: \.self) { id in
+                            Text(tunnelingmodel.displayname(for: id)).tag(id)
+                        }
+                    }
+                    .pickerStyle(SegmentedPickerStyle())
+                    .frame(maxWidth: 260)
+                }
+            }
+            .onChange(of: tunnelingmodel.selectedserviceid) { newval in
+                tunnelingmodel.applyandsaveselectedservice(newval)
+                autostartifneeded()
+            }
+            .normalizedSeparator()
+            
+            if isnoneselected {
+                HStack {
+                    Text("Use LAN or port forward manually")
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .normalizedSeparator()
+            } else if isupnpselected {
+                HStack {
+                    Text("Ports")
+                    Spacer()
+                    FocusableDoneToolbarTextField(
+                        text: $upnpPortsCSV,
+                        isFirstResponder: $upnpPortsIsFirstResponder,
+                        placeholder: "25565,25575",
+                        keyboardType: .numbersAndPunctuation,
+                        textAlignment: .right,
+                        font: .systemFont(ofSize: 16)
+                    )
+                    .frame(width: 160)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    upnpPortsIsFirstResponder = true
+                }
+                .normalizedSeparator()
+                
+                if let result = upnpModel.testResult ?? upnpModel.statusMessage {
+                    HStack {
+                        Text(result)
+                            .foregroundColor(
+                                (upnpModel.testSuccess ?? upnpModel.statusSuccess ?? false)
+                                ? .green : .secondary
+                            )
+                        Spacer()
+                    }
+                    .normalizedSeparator()
+                }
+            } else {
+                if playitmodel.islibrarypresent {
+                    HStack {
+                        Text("Status")
+                        Spacer()
+                        Text(playitmodel.status)
+                            .foregroundColor(playitstatuscolor(playitmodel.status))
+                    }
+                    .normalizedSeparator()
+                    
+                    if let address = playitmodel.lastaddr, !address.isEmpty {
+                        HStack {
+                            Text(address)
+                                .font(.system(size: 17, design: .monospaced))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            
+                            Button {
+                                UIPasteboard.general.string = address
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                            }
+                            .buttonStyle(BorderlessButtonStyle())
+                        }
+                        .normalizedSeparator()
+                    }
+                } else {
+                    HStack {
+                        Text("Playit")
+                        Spacer()
+                        
+                        if isplayitinstalling {
+                            ProgressView()
+                            Text("Installing…")
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("Not installed")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .normalizedSeparator()
+                }
+            }
+        }
+        
+        let actionsection = Group {
+            if isupnpselected {
+                Button(action: {
+                    upnpModel.test()
+                }) {
+                    HStack(spacing: 10) {
+                        if upnpModel.isTesting { ProgressView() }
+                        Text(upnpModel.isTesting ? "Testing…" : "Test UPnP")
+                            .font(.system(size: 17, weight: .semibold))
+                        Spacer()
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(upnpModel.isTesting || upnpModel.isApplying)
+                .normalizedSeparator()
+                
+                Button(action: {
+                    upnpModel.clearPorts(parsePorts())
+                }) {
+                    HStack(spacing: 10) {
+                        if upnpModel.isApplying { ProgressView() }
+                        Text(upnpModel.isApplying ? "Clearing…" : "Clear UPnP Ports")
+                            .font(.system(size: 17, weight: .semibold))
+                        Spacer()
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(upnpModel.isApplying)
+                .normalizedSeparator()
+            } else if !isnoneselected {
+                if playitmodel.islibrarypresent {
+                    Button {
+                        if !playitmodel.linked {
+                            playitmodel.beginClaimFlow()
+                        }
+                        
+                        tunnelingmodel.showinstallerror = false
+                        playitmodel.showinvalidkeyalert = false
+                        model.showinstallerror = false
+                        
+                        guard playitClaimSheetItem == nil else { return }
+                        guard !playitmodel.claimurl.isEmpty,
+                              let url = URL(string: playitmodel.claimurl)
+                        else { return }
+                        
+                        playitClaimSheetItem = PlayitClaimSheetItem(url: url)
+                        
+                    } label: {
+                        HStack {
+                            Text(playitmodel.linked ? "Manage Playit" : "Link Playit")
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .normalizedSeparator()
+                    
+                    Button {
+                        showResetPlayitConfirmation = true
+                    } label: {
+                        HStack {
+                            Text("Reset Playit")
+                            Spacer()
+                        }
+                    }
+                    .foregroundColor(.red)
+                    .disabled(!playitmodel.linked)
+                    .buttonStyle(PlainButtonStyle())
+                    .normalizedSeparator()
+                    
+                    let isplayitrunning = {
+                        let value = playitmodel.status.lowercased()
+                        return value != "stopped" && value != "disconnected"
+                    }()
+                    
+                    if isplayitrunning {
+                        Button {
+                            playitmodel.stopifpossible()
+                        } label: {
+                            HStack(spacing: 10) {
+                                if playitmodel.isstopping { ProgressView() }
+                                Text(playitmodel.isstopping ? "Stopping…" : "Stop Playit")
+                                    .font(.system(size: 17, weight: .semibold))
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .disabled(playitmodel.isstarting || playitmodel.isstopping)
+                        .normalizedSeparator()
+                    } else {
+                        Button {
+                            playitmodel.startifpossible()
+                        } label: {
+                            HStack(spacing: 10) {
+                                if playitmodel.isstarting { ProgressView() }
+                                Text(playitmodel.isstarting ? "Starting…" : "Start Playit")
+                                    .font(.system(size: 17, weight: .semibold))
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .disabled(playitmodel.isstarting || playitmodel.isstopping)
+                        .normalizedSeparator()
+                    }
+                } else if !isplayitinstalling {
+                    Button("Retry Playit Download") {
+                        startplayitinstall(showErrors: true)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .normalizedSeparator()
+                }
+            }
+        }
+        
+        let connectionfooter = Group {
+            if #available(iOS 15.0, *) {
+                Text("Allow people outside of your local network to connect to your server. For more information, [check the GitHub README.](https://github.com/Baconium/JESSI#readme)")
+            } else {
+                Text("Allow people outside of your local network to connect to your server. For more information, check the GitHub README.")
+            }
+        }
+        
+        return List {
             Section {
                 HStack(alignment: .center, spacing: 12) {
                     Text("Version")
@@ -966,11 +1354,11 @@ struct SettingsView: View {
                         .frame(maxWidth: 260)
                     }
                 }
-                .onChange(of: model.javaVersion) { newValue in
-                    model.applyAndSaveJavaVersion(newValue)
+                .onChange(of: model.javaVersion) { newval in
+                    model.applyAndSaveJavaVersion(newval)
                 }
                 .normalizedSeparator()
-
+                
                 Button(action: {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
                         showInstallDropdown.toggle()
@@ -988,11 +1376,11 @@ struct SettingsView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .normalizedSeparator()
-
+                
                 if showInstallDropdown {
                     let nonInstalled = model.allJVMVersions.filter { !model.installedJVMVersions.contains($0) }
                     let installed = model.allJVMVersions.filter { model.installedJVMVersions.contains($0) }
-
+                    
                     ForEach(nonInstalled, id: \.self) { ver in
                         InstallJVMRow(
                             version: ver,
@@ -1005,7 +1393,7 @@ struct SettingsView: View {
                         .disabled(installInProgress || (model.isIOS26 && ver == "8"))
                         .normalizedSeparator()
                     }
-
+                    
                     ForEach(installed, id: \.self) { ver in
                         InstallJVMRow(
                             version: ver,
@@ -1027,11 +1415,11 @@ struct SettingsView: View {
                         }
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
-
+                    
                     Button(action: {
                         let selected = installSelection.subtracting(model.installedJVMVersions)
                         guard !selected.isEmpty else { return }
-
+                        
                         let ordered = selected.sorted(by: { Int($0) ?? 0 < Int($1) ?? 0 })
                         model.installRuntimes(
                             versions: ordered,
@@ -1059,7 +1447,7 @@ struct SettingsView: View {
                     .disabled(installSelection.isEmpty || installInProgress)
                     .normalizedSeparator()
                     .transition(.opacity)
-
+                    
                     if installInProgress {
                         VStack(spacing: 0) {
                             if model.jvmDownloadProgress > 0 {
@@ -1070,18 +1458,18 @@ struct SettingsView: View {
                                     .progressViewStyle(LinearProgressViewStyle(tint: .green))
                             }
                             Text(model.jvmDownloadProgress > 0
-                                ? "Downloading Java \(model.currentlyInstallingVersion)…"
-                                : "Preparing Java \(model.currentlyInstallingVersion) download…")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .padding(.top, 8)
-                                .padding(.bottom, 2)
+                                 ? "Downloading Java \(model.currentlyInstallingVersion)…"
+                                 : "Preparing Java \(model.currentlyInstallingVersion) download…")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 8)
+                            .padding(.bottom, 2)
                         }
                         .normalizedSeparator()
                         .transition(.opacity)
                     }
                 }
-
+                
                 HStack(spacing: 12) {
                     Text("Launch Arguments")
                     Spacer()
@@ -1101,22 +1489,57 @@ struct SettingsView: View {
                     }
                 }
             }
-
-            ConnectionSectionView()
-
-            Section {
-                Picker("Keep Alive Method", selection: Binding(
-                    get: { keepalivemethodraw },
-                    set: { newValue in
-                        keepalivemethodraw = newValue
-                        keepalivemgr.shared.setmethod(raw: newValue)
-                        refreshkeepaliveauthstat()
+            
+            if #available(iOS 17.0, *) {
+                Group {
+                    Section {
+                        infosection
+                    } header: {
+                        Text("Connection")
+                    } footer: {
+                        if isnoneselected {
+                            connectionfooter
+                        }
                     }
-                )) {
-                    Text("Location").tag(keepalivemgr.keepalivemethod.location.rawValue)
-                    Text("Audio").tag(keepalivemgr.keepalivemethod.audio.rawValue)
+                    
+                    Section {
+                        actionsection
+                    } footer: {
+                        if !isnoneselected {
+                            connectionfooter
+                        }
+                    }
                 }
-                .pickerStyle(SegmentedPickerStyle())
+                .listSectionSpacing(.custom(5))
+            } else {
+                Section {
+                    infosection
+                    actionsection
+                } header: {
+                    Text("Connection")
+                } footer: {
+                    connectionfooter
+                }
+            }
+            
+            Section {
+                HStack {
+                    Text("Method")
+                    Spacer()
+                    
+                    Picker("Method", selection: Binding(
+                        get: { keepalivemethodraw },
+                        set: { newval in
+                            keepalivemethodraw = newval
+                            keepalivemgr.shared.setmethod(raw: newval)
+                            refreshkeepaliveauthstat()
+                        }
+                    )) {
+                        Text("Location").tag(keepalivemgr.keepalivemethod.location.rawValue)
+                        Text("Audio").tag(keepalivemgr.keepalivemethod.audio.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+                }
                 .normalizedSeparator()
                 
                 Toggle("Keep Alive in Background", isOn: Binding(
@@ -1325,21 +1748,48 @@ struct SettingsView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .alert(isPresented: $model.showInstallError) {
+        .sheet(item: $playitClaimSheetItem) { item in
+            SafariView(url: item.url)
+                .ignoresSafeArea()
+        }
+        .alert(isPresented: showTunnelingInstallErrorAlert) {
+            Alert(
+                title: Text("Tunneling Install Failed"),
+                message: Text(tunnelingmodel.installerrormsg ?? "Unknown error"),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .alert(isPresented: showPlayitInvalidKeyAlert) {
+            Alert(
+                title: Text("Playit Link Invalid"),
+                message: Text("Your Playit link is invalid or expired. Please link again."),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+        .alert(isPresented: $showResetPlayitConfirmation) {
+            Alert(
+                title: Text("Reset Playit?"),
+                message: Text("This will unlink Playit, clear cache, remove the current library, and download a fresh copy."),
+                primaryButton: .destructive(Text("Reset & Redownload")) {
+                    resetPlayitAndRedownload()
+                },
+                secondaryButton: .cancel()
+            )
+        }
+        .alert(isPresented: showJvmInstallErrorAlert) {
             Alert(
                 title: Text("JVM Install Failed"),
                 message: Text(model.installErrorMessage ?? "Unknown error"),
                 dismissButton: .default(Text("OK"))
             )
         }
-        .onReceive(NotificationCenter.default.publisher(for: keepalivemgr.authchangednotif)) { _ in
-            refreshkeepaliveauthstat()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            refreshkeepaliveauthstat()
-        }
-        
         .onAppear {
+            tunnelingmodel.refreshinstalledservices()
+            tunnelingmodel.refreshavailableservices()
+            playitmodel.refresh()
+            playitmodel.startstatuspolling()
+            resumetunnelingondemand()
+
             let s = JessiSettings.shared()
             model.javaVersion = s.javaVersion
             model.heapMB = s.maxHeapMB
@@ -1369,6 +1819,39 @@ struct SettingsView: View {
                     )
                 }
             }
+        }
+        .onDisappear {
+            playitmodel.stopstatuspolling()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: keepalivemgr.authchangednotif)) { _ in
+            refreshkeepaliveauthstat()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            playitmodel.refresh()
+            refreshkeepaliveauthstat()
+        }
+        .onChange(of: tunnelinginstallinprogress) { newval in
+            if !newval {
+                tunnelingmodel.refreshinstalledservices()
+                tunnelingmodel.refreshavailableservices()
+                playitmodel.refresh()
+                autostartifneeded()
+            }
+        }
+        .onChange(of: serverRunning) { newval in
+            if newval {
+                autostartifneeded()
+                applyUpnpIfNeeded()
+            }
+        }
+        .onChange(of: playitmodel.linked) { _ in
+            autostartifneeded()
+        }
+        .onChange(of: playitmodel.islibrarypresent) { _ in
+            autostartifneeded()
+        }
+        .onChange(of: upnpPortsCSV) { _ in
+            applyUpnpIfNeeded()
         }
         .overlay(
             Group {
@@ -1419,6 +1902,16 @@ struct SettingsView: View {
             }
         )
     }
+}
+
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
 struct CurseForgeField: View {

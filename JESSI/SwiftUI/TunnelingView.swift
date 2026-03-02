@@ -1,81 +1,8 @@
 import SwiftUI
-import UIKit
-import SafariServices
+import Combine
 import Security
 import Darwin
-import Combine
 import Network
-
-private struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct ScrollContentHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct ScrollViewHeightPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
-    }
-}
-
-private struct InstallTunnelingRow: View {
-    let name: String
-    let isInstalled: Bool
-    let isSelected: Bool
-    let isInstalling: Bool
-    let onToggle: () -> Void
-
-    private var iconName: String {
-        if isInstalled || isSelected { return "checkmark.circle.fill" }
-        return "circle"
-    }
-
-    private var iconColor: Color {
-        if isInstalled { return .green }
-        if isSelected { return Color.accentColor }
-        return .secondary
-    }
-
-    private var statusText: String? {
-        if isInstalling { return "Installing…" }
-        if isInstalled { return "Installed" }
-        return nil
-    }
-
-    var body: some View {
-        Button(action: onToggle) {
-            HStack(spacing: 10) {
-                Image(systemName: iconName)
-                    .foregroundColor(iconColor)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name)
-                        .foregroundColor(.primary)
-
-                    if let statusText {
-                        Text(statusText)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Spacer()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-        .disabled(isInstalled)
-    }
-}
 
 final class TunnelingModel: ObservableObject {
     struct ServiceInfo: Identifiable {
@@ -108,29 +35,29 @@ final class TunnelingModel: ObservableObject {
 
     var allServices: [ServiceInfo] { Self.services }
 
-    @Published var availableServiceIds: [String] = []
-    @Published var selectedServiceId: String = ""
-    @Published var installedServiceIds: Set<String> = []
+    @Published var availableserviceids: [String] = []
+    @Published var selectedserviceid: String = ""
+    @Published var installedserviceids: Set<String> = []
 
-    @Published var installErrorMessage: String? = nil
-    @Published var showInstallError: Bool = false
+    @Published var installerrormsg: String? = nil
+    @Published var showinstallerror: Bool = false
 
     private let selectedKey = "jessi.tunnel.service"
 
     init() {
         let stored = UserDefaults.standard.string(forKey: selectedKey)
-        selectedServiceId = stored ?? allServices.first?.id ?? ""
+        selectedserviceid = stored ?? allServices.first?.id ?? ""
 
-        refreshInstalledServices()
-        refreshAvailableServices()
+        refreshinstalledservices()
+        refreshavailableservices()
     }
 
-    func applyAndSaveSelectedService(_ id: String) {
-        selectedServiceId = id
+    func applyandsaveselectedservice(_ id: String) {
+        selectedserviceid = id
         UserDefaults.standard.set(id, forKey: selectedKey)
     }
 
-    func displayName(for id: String) -> String {
+    func displayname(for id: String) -> String {
         allServices.first(where: { $0.id == id })?.name ?? id
     }
 
@@ -154,31 +81,31 @@ final class TunnelingModel: ObservableObject {
         servicesDir.appendingPathComponent(id, isDirectory: true)
     }
 
-    func refreshInstalledServices() {
+    func refreshinstalledservices() {
         let installed = allServices.compactMap { info -> String? in
             if info.fileName == nil { return info.id }
             guard let fileURL = serviceFileURL(for: info.id) else { return nil }
             return FileManager.default.fileExists(atPath: fileURL.path) ? info.id : nil
         }
-        installedServiceIds = Set(installed)
+        installedserviceids = Set(installed)
     }
 
-    func refreshAvailableServices() {
-        availableServiceIds = allServices.map { $0.id }.filter(installedServiceIds.contains)
+    func refreshavailableservices() {
+        availableserviceids = allServices.map { $0.id }.filter(installedserviceids.contains)
 
-        if !availableServiceIds.contains(selectedServiceId), let first = availableServiceIds.first {
-            applyAndSaveSelectedService(first)
+        if !availableserviceids.contains(selectedserviceid), let first = availableserviceids.first {
+            applyandsaveselectedservice(first)
         }
     }
 
     func deleteInstalledService(_ id: String) {
-        guard installedServiceIds.contains(id) else { return }
+        guard installedserviceids.contains(id) else { return }
         try? FileManager.default.removeItem(at: serviceDir(for: id))
-        refreshInstalledServices()
-        refreshAvailableServices()
+        refreshinstalledservices()
+        refreshavailableservices()
     }
 
-    private func installOneService(id: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    private func installoneservice(id: String, completion: @escaping (Result<Void, Error>) -> Void) {
         guard let info = info(for: id), let downloadURL = info.downloadURL, let fileName = info.fileName else {
             completion(.failure(NSError(domain: "JESSI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown service: \(id)"])) )
             return
@@ -232,7 +159,7 @@ final class TunnelingModel: ObservableObject {
         task.resume()
     }
 
-    func installServices(
+    func installservices(
         services: [String],
         updateInProgress: @escaping (Bool) -> Void,
         updateQueueCSV: @escaping (String) -> Void,
@@ -245,8 +172,8 @@ final class TunnelingModel: ObservableObject {
         func fail(_ message: String) {
             if showErrors {
                 DispatchQueue.main.async {
-                    self.installErrorMessage = message
-                    self.showInstallError = true
+                    self.installerrormsg = message
+                    self.showinstallerror = true
                 }
             }
             updateQueueCSV("")
@@ -263,8 +190,8 @@ final class TunnelingModel: ObservableObject {
         func next() {
             guard !remaining.isEmpty else {
                 DispatchQueue.main.async {
-                    self.refreshInstalledServices()
-                    self.refreshAvailableServices()
+                    self.refreshinstalledservices()
+                    self.refreshavailableservices()
                 }
                 updateQueueCSV("")
                 updateInProgress(false)
@@ -275,12 +202,12 @@ final class TunnelingModel: ObservableObject {
             let current = remaining.removeFirst()
             updateQueueCSV(([current] + remaining).joined(separator: ","))
 
-            self.installOneService(id: current) { result in
+            self.installoneservice(id: current) { result in
                 switch result {
                 case .success:
                     DispatchQueue.main.async {
-                        self.refreshInstalledServices()
-                        self.refreshAvailableServices()
+                        self.refreshinstalledservices()
+                        self.refreshavailableservices()
                     }
                     next()
                 case .failure(let error):
@@ -294,19 +221,19 @@ final class TunnelingModel: ObservableObject {
         next()
     }
 
-    static func autoInstallPlayitIfNeeded() {
+    static func autoinstallplayitondemand() {
         let defaults = UserDefaults.standard
         let autoKey = "jessi.tunnel.autoInstall.started"
         guard !defaults.bool(forKey: autoKey) else { return }
         defaults.set(true, forKey: autoKey)
 
         let model = TunnelingModel()
-        model.refreshInstalledServices()
-        if model.installedServiceIds.contains("playit") {
+        model.refreshinstalledservices()
+        if model.installedserviceids.contains("playit") {
             return
         }
 
-        model.installServices(
+        model.installservices(
             services: ["playit"],
             updateInProgress: { defaults.set($0, forKey: "jessi.tunnel.install.inProgress") },
             updateQueueCSV: { defaults.set($0, forKey: "jessi.tunnel.install.queue") },
@@ -326,6 +253,7 @@ final class PlayitModel: ObservableObject {
     @Published var claiming: Bool = false
     @Published var claimstatus: String = ""
     @Published var isstarting: Bool = false
+    @Published var isstopping: Bool = false
     @Published var showinvalidkeyalert: Bool = false
 
     private let claimurlkey = "jessi.playit.claimurl"
@@ -367,8 +295,8 @@ final class PlayitModel: ObservableObject {
         }
 
         if libhandle == nil && !isstarting {
-            setStatus("Disconnected")
-            setLastAddr(nil)
+            setstatus("Disconnected")
+            setlastaddr(nil)
         }
     }
 
@@ -378,12 +306,12 @@ final class PlayitModel: ObservableObject {
         defaults.removeObject(forKey: lastaddrkey)
         defaults.removeObject(forKey: lasterrkey)
         linked = false
-        setStatus("Disconnected")
-        setLastAddr(nil)
-        setError(nil)
+        setstatus("Disconnected")
+        setlastaddr(nil)
+        seterror(nil)
     }
 
-    func clearCache() {
+    func clearcache() {
         resetlink()
         
         let fm = FileManager.default
@@ -413,18 +341,18 @@ final class PlayitModel: ObservableObject {
     }
 
     func startifpossible() {
-        if isstarting { return }
+        if isstarting || isstopping { return }
         guard islibrarypresent else {
-            setError("Playit library missing")
+            seterror("Playit library missing")
             return
         }
         guard let secret = defaults.string(forKey: secretkeykey), !secret.isEmpty else {
-            setError("Playit not linked")
+            seterror("Playit not linked")
             return
         }
 
         isstarting = true
-        setError(nil)
+        seterror(nil)
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
@@ -432,11 +360,49 @@ final class PlayitModel: ObservableObject {
             DispatchQueue.main.async {
                 self.isstarting = false
                 if let error {
-                    self.setError(error)
+                    self.seterror(error)
                 } else {
                     self.startstatuspolling()
                     self.refreshfromlibrary()
                 }
+            }
+        }
+    }
+
+    func stopifpossible() {
+        if isstarting || isstopping { return }
+        guard let handle = libhandle else {
+            setstatus("Stopped")
+            setlastaddr(nil)
+            seterror(nil)
+            laststatuscode = .stopped
+            return
+        }
+
+        guard let playitstop = loadsymbol(handle, name: "playit_stop", type: PlayitStopFn.self) else {
+            seterror("Failed to load Playit stop symbol")
+            return
+        }
+
+        isstopping = true
+        seterror(nil)
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let stopResult = playitstop()
+
+            DispatchQueue.main.async {
+                self.isstopping = false
+                if stopResult != 0 {
+                    self.seterror("Playit stop failed (\(stopResult))")
+                    return
+                }
+
+                self.laststatuscode = .stopped
+                self.setstatus("Stopped")
+                self.setlastaddr(nil)
+                self.seterror(nil)
+                self.refreshfromlibrary()
             }
         }
     }
@@ -460,8 +426,7 @@ final class PlayitModel: ObservableObject {
         playitsetlog(jessi_playit_log_callback, nil)
 
         let config: [String: Any] = [
-            "secret_key": secretkey,
-            "agent_version": "99.0.0"
+            "secret_key": secretkey
         ]
         guard let jsonData = try? JSONSerialization.data(withJSONObject: config, options: []),
               let jsonStr = String(data: jsonData, encoding: .utf8)
@@ -506,20 +471,33 @@ final class PlayitModel: ObservableObject {
             }
         }
 
-        setStatus(code.displayname)
+        let addressValue: String? = {
+            guard let addr = s.last_address else { return nil }
+            let value = String(cString: addr)
+            return value.isEmpty ? nil : value
+        }()
+        setlastaddr(addressValue)
 
-        if let addr = s.last_address {
-            setLastAddr(String(cString: addr))
+        if code == .disconnected, addressValue == nil, s.last_error == nil, libhandle != nil {
+            setstatus("Online (No Active Tunnels)")
+        } else {
+            setstatus(code.displayname)
         }
 
         if let err = s.last_error {
             let value = String(cString: err)
-            setError(value)
+            let lower = value.lowercased()
+            if lower.contains("over port limit") {
+                setstatus("Account Over Port Limit")
+            }
+            seterror(value)
             if value.contains("InvalidAgentKey") {
                 resetlink()
-                setError("Playit link expired or invalid. Please re-link.")
+                seterror("Playit link expired or invalid. Please re-link.")
                 showinvalidkeyalert = true
             }
+        } else {
+            seterror(nil)
         }
     }
 
@@ -531,17 +509,20 @@ final class PlayitModel: ObservableObject {
     func beginClaimFlow() {
         if claiming { return }
 
-        let code = generateClaimCode()
+        let code = generateclaimcode()
         let url = "https://playit.gg/claim/\(code)"
-        storeClaimUrl(url)
+        storeclaimurl(url)
 
         claimstatus = "Waiting for approval... \n"
         claiming = true
+        tunnelinglogger.log("welcome to:");
+        tunnelinglogger.log("ROOOOTS AMAZING PLAYIT INTEGRATION");
+        tunnelinglogger.divider();
         tunnelinglogger.log("Playit: claim started (\(code))")
 
         claimTask?.cancel()
         claimTask = Task { [weak self] in
-            await self?.runClaimFlow(code: code)
+            await self?.runclaimflow(code: code)
         }
     }
 
@@ -560,33 +541,67 @@ final class PlayitModel: ObservableObject {
     @MainActor
     private func finishClaimWithError(_ message: String) {
         claiming = false
-        setError(message)
+        seterror(message)
     }
 
     @MainActor
     private func finishClaimSuccess(secretKey: String) {
         claiming = false
-        storeSecretKey(secretKey)
+        storesecretkey(secretKey)
         linked = true
-        setError(nil)
+        seterror(nil)
         tunnelinglogger.log("Playit: claim success")
+        bringAgentOnlineAfterClaim()
     }
 
-    private func storeClaimUrl(_ url: String) {
+    @MainActor
+    private func bringAgentOnlineAfterClaim() {
+        // Refresh persisted state first; `islibrarypresent` can be stale if install state changed.
+        refresh()
+
+        guard islibrarypresent else {
+            seterror("Playit linked, but the Playit library is missing.")
+            return
+        }
+
+        // First attempt immediately.
+        startifpossible()
+
+        Task { @MainActor in
+            // Retry startup/status a few times to handle claim->connect race conditions.
+            for attempt in 0..<8 {
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                self.refreshfromlibrary()
+
+                if self.laststatuscode == .connected {
+                    return
+                }
+
+                // In this FFI, `.disconnected` can also mean "no active tunnel yet".
+                // Only retry startup when clearly not running/failed.
+                if !self.isstarting && (self.laststatuscode == .stopped || self.laststatuscode == .error || self.laststatuscode == nil) {
+                    tunnelinglogger.log("Playit: retrying agent start after claim (attempt \(attempt + 2))")
+                    self.startifpossible()
+                }
+            }
+        }
+    }
+
+    private func storeclaimurl(_ url: String) {
         claimurl = url
         defaults.set(url, forKey: claimurlkey)
     }
 
-    private func storeSecretKey(_ key: String) {
+    private func storesecretkey(_ key: String) {
         defaults.set(key, forKey: secretkeykey)
     }
 
-    private func setStatus(_ value: String) {
+    private func setstatus(_ value: String) {
         status = value
         defaults.set(value, forKey: statuskey)
     }
 
-    private func setLastAddr(_ value: String?) {
+    private func setlastaddr(_ value: String?) {
         lastaddr = value
         if let value {
             defaults.set(value, forKey: lastaddrkey)
@@ -595,7 +610,7 @@ final class PlayitModel: ObservableObject {
         }
     }
 
-    private func setError(_ value: String?) {
+    private func seterror(_ value: String?) {
         lasterr = value
         if let value {
             defaults.set(value, forKey: lasterrkey)
@@ -604,7 +619,7 @@ final class PlayitModel: ObservableObject {
         }
     }
 
-    private func generateClaimCode() -> String {
+    private func generateclaimcode() -> String {
         var bytes = [UInt8](repeating: 0, count: 5)
         let result = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
         if result != errSecSuccess {
@@ -613,8 +628,8 @@ final class PlayitModel: ObservableObject {
         return bytes.map { String(format: "%02x", $0) }.joined()
     }
 
-    private func runClaimFlow(code: String) async {
-        let version = appVersionString()
+    private func runclaimflow(code: String) async {
+        let version = appversionstring()
         let setupReq = ClaimSetupRequest(code: code, agent_type: "self-managed", version: version)
 
         while !Task.isCancelled {
@@ -622,7 +637,7 @@ final class PlayitModel: ObservableObject {
                 let result: ApiResult<String, String> = try await post(path: "/claim/setup", body: setupReq)
                 switch result {
                 case .success(let status):
-                    let state = parseClaimSetupStatus(status)
+                    let state = parseclaimsetupstatus(status)
                     switch state {
                     case .waitingForUserVisit:
                         await updateClaimStatus("Open the link to continue")
@@ -631,7 +646,7 @@ final class PlayitModel: ObservableObject {
                     case .userAccepted:
                         await updateClaimStatus("Approved. Finalizing…")
                         tunnelinglogger.log("Playit: claim approved")
-                        await exchangeClaim(code: code)
+                        await exchangeclaim(code: code)
                         return
                     case .userRejected:
                         await finishClaimWithError("Claim rejected")
@@ -656,7 +671,7 @@ final class PlayitModel: ObservableObject {
         }
     }
 
-    private func exchangeClaim(code: String) async {
+    private func exchangeclaim(code: String) async {
         let exchangeReq = ClaimExchangeRequest(code: code)
         let endAt = Date().addingTimeInterval(300)
 
@@ -690,14 +705,14 @@ final class PlayitModel: ObservableObject {
         }
     }
 
-    private func appVersionString() -> String {
+    private func appversionstring() -> String {
         let bundle = Bundle.main
         let version = bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
         let build = bundle.infoDictionary?["CFBundleVersion"] as? String ?? "0"
-        return "jessi-ios \(version) (\(build))"
+        return "JESSI (iOS) \(version) (\(build))"
     }
 
-    private func parseClaimSetupStatus(_ raw: String) -> ClaimSetupState {
+    private func parseclaimsetupstatus(_ raw: String) -> ClaimSetupState {
         let normalized = raw.lowercased().replacingOccurrences(of: "-", with: "").replacingOccurrences(of: "_", with: "")
         switch normalized {
         case "waitingforuservisit":
@@ -1210,957 +1225,5 @@ private func jessi_playit_log_callback(level: Int32, message: UnsafePointer<CCha
     case 0: prefix = "[DEBUG]"
     default: prefix = "[TRACE]"
     }
-    tunnelinglogger.log("Playit \(prefix) \(text)")
-}
-
-struct TunnelingView: View {
-    @StateObject private var model = TunnelingModel()
-    @StateObject private var playitmodel = PlayitModel()
-    @AppStorage("jessi.server.running") private var serverRunning: Bool = false
-
-    @State private var showInstallDropdown: Bool = false
-    @AppStorage("jessi.tunnel.install.inProgress") private var installInProgress: Bool = false
-    @AppStorage("jessi.tunnel.install.selection") private var installSelectionCSV: String = ""
-    @AppStorage("jessi.tunnel.install.queue") private var installQueueCSV: String = ""
-
-    @State private var didAutoResumeInstall: Bool = false
-    @State private var showclaim: Bool = false
-    @State private var showlogs: Bool = false
-    @State private var showstatusinfo: Bool = false
-    @State private var infotheusercouldmaybefinduseful: String = ""
-
-    @State private var scrollviewheight: CGFloat = 0
-    @State private var contentheight: CGFloat = 0
-    @State private var scrolloffset: CGFloat = 0
-    @State private var shouldautoscroll = true
-
-    private var installSelection: Set<String> {
-        csvToSet(installSelectionCSV)
-    }
-
-    private func setInstallSelection(_ selection: Set<String>) {
-        installSelectionCSV = orderedIds(selection).joined(separator: ",")
-    }
-
-    private var installQueue: Set<String> {
-        csvToSet(installQueueCSV)
-    }
-
-    private func csvToSet(_ csv: String) -> Set<String> {
-        Set(csv.split(separator: ",").map(String.init))
-    }
-
-    private func orderedIds(_ set: Set<String>) -> [String] {
-        model.allServices.map { $0.id }.filter(set.contains)
-    }
-
-    private func toggleSelection(_ id: String) {
-        if model.installedServiceIds.contains(id) { return }
-        if installInProgress { return }
-        var next = installSelection
-        if next.contains(id) {
-            next.remove(id)
-        } else {
-            next.insert(id)
-        }
-        setInstallSelection(next)
-    }
-
-    var body: some View {
-        VStack {
-            List {
-                tunnelingSection
-                playitSection
-            }
-
-            if playitmodel.claiming {
-                console
-            }
-
-            Spacer()
-
-            startPlayitButton
-        }
-        .listStyle(InsetGroupedListStyle())
-        .navigationTitle("Tunneling")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showlogs = true
-                } label: {
-                    Text("Show Logs")
-                        .foregroundColor(.green)
-                }
-            }
-        }
-        .navigationBarTitleDisplayMode(.inline)
-        .alert(isPresented: $model.showInstallError) {
-            Alert(
-                title: Text("Tunneling Install Failed"),
-                message: Text(model.installErrorMessage ?? "Unknown error"),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .alert(isPresented: $playitmodel.showinvalidkeyalert) {
-            Alert(
-                title: Text("Playit Link Invalid"),
-                message: Text("Your Playit link is invalid or expired. Please link again."),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .sheet(isPresented: $showclaim) {
-            if let url = URL(string: playitmodel.claimurl), !playitmodel.claimurl.isEmpty {
-                SafariView(url: url)
-                    .ignoresSafeArea()
-            }
-        }
-        .sheet(isPresented: $showlogs) {
-            LogsViewSheet(logger: tunnelinglogger)
-        }
-        .onAppear {
-            model.refreshInstalledServices()
-            model.refreshAvailableServices()
-            playitmodel.refresh()
-            playitmodel.startstatuspolling()
-
-            setInstallSelection(installSelection.subtracting(model.installedServiceIds))
-            resumeInstallIfNeeded()
-
-            appendConsole("Playit status: \(playitmodel.status)")
-            if let addr = playitmodel.lastaddr, !addr.isEmpty {
-                appendConsole("Playit address: \(addr)")
-            }
-            if let err = playitmodel.lasterr, !err.isEmpty {
-                appendConsole("Playit error: \(err)")
-            }
-        }
-        .onDisappear {
-            playitmodel.stopstatuspolling()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            playitmodel.refresh()
-        }
-        .onChange(of: playitmodel.status) { newValue in
-            appendConsole("Playit status: \(newValue)")
-            if newValue == "Connecting" {
-                appendConsole("Info: Connecting means the agent started and is negotiating a control session with Playit.")
-            } else if newValue == "Connected" {
-                appendConsole("Info: Connected means the tunnel is ready and an address is assigned.")
-            } else if newValue == "Disconnected" {
-                appendConsole("Info: Disconnected means the Playit agent is not started yet.")
-            }
-        }
-        .onChange(of: playitmodel.lastaddr) { newValue in
-            guard let newValue, !newValue.isEmpty else { return }
-            appendConsole("Playit address: \(newValue)")
-        }
-        .onChange(of: playitmodel.lasterr) { newValue in
-            guard let newValue, !newValue.isEmpty else { return }
-            appendConsole("Playit error: \(newValue)")
-        }
-        .onChange(of: playitmodel.claimstatus) { newValue in
-            guard playitmodel.claiming, !newValue.isEmpty else { return }
-            appendConsole("Playit: \(newValue)")
-        }
-        .onChange(of: playitmodel.claiming) { newValue in
-            appendConsole(newValue ? "Playit: claim started" : "Playit: claim ended")
-        }
-        .onChange(of: installInProgress) { newValue in
-            appendConsole(newValue ? "Install: started" : "Install: finished")
-        }
-        .onChange(of: model.showInstallError) { newValue in
-            guard newValue else { return }
-            appendConsole("Install error: \(model.installErrorMessage ?? "Unknown error")")
-        }
-    }
-
-    @ViewBuilder
-    private var tunnelingSection: some View {
-        Section {
-            tunnelingPickerRow.normalizedSeparator()
-            installToggleRow.normalizedSeparator()
-
-            if showInstallDropdown {
-                installList
-                installButton.normalizedSeparator()
-            }
-        } header: {
-            Text("Tunneling")
-        } footer: {
-            Text("Install a tunneling service above to expose your server.")
-        }
-    }
-
-    private var tunnelingPickerRow: some View {
-        HStack(alignment: .center, spacing: 2.5) {
-            Text("Service")
-            Spacer()
-            if model.availableServiceIds.isEmpty {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(Color.yellow)
-                Text("No services found")
-                    .foregroundColor(Color.secondary)
-            } else {
-                Picker("Tunneling", selection: $model.selectedServiceId) {
-                    ForEach(model.availableServiceIds, id: \.self) { id in
-                        Text(model.displayName(for: id)).tag(id)
-                    }
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                .frame(maxWidth: 260)
-            }
-        }
-        .onChange(of: model.selectedServiceId) { newValue in
-            model.applyAndSaveSelectedService(newValue)
-        }
-    }
-
-    private var installToggleRow: some View {
-        Button(action: {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                showInstallDropdown.toggle()
-            }
-        }) {
-            HStack(alignment: .center, spacing: 12) {
-                Text("Install Tunneling Service")
-                    .foregroundColor(.primary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundColor(.secondary)
-                    .rotationEffect(.degrees(showInstallDropdown ? 90 : 0))
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    @ViewBuilder
-    private var installList: some View {
-        let nonInstalled = model.allServices.filter { !model.installedServiceIds.contains($0.id) }
-        let installed = model.allServices.filter { model.installedServiceIds.contains($0.id) }
-
-        ForEach(nonInstalled) { info in
-            InstallTunnelingRow(
-                name: info.name,
-                isInstalled: false,
-                isSelected: installSelection.contains(info.id),
-                isInstalling: installInProgress && installQueue.contains(info.id),
-                onToggle: { toggleSelection(info.id) }
-            )
-            .disabled(installInProgress)
-            .normalizedSeparator()
-        }
-
-        ForEach(installed) { info in
-            InstallTunnelingRow(
-                name: info.name,
-                isInstalled: true,
-                isSelected: false,
-                isInstalling: false,
-                onToggle: { }
-            )
-            .disabled(true)
-            .normalizedSeparator()
-        }
-        .onDelete { offsets in
-            for i in offsets {
-                guard i >= 0 && i < installed.count else { continue }
-                let id = installed[i].id
-                model.deleteInstalledService(id)
-                setInstallSelection(installSelection.subtracting([id]))
-            }
-        }
-        .transition(.move(edge: .top).combined(with: .opacity))
-    }
-
-    private var installButton: some View {
-        Button(action: {
-            let selected = installSelection.subtracting(model.installedServiceIds)
-            guard !selected.isEmpty else { return }
-
-            let ordered = orderedIds(selected)
-            model.installServices(
-                services: ordered,
-                updateInProgress: { installInProgress = $0 },
-                updateQueueCSV: { installQueueCSV = $0 },
-                clearSelection: { setInstallSelection([]) }
-            )
-        }) {
-            HStack(spacing: 10) {
-                if installInProgress {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                        .accentColor(.white)
-                }
-                Text(installInProgress ? "Installing…" : "Install")
-                    .font(.system(size: 17, weight: .semibold))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background((installSelection.isEmpty || installInProgress) ? Color.gray.opacity(0.35) : Color.green)
-            .foregroundColor(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(PlainButtonStyle())
-        .disabled(installSelection.isEmpty || installInProgress)
-        .normalizedSeparator()
-        .transition(.opacity)
-    }
-
-    @ViewBuilder
-    private var playitSection: some View {
-        if playitmodel.islibrarypresent {
-            Section {
-                HStack {
-                    Text("Status")
-                    Spacer()
-                    Text(playitmodel.status)
-                        .foregroundColor(playitmodel.status.lowercased().contains("disconnected") ? .secondary : .green)
-                    .buttonStyle(BorderlessButtonStyle())
-                }
-                .normalizedSeparator()
-
-                if let address = playitmodel.lastaddr, !address.isEmpty {
-                    HStack {
-                        Text("Address")
-                        Spacer()
-                        Text(address)
-                            .font(.system(size: 14, design: .monospaced))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Button(action: {
-                            UIPasteboard.general.string = address
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        }) {
-                            Image(systemName: "doc.on.doc")
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(BorderlessButtonStyle())
-                    }
-                    .normalizedSeparator()
-                }
-
-                Button(action: {
-                    if !playitmodel.linked {
-                        playitmodel.beginClaimFlow()
-                    }
-                    showclaim = true
-                }) {
-                    HStack {
-                        Text(playitmodel.linked ? "Manage Playit" : "Link Playit")
-                            .foregroundColor(.primary)
-                        Spacer()
-                        Image(systemName: playitmodel.linked ? "gearshape" : "link")
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .buttonStyle(PlainButtonStyle())
-                .normalizedSeparator()
-
-                Button("Reset Playit Link") {
-                    playitmodel.resetlink()
-                }
-                .disabled(!playitmodel.linked)
-                .foregroundColor(.red)
-                .buttonStyle(PlainButtonStyle())
-                .normalizedSeparator()
-                
-                Button("Clear Playit Cache") {
-                    playitmodel.clearCache()
-                }
-                .foregroundColor(.red)
-                .buttonStyle(PlainButtonStyle())
-                .normalizedSeparator()
-            } header: {
-                Text("Playit")
-            } footer: {
-                Text("Playit starts at the same time as your server. Link your account to get a public address.")
-            }
-        }
-    }
-
-    private var startPlayitButton: some View {
-        let startDisabled = !serverRunning || !playitmodel.linked || !playitmodel.islibrarypresent || playitmodel.isstarting
-        return Button(action: {
-            playitmodel.startifpossible()
-        }) {
-            HStack(spacing: 10) {
-                if playitmodel.isstarting {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                }
-                Text(playitmodel.isstarting ? "Starting…" : "Start Playit")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-            }
-            .foregroundColor(.white)
-            .background(Color.green)
-            .cornerRadius(14)
-            .shadow(color: Color.black.opacity(1.0), radius: 8, x: 0, y: 6)
-            .padding(.horizontal, 16)
-            .padding(.bottom, createButtonBottomPadding)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .disabled(startDisabled)
-    }
-
-    private var console: some View {
-        VStack {
-            HStack {
-                Spacer()
-
-                Button("Cancel") {
-                    playitmodel.cancelClaimFlow()
-                }
-                .foregroundColor(.red)
-                .buttonStyle(BorderlessButtonStyle())
-            }
-
-            GroupBox {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 0) {
-                            Color.clear
-                                .frame(height: 0)
-                                .background(
-                                    GeometryReader { geo in
-                                        Color.clear
-                                            .preference(
-                                                key: ScrollOffsetPreferenceKey.self,
-                                                value: geo.frame(in: .named("console-scroll")).minY
-                                            )
-                                    }
-                                )
-
-                            HStack(spacing: 10) {
-                                Text(playitmodel.claimstatus.isEmpty
-                                     ? "Claiming…"
-                                     : playitmodel.claimstatus)
-                                .foregroundColor(.secondary)
-
-                                Spacer()
-                            }
-
-                            Color.clear
-                                .frame(height: 1)
-                                .id("BOTTOM")
-                        }
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear
-                                    .preference(
-                                        key: ScrollContentHeightPreferenceKey.self,
-                                        value: geo.size.height
-                                    )
-                            }
-                        )
-                    }
-                    .coordinateSpace(name: "console-scroll")
-                    .background(
-                        GeometryReader { geo in
-                            Color.clear
-                                .preference(
-                                    key: ScrollViewHeightPreferenceKey.self,
-                                    value: geo.size.height
-                                )
-                        }
-                    )
-                    .onPreferenceChange(ScrollContentHeightPreferenceKey.self) { newValue in
-                        contentheight = newValue
-                        let visibleBottom = scrolloffset + scrollviewheight
-                        let distanceFromBottom = contentheight - visibleBottom
-                        shouldautoscroll = distanceFromBottom < 40
-                    }
-                    .onPreferenceChange(ScrollViewHeightPreferenceKey.self) { newValue in
-                        scrollviewheight = newValue
-                        let visibleBottom = scrolloffset + scrollviewheight
-                        let distanceFromBottom = contentheight - visibleBottom
-                        shouldautoscroll = distanceFromBottom < 40
-                    }
-                    .onPreferenceChange(ScrollOffsetPreferenceKey.self) { newValue in
-                        scrolloffset = -newValue
-                        let visibleBottom = scrolloffset + scrollviewheight
-                        let distanceFromBottom = contentheight - visibleBottom
-                        shouldautoscroll = distanceFromBottom < 40
-                    }
-                    .onChange(of: playitmodel.claimstatus) { _ in
-                        guard shouldautoscroll else { return }
-                        proxy.scrollTo("BOTTOM", anchor: .bottom)
-                    }
-                }
-            }
-            .frame(minHeight: 100, maxHeight: 100)
-        }
-        .padding(.horizontal, 16)
-    }
-
-    private var createButtonBottomPadding: CGFloat {
-        24
-    }
-
-    private func resumeInstallIfNeeded() {
-        guard !didAutoResumeInstall, installInProgress else { return }
-        didAutoResumeInstall = true
-        let queue = installQueue
-        guard !queue.isEmpty else { return }
-
-        let ordered = orderedIds(queue)
-        model.installServices(
-            services: ordered,
-            updateInProgress: { installInProgress = $0 },
-            updateQueueCSV: { installQueueCSV = $0 },
-            clearSelection: { setInstallSelection([]) }
-        )
-    }
-
-    private func appendConsole(_ line: String) {
-        if infotheusercouldmaybefinduseful.isEmpty {
-            infotheusercouldmaybefinduseful = line
-        } else {
-            infotheusercouldmaybefinduseful += "\n" + line
-        }
-    }
-}
-
-struct SafariView: UIViewControllerRepresentable {
-    let url: URL
-    
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
-    }
-    
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
-}
-
-struct ConnectionSectionView: View {
-    @StateObject private var model = TunnelingModel()
-    @StateObject private var playitmodel = PlayitModel()
-    @StateObject private var upnpmodel = UpnpModel()
-    @AppStorage("jessi.server.running") private var serverRunning: Bool = false
-    @AppStorage("jessi.tunnel.install.inProgress") private var installInProgress: Bool = false
-    @AppStorage("jessi.tunnel.install.queue") private var installQueueCSV: String = ""
-    @AppStorage("jessi.upnp.ports") private var upnpPortsCSV: String = "25565"
-
-    @State private var didAutoResumeInstall: Bool = false
-    @State private var showclaim: Bool = false
-    @State private var showlogs: Bool = false
-    @State private var showstatusinfo: Bool = false
-    @State private var upnpPortsIsFirstResponder: Bool = false
-
-    private var installQueue: Set<String> {
-        Set(installQueueCSV.split(separator: ",").map(String.init))
-    }
-
-    private var isPlayitInstalling: Bool {
-        installInProgress && installQueue.contains("playit")
-    }
-
-    private var isUpnpSelected: Bool {
-        model.selectedServiceId == "upnp"
-    }
-
-    private var isNoneSelected: Bool {
-        model.selectedServiceId == "none"
-    }
-
-    var body: some View {
-        Group {
-            Section {
-                serviceRow.normalizedSeparator()
-
-                if isNoneSelected {
-                    noneSelectedRow.normalizedSeparator()
-                } else if isUpnpSelected {
-                    upnpPortsRow.normalizedSeparator()
-                    upnpTestRow.normalizedSeparator()
-                    upnpClearRow.normalizedSeparator()
-                    upnpResultRow.normalizedSeparator()
-                } else {
-                    if playitmodel.islibrarypresent {
-                        statusRow.normalizedSeparator()
-
-                        if let address = playitmodel.lastaddr, !address.isEmpty {
-                            addressRow(address).normalizedSeparator()
-                        }
-
-                        linkRow.normalizedSeparator()
-                        resetRow.normalizedSeparator()
-                        clearCacheRow.normalizedSeparator()
-                        startRow.normalizedSeparator()
-                    } else {
-                        installStatusRow.normalizedSeparator()
-                        if !isPlayitInstalling {
-                            retryInstallRow.normalizedSeparator()
-                        }
-                    }
-                }
-            } header: {
-                Text("Connection")
-            } footer: {
-                connectionFooter
-            }
-        }
-        .sheet(isPresented: $showclaim) {
-            if let url = URL(string: playitmodel.claimurl), !playitmodel.claimurl.isEmpty {
-                SafariView(url: url)
-                    .ignoresSafeArea()
-            }
-        }
-        .sheet(isPresented: $showlogs) {
-            LogsViewSheet(logger: tunnelinglogger)
-        }
-        .alert(isPresented: $model.showInstallError) {
-            Alert(
-                title: Text("Tunneling Install Failed"),
-                message: Text(model.installErrorMessage ?? "Unknown error"),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .alert(isPresented: $playitmodel.showinvalidkeyalert) {
-            Alert(
-                title: Text("Playit Link Invalid"),
-                message: Text("Your Playit link is invalid or expired. Please link again."),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .onAppear {
-            model.refreshInstalledServices()
-            model.refreshAvailableServices()
-            playitmodel.refresh()
-            playitmodel.startstatuspolling()
-            resumeInstallIfNeeded()
-        }
-        .onDisappear {
-            playitmodel.stopstatuspolling()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
-            playitmodel.refresh()
-        }
-        .onChange(of: installInProgress) { newValue in
-            if !newValue {
-                model.refreshInstalledServices()
-                model.refreshAvailableServices()
-                playitmodel.refresh()
-                autoStartIfNeeded()
-            }
-        }
-        .onChange(of: serverRunning) { newValue in
-            if newValue {
-                autoStartIfNeeded()
-                applyUpnpIfNeeded()
-            }
-        }
-        .onChange(of: playitmodel.linked) { _ in
-            autoStartIfNeeded()
-        }
-        .onChange(of: playitmodel.islibrarypresent) { _ in
-            autoStartIfNeeded()
-        }
-        .onChange(of: upnpPortsCSV) { _ in
-            applyUpnpIfNeeded()
-        }
-    }
-
-    private var serviceRow: some View {
-        HStack(alignment: .center, spacing: 2.5) {
-            Text("Service")
-            Spacer()
-            if model.availableServiceIds.isEmpty {
-                if isPlayitInstalling {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                    Text("Installing…")
-                        .foregroundColor(.secondary)
-                } else {
-                    Text("Unavailable")
-                        .foregroundColor(.secondary)
-                }
-            } else {
-                Picker("Tunneling", selection: $model.selectedServiceId) {
-                    ForEach(model.availableServiceIds, id: \.self) { id in
-                        Text(model.displayName(for: id)).tag(id)
-                    }
-                }
-                .pickerStyle(SegmentedPickerStyle())
-                .frame(maxWidth: 260)
-            }
-        }
-        .onChange(of: model.selectedServiceId) { newValue in
-            model.applyAndSaveSelectedService(newValue)
-            autoStartIfNeeded()
-        }
-    }
-
-    @ViewBuilder
-    private var connectionFooter: some View {
-        if #available(iOS 15.0, *) {
-            Text(makeConnectionFooterAttributedText())
-        } else {
-            Text(connectionFooterPlainText)
-        }
-    }
-
-    private var connectionFooterPlainText: String {
-        "Allow people outside of your local network to connect to your server. For more information, check the GitHub README."
-    }
-
-    @available(iOS 15.0, *)
-    private func makeConnectionFooterAttributedText() -> AttributedString {
-        var text = AttributedString(connectionFooterPlainText)
-        if let range = text.range(of: "check the GitHub README.") {
-            text[range].link = URL(string: "https://github.com/Baconium/JESSI")
-            text[range].underlineStyle = .single
-            text[range].foregroundColor = .gray
-        }
-        return text
-    }
-
-    private var statusRow: some View {
-        HStack {
-            Text("Status")
-            Spacer()
-            Text(playitmodel.status)
-                .foregroundColor(playitmodel.status.lowercased().contains("disconnected") ? .secondary : .green)
-            .buttonStyle(BorderlessButtonStyle())
-        }
-    }
-
-    private var noneSelectedRow: some View {
-        HStack {
-            Text("Use LAN or port forward manually")
-                .foregroundColor(.secondary)
-            Spacer()
-        }
-    }
-
-    private func addressRow(_ address: String) -> some View {
-        HStack {
-            Text("Address")
-            Spacer()
-            Text(address)
-                .font(.system(size: 14, design: .monospaced))
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Button(action: {
-                UIPasteboard.general.string = address
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            }) {
-                Image(systemName: "doc.on.doc")
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(BorderlessButtonStyle())
-        }
-    }
-
-    private var linkRow: some View {
-        Button(action: {
-            if !playitmodel.linked {
-                playitmodel.beginClaimFlow()
-            }
-            showclaim = true
-        }) {
-            HStack {
-                Text(playitmodel.linked ? "Manage Playit" : "Link Playit")
-                    .foregroundColor(.primary)
-                Spacer()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private var resetRow: some View {
-        Button(action: {
-            playitmodel.resetlink()
-        }) {
-            HStack {
-                Text("Reset Playit Link")
-                Spacer()
-            }
-            .contentShape(Rectangle())
-        }
-        .disabled(!playitmodel.linked)
-        .foregroundColor(.red)
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private var clearCacheRow: some View {
-        Button(action: {
-            playitmodel.clearCache()
-        }) {
-            HStack {
-                Text("Clear Playit Cache")
-                Spacer()
-            }
-            .contentShape(Rectangle())
-        }
-        .foregroundColor(.red)
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private var startRow: some View {
-        let startDisabled = !serverRunning || !playitmodel.linked || !playitmodel.islibrarypresent || playitmodel.isstarting
-        return Button(action: {
-            playitmodel.startifpossible()
-        }) {
-            HStack(spacing: 10) {
-                if playitmodel.isstarting {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                }
-                Text(playitmodel.isstarting ? "Starting…" : "Start Playit")
-                    .font(.system(size: 17, weight: .semibold))
-                Spacer()
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-        .disabled(startDisabled)
-    }
-
-    private var upnpPortsRow: some View {
-        HStack {
-            Text("Ports")
-            Spacer()
-            FocusableDoneToolbarTextField(
-                text: $upnpPortsCSV,
-                isFirstResponder: $upnpPortsIsFirstResponder,
-                placeholder: "25565,25575",
-                keyboardType: .numbersAndPunctuation,
-                textAlignment: .right,
-                font: .systemFont(ofSize: 16)
-            )
-            .frame(width: 160)
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            upnpPortsIsFirstResponder = true
-        }
-    }
-
-    private var upnpTestRow: some View {
-        Button(action: {
-            upnpmodel.enablePorts(parsePorts())
-            upnpmodel.test()
-        }) {
-            HStack(spacing: 10) {
-                if upnpmodel.isTesting {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                }
-                Text(upnpmodel.isTesting ? "Testing…" : "Test UPnP")
-                    .font(.system(size: 17, weight: .semibold))
-                Spacer()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-        .disabled(upnpmodel.isTesting)
-    }
-
-    private var upnpClearRow: some View {
-        Button(action: {
-            upnpmodel.clearPorts(parsePorts())
-        }) {
-            HStack(spacing: 10) {
-                if upnpmodel.isApplying {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                }
-                Text(upnpmodel.isApplying ? "Clearing…" : "Clear UPnP Ports")
-                    .font(.system(size: 17, weight: .semibold))
-                Spacer()
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(PlainButtonStyle())
-        .disabled(upnpmodel.isApplying)
-    }
-
-    @ViewBuilder
-    private var upnpResultRow: some View {
-        if let result = upnpmodel.testResult ?? upnpmodel.statusMessage {
-            HStack {
-                Text(result)
-                    .foregroundColor((upnpmodel.testSuccess ?? upnpmodel.statusSuccess ?? false) ? .green : .secondary)
-                Spacer()
-            }
-        }
-    }
-
-    private var installStatusRow: some View {
-        HStack {
-            Text("Playit")
-            Spacer()
-            if isPlayitInstalling {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle())
-                Text("Installing…")
-                    .foregroundColor(.secondary)
-            } else {
-                Text("Not installed")
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
-
-    private var retryInstallRow: some View {
-        Button("Retry Playit Download") {
-            startPlayitInstall(showErrors: true)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private func startPlayitInstall(showErrors: Bool) {
-        model.installServices(
-            services: ["playit"],
-            updateInProgress: { installInProgress = $0 },
-            updateQueueCSV: { installQueueCSV = $0 },
-            clearSelection: { },
-            showErrors: showErrors
-        )
-    }
-
-    private func resumeInstallIfNeeded() {
-        guard !didAutoResumeInstall, installInProgress else { return }
-        didAutoResumeInstall = true
-        let queue = installQueue
-        guard !queue.isEmpty else { return }
-
-        model.installServices(
-            services: Array(queue),
-            updateInProgress: { installInProgress = $0 },
-            updateQueueCSV: { installQueueCSV = $0 },
-            clearSelection: { },
-            showErrors: false
-        )
-    }
-
-    private func autoStartIfNeeded() {
-        guard model.selectedServiceId == "playit" else { return }
-        guard serverRunning else { return }
-        guard playitmodel.linked else { return }
-        guard playitmodel.islibrarypresent else { return }
-        playitmodel.startifpossible()
-    }
-
-    private func applyUpnpIfNeeded() {
-        guard isUpnpSelected else { return }
-        guard serverRunning else { return }
-        upnpmodel.enablePorts(parsePorts())
-    }
-
-    private func parsePorts() -> [Int] {
-        let parts = upnpPortsCSV.split { ",; \n\t".contains($0) }
-        var out: [Int] = []
-        for part in parts {
-            let trimmed = part.trimmingCharacters(in: .whitespacesAndNewlines)
-            if let value = Int(trimmed), (1...65535).contains(value) {
-                if !out.contains(value) { out.append(value) }
-            }
-        }
-        return out
-    }
+    tunnelinglogger.log("[playit-ios] \(prefix) \(text)")
 }

@@ -5,7 +5,7 @@ import Combine
 import UIKit
 
 struct RootTabView: View {
-	@StateObject private var tourManager = TourManager()
+    @StateObject private var tourManager = TourManager()
     private let minSwipeDistance: CGFloat = 60
 
     init() {
@@ -18,7 +18,7 @@ struct RootTabView: View {
         }
     }
 
-	var body: some View {
+    var body: some View {
         let tabBinding = Binding<Int>(
             get: { tourManager.selectedTab },
             set: { newValue in
@@ -83,9 +83,9 @@ struct RootTabView: View {
         .environmentObject(tourManager)
         .onAppear {
             keepalivemgr.shared.startifenabled()
-            TunnelingModel.autoInstallPlayitIfNeeded()
+            TunnelingModel.autoinstallplayitondemand()
         }
-	}
+    }
 
     private func handleTabSwipe(_ gesture: DragGesture.Value) {
         let horizontalTranslation = gesture.translation.width
@@ -176,33 +176,33 @@ class TourManager: ObservableObject {
 struct WelcomeTourView: View {
     @EnvironmentObject var tourManager: TourManager
 
-	private func appIconUIImage() -> UIImage? {
-		let info = Bundle.main.infoDictionary
-		let icons = info?["CFBundleIcons"] as? [String: Any]
-		let primary = icons?["CFBundlePrimaryIcon"] as? [String: Any]
-		let files = primary?["CFBundleIconFiles"] as? [String]
-		guard let iconName = files?.last else { return nil }
-		return UIImage(named: iconName)
-	}
+    private func appIconUIImage() -> UIImage? {
+        let info = Bundle.main.infoDictionary
+        let icons = info?["CFBundleIcons"] as? [String: Any]
+        let primary = icons?["CFBundlePrimaryIcon"] as? [String: Any]
+        let files = primary?["CFBundleIconFiles"] as? [String]
+        guard let iconName = files?.last else { return nil }
+        return UIImage(named: iconName)
+    }
     
     var body: some View {
         VStack(spacing: 16) {
-			Group {
-				if let icon = appIconUIImage() {
-					Image(uiImage: icon)
-						.resizable()
-						.interpolation(.high)
-						.scaledToFit()
-						.frame(width: 84, height: 84)
-						.clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-				} else {
-					Image(systemName: "server.rack")
-						.resizable()
-						.scaledToFit()
-						.frame(width: 84, height: 84)
-						.foregroundColor(.green)
-				}
-			}
+            Group {
+                if let icon = appIconUIImage() {
+                    Image(uiImage: icon)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: 84, height: 84)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                } else {
+                    Image(systemName: "server.rack")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 84, height: 84)
+                        .foregroundColor(.green)
+                }
+            }
 
             Text("Welcome to JESSI!")
                 .font(.title)
