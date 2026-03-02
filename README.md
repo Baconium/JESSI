@@ -61,15 +61,8 @@ This project is in active development, heres a list of some current features:
 - Easy server console interaction (via RCON)
 - Downloading only the JVM's you want
 - Network tunneling via playit.gg and UPnP support
-- Integrated mod downloading via Modrinth (curseforge etas0n)
-
-In the future, I plan to add the following:
-
-- Better jailbroken/trollstore device support (allow the JVM to run in a seperate process)
-- Improved launch UI
-- A GUI to configure all server and mod configs
-- Modpack support
-- And probably much more but this is all I could think of for now
+- Integrated mod, modpack, resource pack, and datapack downloading via Modrinth and curseforge
+- Keep alive, run the server in the background even with the screen off
 
 # Building/Miscellaneous extra info
 
