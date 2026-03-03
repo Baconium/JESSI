@@ -59,7 +59,7 @@ BOOL jessi_check_jit_enabled(void) {
     return (flags & CS_DEBUGGED) != 0;
 }
 
-static BOOL jessi_is_debugger_attached(void) {
+static __attribute__((unused)) BOOL jessi_is_debugger_attached(void) {
     int flags = 0;
     if (csops(getpid(), CS_OPS_STATUS, &flags, sizeof(flags)) != 0) {
         return NO;

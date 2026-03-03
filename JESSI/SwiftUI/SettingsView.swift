@@ -305,6 +305,7 @@ final class SettingsModel: ObservableObject {
 
     private var activeJVMSession: URLSession? = nil
     private var activeJVMDelegate: JVMDownloadProgressDelegate? = nil
+    private var isInstallPipelineRunning: Bool = false
 
     let allJVMVersions: [String] = ["8", "17", "21"]
 
@@ -753,6 +754,10 @@ final class SettingsModel: ObservableObject {
                          updateInProgress: @escaping (Bool) -> Void,
                          updateQueueCSV: @escaping (String) -> Void,
                          clearSelection: @escaping () -> Void) {
+        if isInstallPipelineRunning {
+            return
+        }
+
         let filtered = versions.filter { !(isIOS26 && $0 == "8") }
         guard !filtered.isEmpty else {
             DispatchQueue.main.async {
@@ -765,6 +770,8 @@ final class SettingsModel: ObservableObject {
             return
         }
 
+        isInstallPipelineRunning = true
+
         var remaining = filtered
         func next() {
             if remaining.isEmpty {
@@ -775,6 +782,7 @@ final class SettingsModel: ObservableObject {
                 updateQueueCSV("")
                 updateInProgress(false)
                 clearSelection()
+                self.isInstallPipelineRunning = false
                 return
             }
 
@@ -796,6 +804,7 @@ final class SettingsModel: ObservableObject {
                     }
                     updateQueueCSV("")
                     updateInProgress(false)
+                    self.isInstallPipelineRunning = false
                 }
             }
         }
@@ -1445,6 +1454,7 @@ struct SettingsView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                     
                     Button(action: {
+                        didAutoResumeInstall = true
                         let selected = installSelection.subtracting(model.installedJVMVersions)
                         guard !selected.isEmpty else { return }
                         
@@ -1550,7 +1560,7 @@ struct SettingsView: View {
             }
             
             Section {
-                HStack {
+                HStack(alignment: .center, spacing: 12) {
                     Text("Method")
                     Spacer()
                     
@@ -1575,10 +1585,11 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .frame(maxWidth: 260)
                 }
                 .normalizedSeparator()
                 
-                Toggle("Keep Alive in Background", isOn: keepAliveEnabledBinding)
+                Toggle("Keep alive in background", isOn: keepAliveEnabledBinding)
                 .normalizedSeparator()
             } header: {
                 Text("keep alive")

@@ -214,6 +214,8 @@ struct CreateServerView: View {
                     }
 
                 }
+                .disabled(isCreating)
+                .allowsHitTesting(!isCreating)
 
                 Section(header: Text("Server Icon (Optional)")) {
                     Button(action: { showingIconImporter = true }) {
@@ -246,6 +248,8 @@ struct CreateServerView: View {
                     QuickSettingValueRow(title: "World Seed", defaultValue: "Random", text: $seed, keyboardType: .default, fieldWidth: 200)
                         .normalizedSeparator()
                 }
+                .disabled(isCreating)
+                .allowsHitTesting(!isCreating)
 
                 Section {
                     Color.clear
@@ -257,7 +261,7 @@ struct CreateServerView: View {
             .navigationTitle("Server Setup")
             .navigationBarTitleDisplayMode(.inline)
 
-            VStack(spacing: 12) {
+            VStack(spacing: 0) {
                 Button(action: createServer) {
                     HStack(spacing: 10) {
                         if isCreating {
@@ -275,27 +279,37 @@ struct CreateServerView: View {
                 .background(Color.green)
                 .cornerRadius(14)
                 .shadow(color: Color.black.opacity(0.5), radius: 8, x: 0, y: 4)
+                .overlay(
+                    Group {
+                        if isCreating, let p = createProgress {
+                            VStack(spacing: 0) {
+                                if p > 0 {
+                                    ProgressView(value: p)
+                                        .progressViewStyle(LinearProgressViewStyle(tint: .green))
+                                } else {
+                                    ProgressView()
+                                        .progressViewStyle(LinearProgressViewStyle(tint: .green))
+                                }
 
-                if isCreating, let p = createProgress {
-                    VStack(spacing: 0) {
-                        if p > 0 {
-                            ProgressView(value: p)
-                                .progressViewStyle(LinearProgressViewStyle(tint: .green))
-                        } else {
-                            ProgressView()
-                                .progressViewStyle(LinearProgressViewStyle(tint: .green))
+                                Text(createStatus.isEmpty ? "Working..." : createStatus)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .padding(.top, 8)
+                                    .padding(.bottom, 2)
+                            }
+                            .offset(y: 48)
                         }
-
-                        Text(createStatus.isEmpty ? "Working..." : createStatus)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.top, 8)
-                            .padding(.bottom, 2)
-                    }
-                }
+                    },
+                    alignment: .bottom
+                )
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
+        }
+        .onChange(of: isCreating) { creating in
+            if creating {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
         }
         .onPreferenceChange(FramePreferenceKey.self) { frames in
             if let f = frames["software"] { self.softwareAnchorFrame = f }

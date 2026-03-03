@@ -728,7 +728,7 @@ static void *jessi_dyld_base(void) {
     return (void *)infos->dyldImageLoadAddress;
 }
 
-static bool jessi_write_abs_branch_stub(void *patchAddr, void *target) {
+static __attribute__((unused)) bool jessi_write_abs_branch_stub(void *patchAddr, void *target) {
     if (!patchAddr || !target) return false;
 
     vm_address_t page = (vm_address_t)patchAddr & ~((vm_address_t)getpagesize() - 1);
