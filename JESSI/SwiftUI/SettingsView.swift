@@ -538,17 +538,25 @@ final class SettingsModel: ObservableObject {
         refreshAvailableJavaVersions()
     }
 
-    private func runtimeDownloadURL(for version: String) -> URL? {
+    private func runtimeDownloadURLs(for version: String) -> [URL] {
+        let filename: String
         switch version {
         case "8":
-            return URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre8-ios-aarch64.zip")
+            filename = "jre8-ios-aarch64.zip"
         case "17":
-            return URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre17-ios-aarch64.zip")
+            filename = "jre17-ios-aarch64.zip"
         case "21":
-            return URL(string: "https://crystall1ne.dev/cdn/amethyst-ios/jre21-ios-aarch64.zip")
+            filename = "jre21-ios-aarch64.zip"
         default:
-            return nil
+            return []
         }
+
+        let bases = [
+            "https://crystall1ne.dev/cdn/amethyst-ios",
+            "https://baconium.dev/jessi/jvm"
+        ]
+
+        return bases.compactMap { URL(string: "\($0)/\(filename)") }
     }
 
     private func postInstallFixPermissions(runtimeRoot: URL) {
@@ -632,7 +640,8 @@ final class SettingsModel: ObservableObject {
             return
         }
 
-        guard let url = runtimeDownloadURL(for: version) else {
+        let candidateURLs = runtimeDownloadURLs(for: version)
+        guard !candidateURLs.isEmpty else {
             completion(.failure(NSError(domain: "JESSI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown Java version: \(version)"])))
             return
         }
@@ -657,116 +666,130 @@ final class SettingsModel: ObservableObject {
             return
         }
 
-        let progressDelegate = JVMDownloadProgressDelegate { [weak self] fraction in
-            DispatchQueue.main.async {
-                self?.jvmDownloadProgress = fraction
-            }
-        }
-        let session = URLSession(configuration: .default, delegate: progressDelegate, delegateQueue: nil)
-        self.activeJVMDelegate = progressDelegate
-        self.activeJVMSession = session
-        var progressTimer: DispatchSourceTimer?
-        let task = session.downloadTask(with: url) { tempURL, _, error in
-            let fm = FileManager.default
-            defer {
-                progressTimer?.cancel()
-                progressTimer = nil
-                self.activeJVMSession = nil
-                self.activeJVMDelegate = nil
-                session.finishTasksAndInvalidate()
-            }
-            if let error {
-                completion(.failure(error))
-                return
-            }
-            guard let tempURL else {
-                completion(.failure(NSError(domain: "JESSI", code: 2, userInfo: [NSLocalizedDescriptionKey: "Download failed"])))
+        var lastError: Error?
+
+        func attemptDownload(at index: Int) {
+            guard index < candidateURLs.count else {
+                completion(.failure(lastError ?? NSError(domain: "JESSI", code: 2, userInfo: [NSLocalizedDescriptionKey: "Download failed"])))
                 return
             }
 
-            do {
-                try fm.createDirectory(at: workDir, withIntermediateDirectories: true)
-                defer { try? fm.removeItem(at: workDir) }
-                if fm.fileExists(atPath: zipPath.path) { try? fm.removeItem(at: zipPath) }
-                try fm.moveItem(at: tempURL, to: zipPath)
+            let url = candidateURLs[index]
+            let progressDelegate = JVMDownloadProgressDelegate { [weak self] fraction in
+                DispatchQueue.main.async {
+                    self?.jvmDownloadProgress = fraction
+                }
+            }
+            let session = URLSession(configuration: .default, delegate: progressDelegate, delegateQueue: nil)
+            self.activeJVMDelegate = progressDelegate
+            self.activeJVMSession = session
+            var progressTimer: DispatchSourceTimer?
 
-                let archive = try Archive(url: zipPath, accessMode: .read)
-                for entry in archive {
-                    let outURL = unzipDir.appendingPathComponent(entry.path)
-                    let parent = outURL.deletingLastPathComponent()
-                    try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
-                    if fm.fileExists(atPath: outURL.path) {
-                        try? fm.removeItem(at: outURL)
+            let task = session.downloadTask(with: url) { tempURL, _, error in
+                let fm = FileManager.default
+                defer {
+                    progressTimer?.cancel()
+                    progressTimer = nil
+                    if self.activeJVMSession === session {
+                        self.activeJVMSession = nil
+                        self.activeJVMDelegate = nil
                     }
-                    _ = try archive.extract(entry, to: outURL)
+                    session.finishTasksAndInvalidate()
                 }
 
-                let enumerator = fm.enumerator(at: unzipDir, includingPropertiesForKeys: nil)
-                var foundTarXZ: URL? = nil
-                while let u = enumerator?.nextObject() as? URL {
-                    if u.pathExtension == "xz" && u.lastPathComponent.hasSuffix(".tar.xz") {
-                        foundTarXZ = u
-                        break
-                    }
+                if let error {
+                    lastError = error
+                    attemptDownload(at: index + 1)
+                    return
                 }
-                guard let foundTarXZ else {
-                    throw NSError(domain: "JESSI", code: 3, userInfo: [NSLocalizedDescriptionKey: "Runtime archive did not contain a .tar.xz"])
+                guard let tempURL else {
+                    lastError = NSError(domain: "JESSI", code: 2, userInfo: [NSLocalizedDescriptionKey: "Download failed"])
+                    attemptDownload(at: index + 1)
+                    return
                 }
-                if fm.fileExists(atPath: tarXZPath.path) { try? fm.removeItem(at: tarXZPath) }
-                try fm.copyItem(at: foundTarXZ, to: tarXZPath)
 
                 do {
+                    try fm.createDirectory(at: workDir, withIntermediateDirectories: true)
+                    defer { try? fm.removeItem(at: workDir) }
+                    if fm.fileExists(atPath: zipPath.path) { try? fm.removeItem(at: zipPath) }
+                    try fm.moveItem(at: tempURL, to: zipPath)
+
+                    let archive = try Archive(url: zipPath, accessMode: .read)
+                    for entry in archive {
+                        let outURL = unzipDir.appendingPathComponent(entry.path)
+                        let parent = outURL.deletingLastPathComponent()
+                        try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
+                        if fm.fileExists(atPath: outURL.path) {
+                            try? fm.removeItem(at: outURL)
+                        }
+                        _ = try archive.extract(entry, to: outURL)
+                    }
+
+                    let enumerator = fm.enumerator(at: unzipDir, includingPropertiesForKeys: nil)
+                    var foundTarXZ: URL? = nil
+                    while let u = enumerator?.nextObject() as? URL {
+                        if u.pathExtension == "xz" && u.lastPathComponent.hasSuffix(".tar.xz") {
+                            foundTarXZ = u
+                            break
+                        }
+                    }
+                    guard let foundTarXZ else {
+                        throw NSError(domain: "JESSI", code: 3, userInfo: [NSLocalizedDescriptionKey: "Runtime archive did not contain a .tar.xz"])
+                    }
+                    if fm.fileExists(atPath: tarXZPath.path) { try? fm.removeItem(at: tarXZPath) }
+                    try fm.copyItem(at: foundTarXZ, to: tarXZPath)
+
                     try autoreleasepool {
                         let xzData = try Data(contentsOf: tarXZPath, options: .mappedIfSafe)
                         let tarData = try XZArchive.unarchive(archive: xzData)
                         try tarData.write(to: tarPath, options: [.atomic])
                     }
+
+                    let finalDir = self.runtimeDir(for: version)
+                    let staging = self.runtimesDir.appendingPathComponent("jre\(version).staging-\(UUID().uuidString)", isDirectory: true)
+                    if fm.fileExists(atPath: staging.path) { try? fm.removeItem(at: staging) }
+
+                    try self.extractTar(tarPath, to: staging)
+                    self.postInstallFixPermissions(runtimeRoot: staging)
+
+                    if fm.fileExists(atPath: finalDir.path) {
+                        let backup = self.runtimesDir.appendingPathComponent("jre\(version).backup-\(UUID().uuidString)", isDirectory: true)
+                        try? fm.removeItem(at: backup)
+                        try fm.moveItem(at: finalDir, to: backup)
+                        try? fm.removeItem(at: backup)
+                    }
+                    try fm.moveItem(at: staging, to: finalDir)
+
+                    DispatchQueue.main.async {
+                        self.jvmDownloadProgress = 1
+                    }
+
+                    completion(.success(()))
                 } catch {
-                    completion(.failure(error))
-                    return
+                    lastError = error
+                    attemptDownload(at: index + 1)
                 }
+            }
 
-                let finalDir = self.runtimeDir(for: version)
-                let staging = self.runtimesDir.appendingPathComponent("jre\(version).staging-\(UUID().uuidString)", isDirectory: true)
-                if fm.fileExists(atPath: staging.path) { try? fm.removeItem(at: staging) }
-
-                try self.extractTar(tarPath, to: staging)
-                self.postInstallFixPermissions(runtimeRoot: staging)
-
-                if fm.fileExists(atPath: finalDir.path) {
-                    let backup = self.runtimesDir.appendingPathComponent("jre\(version).backup-\(UUID().uuidString)", isDirectory: true)
-                    try? fm.removeItem(at: backup)
-                    try fm.moveItem(at: finalDir, to: backup)
-                    try? fm.removeItem(at: backup)
-                }
-                try fm.moveItem(at: staging, to: finalDir)
-
+            let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+            timer.schedule(deadline: .now(), repeating: .milliseconds(120))
+            timer.setEventHandler { [weak task] in
+                guard let task = task else { return }
+                let expected = task.countOfBytesExpectedToReceive
+                let received = task.countOfBytesReceived
+                guard expected > 0, received >= 0 else { return }
+                let fraction = min(max(Double(received) / Double(expected), 0), 1)
                 DispatchQueue.main.async {
-                    self.jvmDownloadProgress = 1
+                    self.jvmDownloadProgress = fraction
                 }
-
-                completion(.success(()))
-            } catch {
-                completion(.failure(error))
             }
+            progressTimer = timer
+            timer.resume()
+
+            task.resume()
         }
 
-        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
-        timer.schedule(deadline: .now(), repeating: .milliseconds(120))
-        timer.setEventHandler { [weak task] in
-            guard let task = task else { return }
-            let expected = task.countOfBytesExpectedToReceive
-            let received = task.countOfBytesReceived
-            guard expected > 0, received >= 0 else { return }
-            let fraction = min(max(Double(received) / Double(expected), 0), 1)
-            DispatchQueue.main.async {
-                self.jvmDownloadProgress = fraction
-            }
-        }
-        progressTimer = timer
-        timer.resume()
-
-        task.resume()
+        attemptDownload(at: 0)
     }
 
     func installRuntimes(versions: [String],
