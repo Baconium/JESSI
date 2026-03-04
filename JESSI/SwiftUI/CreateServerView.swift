@@ -433,7 +433,8 @@ struct CreateServerView: View {
         "fuck trump": (title: "Fuck politics", message: "Politics will not be tolerated inside of JESSI, just play minecraft man"),
         "fuck kamala": (title: "Fuck politics", message: "Politics will not be tolerated inside of JESSI, just play minecraft man"),
         "fuck biden": (title: "Fuck politics", message: "Politics will not be tolerated inside of JESSI, just play minecraft man"),
-        "i love abby": (title: "I love you", message: "I hope you're doing well my love")
+        "i love abby": (title: "I love you", message: "I hope you're doing well my love"),
+        "aspe": (title: "rest in paint", message: "stay up man - lang lebe der STammTisch!")
     ]
 
     private func maybeShowSeedEasterEgg(for newSeed: String) {

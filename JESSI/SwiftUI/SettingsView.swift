@@ -302,6 +302,9 @@ final class SettingsModel: ObservableObject {
     @Published var showinstallerror: Bool = false
     @Published var jvmDownloadProgress: Double = 0
     @Published var currentlyInstallingVersion: String = ""
+    @Published var isjvmtestrunning: Bool = false
+    @Published var jvmtestprogress: Double = 0
+    @Published var jvmteststatus: String = ""
 
     private var activeJVMSession: URLSession? = nil
     private var activeJVMDelegate: JVMDownloadProgressDelegate? = nil
@@ -553,7 +556,8 @@ final class SettingsModel: ObservableObject {
 
         let bases = [
             "https://crystall1ne.dev/cdn/amethyst-ios",
-            "https://baconium.dev/jessi/jvm"
+            "https://baconium.dev/jessi/jvm",
+            "https://roooot.dev/jessi/jvm"
         ]
 
         return bases.compactMap { URL(string: "\($0)/\(filename)") }
@@ -855,6 +859,115 @@ final class SettingsModel: ObservableObject {
         updateQueueCSV(filtered.joined(separator: ","))
         next()
     }
+
+    func runjvmdltest(mirrorBase: String) {
+        if isjvmtestrunning {
+            return
+        }
+
+        guard let sourceURL = URL(string: "\(mirrorBase)/jre8-ios-aarch64.zip") else {
+            jvmteststatus = "Invalid mirror URL: \(mirrorBase)"
+            return
+        }
+
+        isjvmtestrunning = true
+        jvmtestprogress = 0
+        jvmteststatus = "Downloading test runtime..."
+
+        let fm = FileManager.default
+        let tmpRoot = fm.temporaryDirectory.appendingPathComponent("jessi-jvm-simulator-test", isDirectory: true)
+        let workDir = tmpRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let zipPath = workDir.appendingPathComponent("jre8-ios-aarch64.zip")
+        let unzipDir = workDir.appendingPathComponent("unzipped", isDirectory: true)
+        let tarXZPath = workDir.appendingPathComponent("runtime.tar.xz")
+        let tarPath = workDir.appendingPathComponent("runtime.tar")
+        let extractedDir = workDir.appendingPathComponent("extracted", isDirectory: true)
+
+        let task = URLSession.shared.downloadTask(with: sourceURL) { tempURL, _, error in
+            func fail(_ message: String) {
+                DispatchQueue.main.async {
+                    self.isjvmtestrunning = false
+                    self.jvmteststatus = message
+                }
+            }
+
+            if let error {
+                fail("Download failed: \(error.localizedDescription)")
+                return
+            }
+            guard let tempURL else {
+                fail("Download failed: temporary file was missing.")
+                return
+            }
+
+            do {
+                try fm.createDirectory(at: unzipDir, withIntermediateDirectories: true)
+
+                if fm.fileExists(atPath: zipPath.path) { try? fm.removeItem(at: zipPath) }
+                try fm.moveItem(at: tempURL, to: zipPath)
+
+                DispatchQueue.main.async {
+                    self.jvmtestprogress = 0.35
+                    self.jvmteststatus = "Extracting zip..."
+                }
+
+                let archive = try Archive(url: zipPath, accessMode: .read)
+                for entry in archive {
+                    let outURL = unzipDir.appendingPathComponent(entry.path)
+                    let parent = outURL.deletingLastPathComponent()
+                    try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
+                    if fm.fileExists(atPath: outURL.path) {
+                        try? fm.removeItem(at: outURL)
+                    }
+                    _ = try archive.extract(entry, to: outURL)
+                }
+
+                let enumerator = fm.enumerator(at: unzipDir, includingPropertiesForKeys: nil)
+                var foundTarXZ: URL? = nil
+                while let u = enumerator?.nextObject() as? URL {
+                    if u.pathExtension == "xz" && u.lastPathComponent.hasSuffix(".tar.xz") {
+                        foundTarXZ = u
+                        break
+                    }
+                }
+                guard let foundTarXZ else {
+                    throw NSError(domain: "JESSI", code: 103, userInfo: [NSLocalizedDescriptionKey: "Zip did not contain a .tar.xz archive"])
+                }
+
+                if fm.fileExists(atPath: tarXZPath.path) { try? fm.removeItem(at: tarXZPath) }
+                try fm.copyItem(at: foundTarXZ, to: tarXZPath)
+
+                DispatchQueue.main.async {
+                    self.jvmtestprogress = 0.6
+                    self.jvmteststatus = "Extracting tar.xz..."
+                }
+
+                try autoreleasepool {
+                    let xzData = try Data(contentsOf: tarXZPath, options: .mappedIfSafe)
+                    let tarData = try XZArchive.unarchive(archive: xzData)
+                    try tarData.write(to: tarPath, options: [.atomic])
+                }
+
+                if fm.fileExists(atPath: extractedDir.path) { try? fm.removeItem(at: extractedDir) }
+                try self.extractTar(tarPath, to: extractedDir)
+
+                let binDir = extractedDir.appendingPathComponent("bin", isDirectory: true)
+                guard fm.fileExists(atPath: binDir.path) else {
+                    throw NSError(domain: "JESSI", code: 104, userInfo: [NSLocalizedDescriptionKey: "Extraction failed: missing runtime bin directory"])
+                }
+
+                DispatchQueue.main.async {
+                    self.jvmtestprogress = 1
+                    self.isjvmtestrunning = false
+                    self.jvmteststatus = "Success: downloaded and fully extracted to \(extractedDir.path)"
+                }
+            } catch {
+                fail("Test failed: \(error.localizedDescription)")
+            }
+        }
+
+        task.resume()
+    }
 }
 
 struct SettingsView: View {
@@ -894,6 +1007,7 @@ struct SettingsView: View {
     @State private var upnpPortsIsFirstResponder: Bool = false
     @State private var showResetPlayitConfirmation: Bool = false
     @State private var showsystemstatuscolors: Bool = false
+    @State private var testmirrorase: String = "https://crystall1ne.dev/cdn/amethyst-ios"
 
     private var isPresentingPlayitClaimSheet: Bool {
         playitClaimSheetItem != nil
@@ -1577,6 +1691,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            
             if #available(iOS 17.0, *) {
                 Group {
                     Section {
@@ -1640,7 +1755,7 @@ struct SettingsView: View {
                 .normalizedSeparator()
                 
                 Toggle("Keep alive in background", isOn: keepAliveEnabledBinding)
-                .normalizedSeparator()
+                    .normalizedSeparator()
             } header: {
                 Text("keep alive")
             } footer: {
@@ -1654,14 +1769,14 @@ struct SettingsView: View {
                     Text("Requires TrollStore. Keeps the app alive using TrollStore entitlements.")
                 }
             }
-
+            
             Section(header: Text("Miscellaneous"), footer: Text(model.heapDescription)) {
                 HStack(spacing: 12) {
                     CurseForgeField(model: model)
                         .frame(maxWidth: 420)
                 }
                 .normalizedSeparator()
-
+                
                 HStack(spacing: 12) {
                     Text("Allocated RAM")
                     Spacer()
@@ -1676,7 +1791,7 @@ struct SettingsView: View {
                     .frame(width: 92)
                 }
                 .normalizedSeparator()
-
+                
                 VStack(alignment: .leading, spacing: 12) {
                     Slider(
                         value: Binding(
@@ -1689,7 +1804,7 @@ struct SettingsView: View {
                 }
                 .normalizedSeparator()
             }
-
+            
             Section(header: Text("System")) {
                 HStack {
                     Text("JIT Enabled")
@@ -1728,7 +1843,7 @@ struct SettingsView: View {
                     Text(model.iOSVersionString)
                 }
                 .normalizedSeparator()
-
+                
                 HStack {
                     Text("Total RAM")
                     Spacer()
@@ -1741,14 +1856,14 @@ struct SettingsView: View {
                     Text(model.freeRAM)
                 }
                 .normalizedSeparator()
-
+                
                 HStack {
                     Text("Local IP")
                     Spacer()
                     Text(localIP)
                 }
                 .normalizedSeparator()
-
+                
                 Button(action: {
                     if showPublicIP {
                         showPublicIP = false
@@ -1761,7 +1876,7 @@ struct SettingsView: View {
                         Text("Public IP")
                             .foregroundColor(.primary)
                         Spacer()
-
+                        
                         if !showPublicIP {
                             Text("Hidden")
                         } else if isFetchingPublicIP {
@@ -1777,17 +1892,17 @@ struct SettingsView: View {
                 .buttonStyle(PlainButtonStyle())
                 .normalizedSeparator()
             }
-
+            
             Section {
                 VStack(spacing: 0) {
-
+                    
                     HStack(spacing: 16) {
                         Image("baconmania")
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 60, height: 60)
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
+                        
                         VStack(alignment: .leading, spacing: 2) {
                             Text("BaconMania")
                                 .font(.headline)
@@ -1795,7 +1910,7 @@ struct SettingsView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
-
+                        
                         Spacer(minLength: 0)
                     }
                     .padding(.vertical, 16)
@@ -1803,19 +1918,19 @@ struct SettingsView: View {
                     .onTapGesture {
                         UIApplication.shared.open(URL(string: "https://baconium.dev")!, options: [:], completionHandler: nil)
                     }
-
+                    
                     Rectangle()
                         .fill(Color(UIColor.separator))
                         .frame(height: 1 / UIScreen.main.scale)
                         .padding(.horizontal, 20)
-
+                    
                     HStack(spacing: 16) {
                         Image("roooot")
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .frame(width: 60, height: 60)
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
+                        
                         VStack(alignment: .leading, spacing: 2) {
                             Text("roooot")
                                 .font(.headline)
@@ -1823,7 +1938,7 @@ struct SettingsView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
-
+                        
                         Spacer(minLength: 0)
                     }
                     .padding(.vertical, 16)
@@ -1836,7 +1951,59 @@ struct SettingsView: View {
             } header: {
                 Text("Credits")
             }
+            
+#if targetEnvironment(simulator)
+            Section {
+                Picker("Mirror", selection: $testmirrorase) {
+                    Text("crystall1ne.dev").tag("https://crystall1ne.dev/cdn/amethyst-ios")
+                    Text("baconium.dev").tag("https://baconium.dev/jessi/jvm")
+                    Text("roooot.dev").tag("https://roooot.dev/jessi/jvm")
+                }
+                .pickerStyle(MenuPickerStyle())
+                .normalizedSeparator()
+                
+                Button(action: {
+                    model.runjvmdltest(mirrorBase: testmirrorase)
+                }) {
+                    HStack(spacing: 10) {
+                        if model.isjvmtestrunning {
+                            ProgressView()
+                        }
+                        Text(model.isjvmtestrunning ? "testing the jvm download" : "test jvm dl + extract")
+                            .font(model.isjvmtestrunning ? .system(size: 17) : .system(size: 17, weight: .semibold))
+                        Spacer()
+                    }
+                }
+                .buttonStyle(PlainButtonStyle())
+                .disabled(model.isjvmtestrunning)
+                .normalizedSeparator()
+                
+                // shitty
+                if model.isjvmtestrunning || !model.jvmteststatus.isEmpty {
+                    VStack(alignment: .leading) {
 
+                        if model.isjvmtestrunning {
+                            ProgressView(value: model.jvmtestprogress)
+                                .progressViewStyle(
+                                    LinearProgressViewStyle(tint: .green)
+                                )
+                                .normalizedSeparator()
+                        }
+
+                        if !model.jvmteststatus.isEmpty {
+                            Text(model.jvmteststatus)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .normalizedSeparator()
+                        }
+                    }
+                }
+            } header: {
+                Text("Simulator Test")
+            } footer: {
+                Text("You shouldnt see this as a normal JESSI consumer, if you do, ignore it and [report it](https://github.com/Baconium/JESSI/issues/new) to big daddy roooot (or baconmania)")
+            }
+#endif
         }
         .listStyle(InsetGroupedListStyle())
         .navigationTitle("Settings")
@@ -2016,6 +2183,14 @@ struct SafariView: UIViewControllerRepresentable {
 struct CurseForgeField: View {
     @ObservedObject var model: SettingsModel
     @State private var isSecure: Bool = true
+    @State private var showeasteregg: Bool = false
+    @State private var eastereggtitle: String = ""
+    @State private var eastereggmsg: String = ""
+    @State private var lasttriggeredkey: String? = nil
+
+    private static let eastereggs: [String: (title: String, message: String)] = [
+        "loveyachilly": (title: "i think youre really pretty lol", message: "whats that mean?")
+    ]
 
     var body: some View {
         HStack(spacing: 12) {
@@ -2027,8 +2202,9 @@ struct CurseForgeField: View {
                 }
             }
             .frame(maxWidth: 420)
-            .onChange(of: model.curseForgeAPIKey) { _ in
+            .onChange(of: model.curseForgeAPIKey) { newValue in
                 model.applyAndSaveCurseForgeAPIKey()
+                maybeshoweasteregg(for: newValue)
             }
 
             Button(action: { isSecure.toggle() }) {
@@ -2037,6 +2213,35 @@ struct CurseForgeField: View {
             }
             .buttonStyle(PlainButtonStyle())
         }
+        .alert(isPresented: $showeasteregg) {
+            Alert(
+                title: Text(eastereggtitle),
+                message: Text(eastereggmsg),
+                dismissButton: .default(Text("yes"))
+            )
+        }
+    }
+
+    private func maybeshoweasteregg(for newValue: String) {
+        let key = newValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !key.isEmpty else {
+            lasttriggeredkey = nil
+            return
+        }
+
+        guard let egg = Self.eastereggs[key] else {
+            if lasttriggeredkey == key {
+                lasttriggeredkey = nil
+            }
+            return
+        }
+
+        guard key != lasttriggeredkey else { return }
+
+        eastereggtitle = egg.title
+        eastereggmsg = egg.message
+        showeasteregg = true
+        lasttriggeredkey = key
     }
 }
 
