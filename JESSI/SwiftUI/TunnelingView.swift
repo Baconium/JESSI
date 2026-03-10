@@ -263,7 +263,7 @@ final class PlayitModel: ObservableObject {
     private let lasterrkey = "jessi.playit.lasterror"
     private let apibase = "https://api.playit.gg"
 
-    private var claimTask: Task<Void, Never>? = nil
+    private var claimtask: Task<Void, Never>? = nil
     private var libhandle: UnsafeMutableRawPointer? = nil
     private var statustimer: Timer? = nil
     private var laststatuscode: PlayitStatusCode? = nil
@@ -279,6 +279,43 @@ final class PlayitModel: ObservableObject {
             .appendingPathComponent("playit", isDirectory: true)
             .appendingPathComponent("libplayit_agent.dylib", isDirectory: false)
             .path
+    }
+
+    @discardableResult
+    func verifylibraryreachable(setErrorOnFailure: Bool = true) -> Bool {
+        let fm = FileManager.default
+        var isDir: ObjCBool = false
+
+        guard fm.fileExists(atPath: libraryPath, isDirectory: &isDir), !isDir.boolValue else {
+            islibrarypresent = false
+            if setErrorOnFailure {
+                seterror("Playit library missing: libplayit_agent.dylib")
+            }
+            return false
+        }
+
+        guard fm.isReadableFile(atPath: libraryPath) else {
+            islibrarypresent = false
+            if setErrorOnFailure {
+                seterror("Playit library is not readable")
+            }
+            return false
+        }
+
+        if libhandle == nil {
+            guard let handle = dlopen(libraryPath, RTLD_NOW) else {
+                islibrarypresent = false
+                if setErrorOnFailure {
+                    let err = String(cString: dlerror())
+                    seterror("Playit library not reachable: \(err)")
+                }
+                return false
+            }
+            libhandle = handle
+        }
+
+        islibrarypresent = true
+        return true
     }
 
     func refresh() {
@@ -342,10 +379,7 @@ final class PlayitModel: ObservableObject {
 
     func startifpossible() {
         if isstarting || isstopping { return }
-        guard islibrarypresent else {
-            seterror("Playit library missing")
-            return
-        }
+        guard verifylibraryreachable() else { return }
         guard let secret = defaults.string(forKey: secretkeykey), !secret.isEmpty else {
             seterror("Playit not linked")
             return
@@ -506,8 +540,9 @@ final class PlayitModel: ObservableObject {
         return unsafeBitCast(sym, to: type)
     }
 
-    func beginClaimFlow() {
+    func beginclaimflow() {
         if claiming { return }
+        guard verifylibraryreachable() else { return }
 
         let code = generateclaimcode()
         let url = "https://playit.gg/claim/\(code)"
@@ -520,43 +555,42 @@ final class PlayitModel: ObservableObject {
         tunnelinglogger.divider();
         tunnelinglogger.log("Playit: claim started (\(code))")
 
-        claimTask?.cancel()
-        claimTask = Task { [weak self] in
+        claimtask?.cancel()
+        claimtask = Task { [weak self] in
             await self?.runclaimflow(code: code)
         }
     }
 
-    func cancelClaimFlow() {
-        claimTask?.cancel()
-        claimTask = nil
+    func cancelclaimflow() {
+        claimtask?.cancel()
+        claimtask = nil
         claiming = false
         claimstatus = ""
     }
 
     @MainActor
-    private func updateClaimStatus(_ text: String) {
+    private func updateclaimstatus(_ text: String) {
         claimstatus.append(text + "\n")
     }
 
     @MainActor
-    private func finishClaimWithError(_ message: String) {
+    private func finishclaimwitherror(_ message: String) {
         claiming = false
         seterror(message)
     }
 
     @MainActor
-    private func finishClaimSuccess(secretKey: String) {
+    private func finishclaimsuccess(secretKey: String) {
         claiming = false
         storesecretkey(secretKey)
         linked = true
         seterror(nil)
         tunnelinglogger.log("Playit: claim success")
-        bringAgentOnlineAfterClaim()
+        bringagentonlineafterclaim()
     }
 
     @MainActor
-    private func bringAgentOnlineAfterClaim() {
-        // Refresh persisted state first; `islibrarypresent` can be stale if install state changed.
+    private func bringagentonlineafterclaim() {
         refresh()
 
         guard islibrarypresent else {
@@ -564,11 +598,9 @@ final class PlayitModel: ObservableObject {
             return
         }
 
-        // First attempt immediately.
         startifpossible()
 
         Task { @MainActor in
-            // Retry startup/status a few times to handle claim->connect race conditions.
             for attempt in 0..<8 {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 self.refreshfromlibrary()
@@ -577,8 +609,6 @@ final class PlayitModel: ObservableObject {
                     return
                 }
 
-                // In this FFI, `.disconnected` can also mean "no active tunnel yet".
-                // Only retry startup when clearly not running/failed.
                 if !self.isstarting && (self.laststatuscode == .stopped || self.laststatuscode == .error || self.laststatuscode == nil) {
                     tunnelinglogger.log("Playit: retrying agent start after claim (attempt \(attempt + 2))")
                     self.startifpossible()
@@ -640,30 +670,30 @@ final class PlayitModel: ObservableObject {
                     let state = parseclaimsetupstatus(status)
                     switch state {
                     case .waitingForUserVisit:
-                        await updateClaimStatus("Open the link to continue")
+                        await updateclaimstatus("Open the link to continue")
                     case .waitingForUser:
-                        await updateClaimStatus("Approve the request in your browser")
+                        await updateclaimstatus("Approve the request in your browser")
                     case .userAccepted:
-                        await updateClaimStatus("Approved. Finalizing…")
+                        await updateclaimstatus("Approved. Finalizing…")
                         tunnelinglogger.log("Playit: claim approved")
                         await exchangeclaim(code: code)
                         return
                     case .userRejected:
-                        await finishClaimWithError("Claim rejected")
+                        await finishclaimwitherror("Claim rejected")
                         tunnelinglogger.log("Playit: claim rejected")
                         return
                     case .unknown(let value):
-                        await updateClaimStatus("Waiting… (\(value))")
+                        await updateclaimstatus("Waiting… (\(value))")
                     }
                 case .fail(let error):
-                    await finishClaimWithError("Claim error: \(error)")
+                    await finishclaimwitherror("Claim error: \(error)")
                     return
                 case .error(let error):
-                    await finishClaimWithError("Claim error: \(error.display)")
+                    await finishclaimwitherror("Claim error: \(error.display)")
                     return
                 }
             } catch {
-                await finishClaimWithError("Claim error: \(error.localizedDescription)")
+                await finishclaimwitherror("Claim error: \(error.localizedDescription)")
                 return
             }
 
@@ -680,24 +710,24 @@ final class PlayitModel: ObservableObject {
                 let result: ApiResult<AgentSecretKey, String> = try await post(path: "/claim/exchange", body: exchangeReq)
                 switch result {
                 case .success(let key):
-                    await finishClaimSuccess(secretKey: key.secret_key)
+                    await finishclaimsuccess(secretKey: key.secret_key)
                     return
                 case .fail(let error):
                     if Date() > endAt {
-                        await finishClaimWithError("Claim timed out (\(error))")
+                        await finishclaimwitherror("Claim timed out (\(error))")
                         return
                     }
                 case .error(let error):
-                    await finishClaimWithError("Claim error: \(error.display)")
+                    await finishclaimwitherror("Claim error: \(error.display)")
                     return
                 }
             } catch {
-                await finishClaimWithError("Claim error: \(error.localizedDescription)")
+                await finishclaimwitherror("Claim error: \(error.localizedDescription)")
                 return
             }
 
             if Date() > endAt {
-                await finishClaimWithError("Claim timed out")
+                await finishclaimwitherror("Claim timed out")
                 return
             }
 

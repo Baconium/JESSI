@@ -102,9 +102,12 @@ BOOL jessi_is_livecontainer_installed(void) {
     NSString *bundle = [NSBundle mainBundle].bundlePath;
     if (bundle.length == 0) return NO;
 
-    NSString *parent = [[bundle stringByResolvingSymlinksInPath] stringByDeletingLastPathComponent];
-    NSString *parentname = parent.lastPathComponent ?: @"";
-    return [parentname caseInsensitiveCompare:@"LiveContainer"] == NSOrderedSame;
+    NSString *resolved = [bundle stringByResolvingSymlinksInPath];
+    NSString *parent = [resolved stringByDeletingLastPathComponent];
+    NSString *grandparent = [parent stringByDeletingLastPathComponent];
+
+    NSString *grandparentname = grandparent.lastPathComponent ?: @"";
+    return [grandparentname caseInsensitiveCompare:@"LiveContainer"] == NSOrderedSame;
 }
 
 const char * _Nullable jessi_team_identifier(void) {
