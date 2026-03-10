@@ -45,7 +45,7 @@ jobs:
           PROJECT_DIR="$GITHUB_WORKSPACE"
           DIST_DIR="$PROJECT_DIR/dist"
           PAYLOAD_DIR="$DIST_DIR/Payload"
-          IPA_PATH="$DIST_DIR/${APP_NAME}-${GITHUB_RUN_NUMBER}.ipa"
+          IPA_PATH="$DIST_DIR/${APP_NAME}.ipa"
           DERIVED_DATA_DIR="$PROJECT_DIR/build/DerivedData"
 
           JESSI_LDID_SIGN="1"
@@ -114,6 +114,7 @@ jobs:
           name: "super beta build"
           prerelease: true
           make_latest: false
+          overwrite_files: true
           body: |
             ## latest beta build
 
@@ -130,11 +131,11 @@ jobs:
 
             **trollstore**
             ```
-            https://github.com/${{ github.repository }}/releases/download/super-beta/${{ env.APP_NAME }}-${{ github.run_number }}.ipa
+            https://github.com/${{ github.repository }}/releases/download/super-beta/${{ env.APP_NAME }}.ipa
             ```
 
             **altstore or any other sideloading platform**
-            import the IPA directly from this release page.
+            import the .ipa directly from this release page.
           files: ${{ env.IPA_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -146,6 +147,7 @@ jobs:
           generate_release_notes: true
           name: "release ${{ github.ref_name }}"
           tag_name: ${{ github.ref_name }}
+          overwrite_files: true
           body: |
             ## ${{ github.ref_name }}
 
@@ -157,11 +159,11 @@ jobs:
 
             **trollstore**
             ```
-            https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.APP_NAME }}-${{ github.run_number }}.ipa
+            https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.APP_NAME }}.ipa
             ```
 
             **altstore or any other sideloading platform**
-            download IPA and sideload normally.
+            download .ipa and sideload normally.
           files: ${{ env.IPA_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
