@@ -29,6 +29,36 @@ CFTypeRef SecTaskCopyValueForEntitlement(SecTaskRef task, CFStringRef entitlemen
 
 #define CS_DEBUGGED 0x10000000
 
+static void jessi_append_livecontainer_log(NSString *line) {
+    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    if (docs.length == 0 || line.length == 0) return;
+
+    NSString *path = [docs stringByAppendingPathComponent:@"livecontainerdetectiondebug.log"];
+    NSData *data = [[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding];
+    if (!data) return;
+
+    NSFileManager *fm = NSFileManager.defaultManager;
+    if (![fm fileExistsAtPath:path]) {
+        [data writeToFile:path atomically:YES];
+        return;
+    }
+
+    NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!handle) {
+        [data writeToFile:path atomically:YES];
+        return;
+    }
+
+    @try {
+        [handle seekToEndOfFile];
+        [handle writeData:data];
+    } @catch (NSException *exception) {
+        (void)exception;
+    } @finally {
+        [handle closeFile];
+    }
+}
+
 static BOOL getEntitlementValue(NSString *key) {
     SecTaskRef task = SecTaskCreateFromSelf(NULL);
     if (!task) return NO;
@@ -105,8 +135,13 @@ BOOL jessi_is_livecontainer_installed(void) {
     for (int i = 0; i < 3 && path.length; i++) {
         path = [path stringByDeletingLastPathComponent];
 
-        NSLog(@"Dir: %@", path);
-        NSLog(@"Contents: %@", [fm contentsOfDirectoryAtPath:path error:nil]);
+        NSString *dirLine = [NSString stringWithFormat:@"Dir: %@", path];
+        NSString *contentsLine = [NSString stringWithFormat:@"Contents: %@", [fm contentsOfDirectoryAtPath:path error:nil]];
+
+        NSLog(@"%@", dirLine);
+        NSLog(@"%@", contentsLine);
+        jessi_append_livecontainer_log(dirLine);
+        jessi_append_livecontainer_log(contentsLine);
 
         if ([[path lastPathComponent] caseInsensitiveCompare:@"LiveContainer"] == NSOrderedSame) {
             return YES;
