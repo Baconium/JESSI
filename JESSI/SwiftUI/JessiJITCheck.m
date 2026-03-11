@@ -130,19 +130,38 @@ BOOL jessi_is_trollstore_installed(void) {
 }
 
 BOOL jessi_is_livecontainer_installed(void) {
+    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    NSString *logpath = [docs stringByAppendingPathComponent:@"uhislivecontainerinstalledorlikenahnotsomuch.log"];
+    NSMutableString *log = [NSMutableString string];
+
+    [log appendString:@"\nloaded images: \n"];
+
+    BOOL detected = NO;
+
     uint32_t count = _dyld_image_count();
+    [log appendFormat:@"image count: %u\n\n", count];
 
     for (uint32_t i = 0; i < count; i++) {
         const char *name = _dyld_get_image_name(i);
         if (!name) continue;
 
-        NSString *image = [NSString stringWithUTF8String:name];
-        if ([image.lowercaseString containsString:@"tweakinjector.dylib"]) {
-            return YES;
+        BOOL match = (strcasestr(name, "tweakinjector.dylib") != NULL);
+
+        [log appendFormat:@"[%u] %s %s\n",
+            i,
+            name,
+            match ? "<- aha!" : ""
+        ];
+
+        if (match) {
+            detected = YES;
         }
     }
 
-    return NO;
+    [log appendFormat:@"\nlivecontainer detected: %s\n", detected ? "yeah" : "fuck nah"];
+    [log writeToFile:logpath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+
+    return detected;
 }
 
 const char * _Nullable jessi_team_identifier(void) {
