@@ -134,7 +134,7 @@ BOOL jessi_is_livecontainer_installed(void) {
     NSString *logpath = [docs stringByAppendingPathComponent:@"uhislivecontainerinstalledorlikenahnotsomuch.log"];
     NSMutableString *log = [NSMutableString string];
 
-    [log appendString:@"\nloaded images: \n"];
+    [log appendString:@"\nloaded images:\n"];
 
     BOOL detected = NO;
 
@@ -145,9 +145,8 @@ BOOL jessi_is_livecontainer_installed(void) {
         const char *name = _dyld_get_image_name(i);
         if (!name) continue;
 
-        BOOL match =
-            (strcasestr(name, "tweakinjector.dylib") != NULL) ||
-            (strcasestr(name, "tweakloader.dylib") != NULL);
+        NSString *lower = [[NSString stringWithUTF8String:name] lowercaseString];
+        BOOL match = [lower containsString:@"tweakinjector.dylib"] || [lower containsString:@"tweakloader.dylib"];
 
         [log appendFormat:@"[%u] %s %s\n",
             i,
