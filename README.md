@@ -59,8 +59,11 @@ JESSI is still being actively developed, and plenty of more features will come. 
 
 # Building/Miscellaneous extra info
 
-If you would like to build JESSI yourself, it's pretty simple. Install Xcode and Xcode CLI, then run scripts/build-ipa.sh
+If you would like to build JESSI yourself, it's pretty simple. Install Xcode and Xcode CLI, then run one of the following:
 
-There are some limitations that we're currently running into for jailed iOS, that we're not sure are solvable. The main one is that the JVM must run in the same process as the app itself. Because of this, when the JVM is killed in any way, the app is also killed. So, at least for now, if you stop a server or create a forge/neoforge server in the server setup, the app will crash after the java process ends. You will not lose any data from a crash occuring this way, and in fact Crash Reporter on iOS doesn't even detect it as a crash. This is solvable by running the JVM in a seperate process, unfortunately this functionality is limited to TrollStore devices for the time being
+- `scripts/build-ipa.sh` for iOS IPA output
+- `scripts/build-ipa.sh --macos` for a macOS (Mac Catalyst) `.app` output in `dist/`
+
+There are some limitations that we're currently running into for jailed iOS, that we're not sure are solvable. The main one is that the JVM must run in the same process as the app itself. Because of this, when the JVM is killed in any way, the app is also killed. So, at least for now, if you stop a server or create a forge/neoforge server in the server setup, the app will crash after the java process ends. You will not lose any data from a crash occuring this way, and in fact Crash Reporter on iOS doesn't even detect it as a crash. This is solvable by running the JVM in a seperate process, which is now automatically used for macOS builds and still available on supported TrollStore setups.
 
 We're open to feedback and suggestions for features, so if you have any ideas on how JESSI could be improved feel free to contact us in the discord server. Thank you for using JESSI!

@@ -8,6 +8,7 @@
 #import <stdio.h>
 #import <string.h>
 #import <mach-o/dyld.h>
+#import <TargetConditionals.h>
 #if __has_include(<sys/codesign.h>)
 #import <sys/codesign.h>
 #else
@@ -76,7 +77,49 @@ static BOOL getEntitlementValue(NSString *key) {
     return result;
 }
 
+BOOL jessi_is_running_on_macos(void) {
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
+    return YES;
+#else
+    if (@available(iOS 14.0, *)) {
+        return [NSProcessInfo processInfo].isiOSAppOnMac;
+    }
+    return NO;
+#endif
+}
+
+static BOOL jessi_try_enable_jit_on_macos(void) {
+#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
+    
+    
+    return YES;
+#else
+    return NO;
+#endif
+}
+
 BOOL jessi_check_jit_enabled(void) {
+
+    if (jessi_is_running_on_macos()) {
+        if (getEntitlementValue(@"com.apple.security.cs.allow-jit") ||
+            getEntitlementValue(@"dynamic-codesigning") ||
+            getEntitlementValue(@"com.apple.private.security.no-sandbox")) {
+            return YES;
+        }
+
+        int flags = 0;
+        if (csops(getpid(), CS_OPS_STATUS, &flags, sizeof(flags)) == 0 && (flags & CS_DEBUGGED) != 0) {
+            return YES;
+        }
+
+        (void)jessi_try_enable_jit_on_macos();
+        flags = 0;
+        if (csops(getpid(), CS_OPS_STATUS, &flags, sizeof(flags)) == 0 && (flags & CS_DEBUGGED) != 0) {
+            return YES;
+        }
+
+        return YES;
+    }
 
     if (getEntitlementValue(@"dynamic-codesigning") || getEntitlementValue(@"com.apple.private.security.no-sandbox")) {
         return YES;
@@ -99,6 +142,9 @@ static __attribute__((unused)) BOOL jessi_is_debugger_attached(void) {
 }
 
 BOOL jessi_is_ios26_or_later(void) {
+    if (jessi_is_running_on_macos()) {
+        return NO;
+    }
     if (@available(iOS 26, *)) {
         return YES;
     }

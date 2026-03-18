@@ -8,7 +8,7 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface JessiServerService : NSObject
-@property (nonatomic, weak, nullable) id<JessiServerServiceDelegate> delegate;
+@property (nonatomic, assign, nullable) id<JessiServerServiceDelegate> delegate;
 @property (nonatomic, readonly, getter=isRunning) BOOL running;
 
 - (NSArray<NSString *> *)availableServerFolders;
@@ -18,6 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)stopServer;
 - (void)clearConsole;
 - (BOOL)sendRcon:(NSString *)command;
+- (NSString *)cleanupStaleJVMProcessesOnMac;
 
 - (void)importServerJarFromURL:(NSURL *)url serverNameHint:(NSString *)nameHint completion:(void (^)(NSError * _Nullable error, NSString * _Nullable serverName))completion;
 

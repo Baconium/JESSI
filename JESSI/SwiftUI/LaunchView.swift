@@ -530,8 +530,9 @@ struct LaunchView: View {
                         .disabled(model.isRunning)
 
                         Button(action: {
+                            let isMacBuild = ProcessInfo.processInfo.isMacCatalystApp
                             let shouldUseSeparateProcess = jessi_is_trollstore_installed() && !JessiSettings.shared().disableSeparateJVMProcessOnTrollStore
-                            if shouldUseSeparateProcess {
+                            if isMacBuild || shouldUseSeparateProcess {
                                 model.stop()
                             } else {
                                 model.activeAlert = .stopConfirm

@@ -7,6 +7,7 @@ import AVFoundation
 import SafariServices
 import ZIPFoundation
 import SWCompression
+import MachO
 
 extension View {
     @ViewBuilder
@@ -291,6 +292,7 @@ final class SettingsModel: ObservableObject {
     @Published var runInBackground: Bool = false
     @Published var disableSeparateJVMProcessOnTrollStore: Bool = false
     @Published var isIOS26: Bool = false
+    @Published var isMacCatalyst: Bool = false
     @Published var iOSVersionString: String = ""
     @Published var isTrollStore: Bool = false
     @Published var islivecontainer: Bool = false
@@ -306,6 +308,8 @@ final class SettingsModel: ObservableObject {
     @Published var isjvmtestrunning: Bool = false
     @Published var jvmtestprogress: Double = 0
     @Published var jvmteststatus: String = ""
+    @Published var cleanupInProgress: Bool = false
+    @Published var cleanupStatus: String = ""
 
     private var activeJVMSession: URLSession? = nil
     private var activeJVMDelegate: JVMDownloadProgressDelegate? = nil
@@ -350,6 +354,7 @@ final class SettingsModel: ObservableObject {
         runInBackground = s.runInBackground
         disableSeparateJVMProcessOnTrollStore = s.disableSeparateJVMProcessOnTrollStore
         isIOS26 = jessi_is_ios26_or_later()
+        isMacCatalyst = ProcessInfo.processInfo.isMacCatalystApp
         isTrollStore = jessi_is_trollstore_installed()
         islivecontainer = jessi_is_livecontainer_installed()
 
@@ -398,7 +403,7 @@ final class SettingsModel: ObservableObject {
 
     func refreshSystemStats() {
         isJITEnabled = isJITEnabledCheck()
-        freeRAM = formatRAM(getAvailableMemoryEstimate())
+        freeRAM = formatRAM(getSystemFreeMemory())
     }
 
     func applyHeapFromText() {
@@ -470,7 +475,7 @@ final class SettingsModel: ObservableObject {
         let wiredPages = UInt64(stats.wire_count)
         let compressedPages = UInt64(stats.compressor_page_count)
 
-        let strictFree = (freePages + speculativePages) * p
+        let strictFree = freePages * p
         let available = (freePages + speculativePages + inactivePages + purgeablePages) * p
 
         return SystemMemoryEstimate(
@@ -482,8 +487,8 @@ final class SettingsModel: ObservableObject {
         )
     }
 
-    private func getAvailableMemoryEstimate() -> UInt64 {
-        estimateSystemMemory()?.availableBytes ?? 0
+    private func getSystemFreeMemory() -> UInt64 {
+        estimateSystemMemory()?.strictFreeBytes ?? 0
     }
 
     private func getAppMemoryFootprint() -> UInt64 {
@@ -496,6 +501,23 @@ final class SettingsModel: ObservableObject {
         }
         guard kr == KERN_SUCCESS else { return 0 }
         return UInt64(info.phys_footprint)
+    }
+
+    func cleanupStaleJVMProcessesForMac() {
+        guard isMacCatalyst else { return }
+        if cleanupInProgress { return }
+
+        cleanupInProgress = true
+        cleanupStatus = "Cleaning up stale JVM processes…"
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            let status = JessiServerService().cleanupStaleJVMProcessesOnMac()
+
+            DispatchQueue.main.async {
+                self.cleanupInProgress = false
+                self.cleanupStatus = status
+            }
+        }
     }
     
     func refreshAvailableJavaVersions() {
@@ -545,25 +567,46 @@ final class SettingsModel: ObservableObject {
     }
 
     private func runtimeDownloadURLs(for version: String) -> [URL] {
-        let filename: String
-        switch version {
-        case "8":
-            filename = "jre8-ios-aarch64.zip"
-        case "17":
-            filename = "jre17-ios-aarch64.zip"
-        case "21":
-            filename = "jre21-ios-aarch64.zip"
-        default:
-            return []
-        }
-
         let bases = [
             "https://crystall1ne.dev/cdn/amethyst-ios",
             "https://baconium.dev/jessi/jvm",
             "https://roooot.dev/jessi/jvm"
         ]
 
-        return bases.compactMap { URL(string: "\($0)/\(filename)") }
+        let filenames: [String]
+        if isMacCatalyst {
+            switch version {
+            case "8":
+                filenames = ["jre8-arm64-20250511-release.tar.xz"]
+            case "17":
+                filenames = ["jre17-arm64-20250225-release.tar.xz"]
+            case "21":
+                filenames = ["jre21-arm64-20250225-release.tar.xz"]
+            default:
+                return []
+            }
+        } else {
+            switch version {
+            case "8":
+                filenames = ["jre8-ios-aarch64.zip"]
+            case "17":
+                filenames = ["jre17-ios-aarch64.zip"]
+            case "21":
+                filenames = ["jre21-ios-aarch64.zip"]
+            default:
+                return []
+            }
+        }
+
+        var urls: [URL] = []
+        for base in bases {
+            for filename in filenames {
+                if let u = URL(string: "\(base)/\(filename)") {
+                    urls.append(u)
+                }
+            }
+        }
+        return urls
     }
 
     private func postInstallFixPermissions(runtimeRoot: URL) {
@@ -582,6 +625,59 @@ final class SettingsModel: ObservableObject {
         let helper2 = runtimeRoot.appendingPathComponent("lib/jspawnhelper", isDirectory: false)
         if fm.fileExists(atPath: helper1.path) { _ = chmod(helper1.path, 0o755) }
         if fm.fileExists(atPath: helper2.path) { _ = chmod(helper2.path, 0o755) }
+    }
+
+    private func readU32LE(_ data: Data, _ offset: Int) -> UInt32? {
+        guard offset >= 0, offset + 4 <= data.count else { return nil }
+        return data.withUnsafeBytes { raw in
+            let p = raw.baseAddress!.advanced(by: offset).assumingMemoryBound(to: UInt32.self)
+            return UInt32(littleEndian: p.pointee)
+        }
+    }
+
+    private func machoPlatform(ofBinaryAt url: URL) -> UInt32? {
+        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
+        guard let magic = readU32LE(data, 0) else { return nil }
+
+        guard magic == MH_MAGIC_64 else { return nil }
+        guard let ncmdsU32 = readU32LE(data, 16) else { return nil }
+        let ncmds = Int(ncmdsU32)
+        var cmdOffset = 32
+
+        for _ in 0..<ncmds {
+            guard let cmd = readU32LE(data, cmdOffset), let cmdsizeU32 = readU32LE(data, cmdOffset + 4) else { break }
+            let cmdsize = Int(cmdsizeU32)
+            if cmdsize < 8 || cmdOffset + cmdsize > data.count { break }
+
+            if cmd == UInt32(LC_BUILD_VERSION), let platform = readU32LE(data, cmdOffset + 8) {
+                return platform
+            }
+
+            cmdOffset += cmdsize
+        }
+
+        return nil
+    }
+
+    private func validateRuntimeForCurrentPlatform(_ runtimeRoot: URL) throws {
+        guard isMacCatalyst else { return }
+
+        let fm = FileManager.default
+        let libjliA = runtimeRoot.appendingPathComponent("lib/libjli.dylib")
+        let libjliB = runtimeRoot.appendingPathComponent("lib/jli/libjli.dylib")
+        let libjli = fm.fileExists(atPath: libjliA.path) ? libjliA : libjliB
+
+        guard fm.fileExists(atPath: libjli.path) else {
+            throw NSError(domain: "JESSI", code: 106, userInfo: [NSLocalizedDescriptionKey: "Downloaded runtime is missing libjli.dylib"])
+        }
+
+        guard let platform = machoPlatform(ofBinaryAt: libjli) else {
+            throw NSError(domain: "JESSI", code: 107, userInfo: [NSLocalizedDescriptionKey: "Could not verify runtime platform for \(libjli.lastPathComponent)"])
+        }
+
+        if platform != UInt32(PLATFORM_MACCATALYST) {
+            throw NSError(domain: "JESSI", code: 108, userInfo: [NSLocalizedDescriptionKey: "Downloaded JVM is not Mac Catalyst compatible (platform \(platform))."])
+        }
     }
 
     private func extractTar(_ tarPath: URL, to destDir: URL) throws {
@@ -718,33 +814,43 @@ final class SettingsModel: ObservableObject {
                 do {
                     try fm.createDirectory(at: workDir, withIntermediateDirectories: true)
                     defer { try? fm.removeItem(at: workDir) }
-                    if fm.fileExists(atPath: zipPath.path) { try? fm.removeItem(at: zipPath) }
-                    try fm.moveItem(at: tempURL, to: zipPath)
-
-                    let archive = try Archive(url: zipPath, accessMode: .read)
-                    for entry in archive {
-                        let outURL = unzipDir.appendingPathComponent(entry.path)
-                        let parent = outURL.deletingLastPathComponent()
-                        try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
-                        if fm.fileExists(atPath: outURL.path) {
-                            try? fm.removeItem(at: outURL)
-                        }
-                        _ = try archive.extract(entry, to: outURL)
-                    }
-
-                    let enumerator = fm.enumerator(at: unzipDir, includingPropertiesForKeys: nil)
-                    var foundTarXZ: URL? = nil
-                    while let u = enumerator?.nextObject() as? URL {
-                        if u.pathExtension == "xz" && u.lastPathComponent.hasSuffix(".tar.xz") {
-                            foundTarXZ = u
-                            break
-                        }
-                    }
-                    guard let foundTarXZ else {
-                        throw NSError(domain: "JESSI", code: 3, userInfo: [NSLocalizedDescriptionKey: "Runtime archive did not contain a .tar.xz"])
-                    }
                     if fm.fileExists(atPath: tarXZPath.path) { try? fm.removeItem(at: tarXZPath) }
-                    try fm.copyItem(at: foundTarXZ, to: tarXZPath)
+
+                    let downloadedName = url.lastPathComponent.isEmpty ? "runtime-download" : url.lastPathComponent
+                    let downloadedPath = workDir.appendingPathComponent(downloadedName)
+                    if fm.fileExists(atPath: downloadedPath.path) { try? fm.removeItem(at: downloadedPath) }
+                    try fm.moveItem(at: tempURL, to: downloadedPath)
+
+                    if downloadedPath.lastPathComponent.hasSuffix(".tar.xz") {
+                        try fm.copyItem(at: downloadedPath, to: tarXZPath)
+                    } else {
+                        if fm.fileExists(atPath: zipPath.path) { try? fm.removeItem(at: zipPath) }
+                        try fm.copyItem(at: downloadedPath, to: zipPath)
+
+                        let archive = try Archive(url: zipPath, accessMode: .read)
+                        for entry in archive {
+                            let outURL = unzipDir.appendingPathComponent(entry.path)
+                            let parent = outURL.deletingLastPathComponent()
+                            try? fm.createDirectory(at: parent, withIntermediateDirectories: true)
+                            if fm.fileExists(atPath: outURL.path) {
+                                try? fm.removeItem(at: outURL)
+                            }
+                            _ = try archive.extract(entry, to: outURL)
+                        }
+
+                        let enumerator = fm.enumerator(at: unzipDir, includingPropertiesForKeys: nil)
+                        var foundTarXZ: URL? = nil
+                        while let u = enumerator?.nextObject() as? URL {
+                            if u.pathExtension == "xz" && u.lastPathComponent.hasSuffix(".tar.xz") {
+                                foundTarXZ = u
+                                break
+                            }
+                        }
+                        guard let foundTarXZ else {
+                            throw NSError(domain: "JESSI", code: 3, userInfo: [NSLocalizedDescriptionKey: "Runtime archive did not contain a .tar.xz"])
+                        }
+                        try fm.copyItem(at: foundTarXZ, to: tarXZPath)
+                    }
 
                     try autoreleasepool {
                         let xzData = try Data(contentsOf: tarXZPath, options: .mappedIfSafe)
@@ -758,6 +864,7 @@ final class SettingsModel: ObservableObject {
 
                     try self.extractTar(tarPath, to: staging)
                     self.postInstallFixPermissions(runtimeRoot: staging)
+                    try self.validateRuntimeForCurrentPlatform(staging)
 
                     if fm.fileExists(atPath: finalDir.path) {
                         let backup = self.runtimesDir.appendingPathComponent("jre\(version).backup-\(UUID().uuidString)", isDirectory: true)
@@ -1556,141 +1663,151 @@ struct SettingsView: View {
         
         return List {
             Section {
-                HStack(alignment: .center, spacing: 12) {
-                    Text("Version")
-                    Spacer()
-                    if model.availableJavaVersions.isEmpty {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(Color.yellow)
-                        Text("No runtimes found")
-                            .foregroundColor(Color.secondary)
-                    } else {
-                        Picker("Java", selection: $model.javaVersion) {
-                            ForEach(model.availableJavaVersions, id: \.self) { ver in
-                                Text("Java \(ver)").tag(ver)
-                            }
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                        .frame(maxWidth: 260)
-                    }
-                }
-                .onChange(of: model.javaVersion) { newval in
-                    model.applyAndSaveJavaVersion(newval)
-                }
-                .normalizedSeparator()
-                
-                Button(action: {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
-                        showInstallDropdown.toggle()
-                    }
-                }) {
+                if model.isMacCatalyst {
                     HStack(alignment: .center, spacing: 12) {
-                        Text("Install JVM")
-                            .foregroundColor(.primary)
+                        Text("Version")
                         Spacer()
-                        Image(systemName: "chevron.right")
+                        Text("System Java")
                             .foregroundColor(.secondary)
-                            .rotationEffect(.degrees(showInstallDropdown ? 90 : 0))
                     }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(PlainButtonStyle())
-                .normalizedSeparator()
-                
-                if showInstallDropdown {
-                    let nonInstalled = model.allJVMVersions.filter { !model.installedJVMVersions.contains($0) }
-                    let installed = model.allJVMVersions.filter { model.installedJVMVersions.contains($0) }
-                    
-                    ForEach(nonInstalled, id: \.self) { ver in
-                        InstallJVMRow(
-                            version: ver,
-                            isInstalled: false,
-                            isUnsupported: model.isIOS26 && ver == "8",
-                            isSelected: installSelection.contains(ver),
-                            isInstalling: installInProgress && installQueue.contains(ver),
-                            onToggle: { toggleSelection(ver) }
-                        )
-                        .disabled(installInProgress || (model.isIOS26 && ver == "8"))
-                        .normalizedSeparator()
-                    }
-                    
-                    ForEach(installed, id: \.self) { ver in
-                        InstallJVMRow(
-                            version: ver,
-                            isInstalled: true,
-                            isUnsupported: false,
-                            isSelected: false,
-                            isInstalling: false,
-                            onToggle: { }
-                        )
-                        .disabled(true)
-                        .normalizedSeparator()
-                    }
-                    .onDelete { offsets in
-                        for i in offsets {
-                            guard i >= 0 && i < installed.count else { continue }
-                            let ver = installed[i]
-                            model.deleteInstalledJVMVersion(ver)
-                            setInstallSelection(installSelection.subtracting([ver]))
-                        }
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    
-                    Button(action: {
-                        didAutoResumeInstall = true
-                        let selected = installSelection.subtracting(model.installedJVMVersions)
-                        guard !selected.isEmpty else { return }
-                        
-                        let ordered = selected.sorted(by: { Int($0) ?? 0 < Int($1) ?? 0 })
-                        model.installRuntimes(
-                            versions: ordered,
-                            updateInProgress: { installInProgress = $0 },
-                            updateQueueCSV: { installQueueCSV = $0 },
-                            clearSelection: { setInstallSelection([]) }
-                        )
-                    }) {
-                        HStack(spacing: 10) {
-                            if installInProgress {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle())
-                                    .accentColor(.white)
+                    .normalizedSeparator()
+                } else {
+                    HStack(alignment: .center, spacing: 12) {
+                        Text("Version")
+                        Spacer()
+                        if model.availableJavaVersions.isEmpty {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(Color.yellow)
+                            Text("No runtimes found")
+                                .foregroundColor(Color.secondary)
+                        } else {
+                            Picker("Java", selection: $model.javaVersion) {
+                                ForEach(model.availableJavaVersions, id: \.self) { ver in
+                                    Text("Java \(ver)").tag(ver)
+                                }
                             }
-                            Text(installInProgress ? "Installing…" : "Install")
-                                .font(.system(size: 17, weight: .semibold))
+                            .pickerStyle(SegmentedPickerStyle())
+                            .frame(maxWidth: 260)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background((installSelection.isEmpty || installInProgress) ? Color.gray.opacity(0.35) : Color.green)
-                        .foregroundColor(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .onChange(of: model.javaVersion) { newval in
+                        model.applyAndSaveJavaVersion(newval)
+                    }
+                    .normalizedSeparator()
+
+                    Button(action: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.9)) {
+                            showInstallDropdown.toggle()
+                        }
+                    }) {
+                        HStack(alignment: .center, spacing: 12) {
+                            Text("Install JVM")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundColor(.secondary)
+                                .rotationEffect(.degrees(showInstallDropdown ? 90 : 0))
+                        }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .disabled(installSelection.isEmpty || installInProgress)
                     .normalizedSeparator()
-                    .transition(.opacity)
-                    
-                    if installInProgress {
-                        VStack(spacing: 0) {
-                            if model.jvmDownloadProgress > 0 {
-                                ProgressView(value: model.jvmDownloadProgress)
-                                    .progressViewStyle(LinearProgressViewStyle(tint: .green))
-                            } else {
-                                ProgressView()
-                                    .progressViewStyle(LinearProgressViewStyle(tint: .green))
-                            }
-                            Text(model.jvmDownloadProgress > 0
-                                 ? "Downloading Java \(model.currentlyInstallingVersion)…"
-                                 : "Preparing Java \(model.currentlyInstallingVersion) download…")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.top, 8)
-                            .padding(.bottom, 2)
+
+                    if showInstallDropdown {
+                        let nonInstalled = model.allJVMVersions.filter { !model.installedJVMVersions.contains($0) }
+                        let installed = model.allJVMVersions.filter { model.installedJVMVersions.contains($0) }
+
+                        ForEach(nonInstalled, id: \.self) { ver in
+                            InstallJVMRow(
+                                version: ver,
+                                isInstalled: false,
+                                isUnsupported: model.isIOS26 && ver == "8",
+                                isSelected: installSelection.contains(ver),
+                                isInstalling: installInProgress && installQueue.contains(ver),
+                                onToggle: { toggleSelection(ver) }
+                            )
+                            .disabled(installInProgress || (model.isIOS26 && ver == "8"))
+                            .normalizedSeparator()
                         }
+
+                        ForEach(installed, id: \.self) { ver in
+                            InstallJVMRow(
+                                version: ver,
+                                isInstalled: true,
+                                isUnsupported: false,
+                                isSelected: false,
+                                isInstalling: false,
+                                onToggle: { }
+                            )
+                            .disabled(true)
+                            .normalizedSeparator()
+                        }
+                        .onDelete { offsets in
+                            for i in offsets {
+                                guard i >= 0 && i < installed.count else { continue }
+                                let ver = installed[i]
+                                model.deleteInstalledJVMVersion(ver)
+                                setInstallSelection(installSelection.subtracting([ver]))
+                            }
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+
+                        Button(action: {
+                            didAutoResumeInstall = true
+                            let selected = installSelection.subtracting(model.installedJVMVersions)
+                            guard !selected.isEmpty else { return }
+
+                            let ordered = selected.sorted(by: { Int($0) ?? 0 < Int($1) ?? 0 })
+                            model.installRuntimes(
+                                versions: ordered,
+                                updateInProgress: { installInProgress = $0 },
+                                updateQueueCSV: { installQueueCSV = $0 },
+                                clearSelection: { setInstallSelection([]) }
+                            )
+                        }) {
+                            HStack(spacing: 10) {
+                                if installInProgress {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle())
+                                        .accentColor(.white)
+                                }
+                                Text(installInProgress ? "Installing…" : "Install")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background((installSelection.isEmpty || installInProgress) ? Color.gray.opacity(0.35) : Color.green)
+                            .foregroundColor(.white)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .disabled(installSelection.isEmpty || installInProgress)
                         .normalizedSeparator()
                         .transition(.opacity)
+
+                        if installInProgress {
+                            VStack(spacing: 0) {
+                                if model.jvmDownloadProgress > 0 {
+                                    ProgressView(value: model.jvmDownloadProgress)
+                                        .progressViewStyle(LinearProgressViewStyle(tint: .green))
+                                } else {
+                                    ProgressView()
+                                        .progressViewStyle(LinearProgressViewStyle(tint: .green))
+                                }
+                                Text(model.jvmDownloadProgress > 0
+                                     ? "Downloading Java \(model.currentlyInstallingVersion)…"
+                                     : "Preparing Java \(model.currentlyInstallingVersion) download…")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .padding(.top, 8)
+                                .padding(.bottom, 2)
+                            }
+                            .normalizedSeparator()
+                            .transition(.opacity)
+                        }
                     }
                 }
-                
+
                 HStack(spacing: 12) {
                     Text("Launch Arguments")
                     Spacer()
@@ -1703,9 +1820,13 @@ struct SettingsView: View {
                 Text("Java")
             } footer: {
                 VStack(alignment: .leading) {
-                    Text("JESSI requires Java to function. Please install a JVM in the menu above. If you're unsure which version to select, select Java 21.")
-                    
-                    if #available(iOS 26.0, *) {
+                    if model.isMacCatalyst {
+                        Text("JESSI requires Java to function. This macOS build uses the Java runtime installed on your system.")
+                    } else {
+                        Text("JESSI requires Java to function. Please install a JVM in the menu above. If you're unsure which version to select, select Java 21.")
+                    }
+
+                    if model.isIOS26 && !model.isMacCatalyst {
                         Text("Java 8 is not supported on iOS 26+")
                     }
                 }
@@ -1790,6 +1911,25 @@ struct SettingsView: View {
             }
             
             Section(header: Text("Miscellaneous"), footer: Text(model.heapDescription)) {
+                if model.isMacCatalyst {
+                    Button(action: {
+                        model.cleanupStaleJVMProcessesForMac()
+                    }) {
+                        HStack(spacing: 10) {
+                            if model.cleanupInProgress {
+                                ProgressView()
+                            }
+                            Text(model.cleanupInProgress ? "Stopping stale JVMs…" : "Clear old processes")
+                                .foregroundColor(.red)
+                            Spacer()
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(model.cleanupInProgress)
+                    .normalizedSeparator()
+                }
+
                 HStack(spacing: 12) {
                     CurseForgeField(model: model)
                         .frame(maxWidth: 420)
@@ -1868,7 +2008,7 @@ struct SettingsView: View {
                 }
                 .normalizedSeparator()
                 HStack {
-                    Text("iOS Version")
+                    Text(model.isMacCatalyst ? "macOS Version" : "iOS Version")
                     Spacer()
                     Text(model.iOSVersionString)
                         .foregroundColor(infostatuscolor())
@@ -1883,7 +2023,7 @@ struct SettingsView: View {
                 }
                 .normalizedSeparator()
                 HStack {
-                    Text("Available RAM (estimated)")
+                    Text("Free RAM")
                     Spacer()
                     Text(model.freeRAM)
                         .foregroundColor(infostatuscolor())
@@ -2179,23 +2319,25 @@ struct SettingsView: View {
         .overlay(
             Group {
                 if tourManager.tourState == 2 {
-                    let hasJVM = !model.installedJVMVersions.isEmpty
+                    let hasJVM = model.isMacCatalyst || !model.installedJVMVersions.isEmpty
                     let canContinueTour = hasJVM || installInProgress
                     VStack {
                         Spacer()
                         VStack(spacing: 16) {
-                            Text("Step 1: Install the JVM")
+                            Text(model.isMacCatalyst ? "Step 1: Verify Java" : "Step 1: Install the JVM")
                                 .font(.headline)
-                            Text("In order to run a Minecraft server, JESSI needs a JVM (Java Virtual Machine). If you don't know which one to install, install Java 21.")
+                            Text(model.isMacCatalyst
+                                 ? "This macOS build uses the Java runtime installed on your system. Make sure Java is installed to run servers."
+                                 : "In order to run a Minecraft server, JESSI needs a JVM (Java Virtual Machine). If you don't know which one to install, install Java 21.")
                                 .multilineTextAlignment(.center)
                                 .font(.subheadline)
                             
-                            if installInProgress && !hasJVM {
+                            if !model.isMacCatalyst && installInProgress && !hasJVM {
                                 Text("JVM install started. You can continue while it downloads in the background.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .multilineTextAlignment(.center)
-                            } else if !hasJVM {
+                            } else if !model.isMacCatalyst && !hasJVM {
                                 Text("Install a JVM above to continue.")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
