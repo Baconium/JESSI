@@ -14,6 +14,7 @@ static const UIBackgroundTaskIdentifier UIBackgroundTaskInvalid = -1;
 #import <netinet/in.h>
 #import <sys/time.h>
 #import <unistd.h>
+#import <signal.h>
 
 #import <spawn.h>
 #import "../SwiftUI/JessiJITCheck.h"
@@ -23,6 +24,75 @@ extern int jessi_server_main(int argc, char *argv[]);
 static NSString *const JessiServerRunningKey = @"jessi.server.running";
 static NSString *const JessiServerRunningChanged = @"JessiServerRunningChanged";
 static BOOL g_serverRunning = NO;
+
+static NSString *jessi_server_pid_file_path(NSString *dir) {
+    return [dir stringByAppendingPathComponent:@".jessi_server_pid"];
+}
+
+static NSString *jessi_capture_cmd(const char *cmd) {
+    if (!cmd) return @"";
+    FILE *fp = popen(cmd, "r");
+    if (!fp) return @"";
+
+    NSMutableString *out = [NSMutableString string];
+    char buf[512];
+    while (fgets(buf, sizeof(buf), fp)) {
+        [out appendString:[NSString stringWithUTF8String:buf] ?: @""];
+    }
+    pclose(fp);
+    return out;
+}
+
+static BOOL jessi_pid_alive(pid_t pid) {
+    if (pid <= 1) return NO;
+    return kill(pid, 0) == 0;
+}
+
+static BOOL jessi_terminate_pid(pid_t pid) {
+    if (pid <= 1) return NO;
+    if (!jessi_pid_alive(pid)) return YES;
+
+    kill(pid, SIGTERM);
+    for (int i = 0; i < 15; i++) {
+        if (!jessi_pid_alive(pid)) return YES;
+        usleep(100000);
+    }
+
+    kill(pid, SIGKILL);
+    for (int i = 0; i < 10; i++) {
+        if (!jessi_pid_alive(pid)) return YES;
+        usleep(100000);
+    }
+
+    return !jessi_pid_alive(pid);
+}
+
+static NSSet<NSNumber *> *jessi_pids_listening_on_port(int port) {
+    NSString *cmd = [NSString stringWithFormat:@"/usr/sbin/lsof -nP -iTCP:%d -sTCP:LISTEN -t 2>/dev/null", port];
+    NSString *out = jessi_capture_cmd(cmd.UTF8String);
+    NSMutableSet<NSNumber *> *pids = [NSMutableSet set];
+
+    NSArray<NSString *> *lines = [out componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
+    for (NSString *line in lines) {
+        NSString *trimmed = [line stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (trimmed.length == 0) continue;
+        pid_t pid = (pid_t)[trimmed intValue];
+        if (pid > 1) [pids addObject:@(pid)];
+    }
+    return pids;
+}
+
+static NSString *jessi_command_for_pid(pid_t pid) {
+    NSString *cmd = [NSString stringWithFormat:@"ps -p %d -o command= 2>/dev/null", pid];
+    return [jessi_capture_cmd(cmd.UTF8String) stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+}
+
+static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
+    NSString *c = cmd.lowercaseString ?: @"";
+    BOOL hasJava = [c containsString:@"/java"] || [c containsString:@" java "];
+    BOOL hasMarker = [c containsString:@"server.jar"] || [c containsString:@"/servers/"] || [c containsString:@"jessi"];
+    return hasJava && hasMarker;
+}
 
 @interface JessiServerService ()
 @property (nonatomic, readwrite, getter=isRunning) BOOL running;
@@ -199,7 +269,7 @@ static BOOL g_serverRunning = NO;
     dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, self.logQueue);
     dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, (uint64_t)(250 * NSEC_PER_MSEC), (uint64_t)(50 * NSEC_PER_MSEC));
 
-    __weak typeof(self) weakSelf = self;
+    __unsafe_unretained typeof(self) weakSelf = self;
     dispatch_source_set_event_handler(timer, ^{
         typeof(self) strongSelf = weakSelf;
         if (!strongSelf || !strongSelf.isRunning) return;
@@ -449,12 +519,26 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
                 int ret = posix_spawn(&pid, execPathC, NULL, NULL, spawnArgv, environ);
                 
                 if (ret == 0) {
+                    NSString *pidPath = jessi_server_pid_file_path(dir);
+                    NSString *pidText = [NSString stringWithFormat:@"%d\n", (int)pid];
+                    [pidText writeToFile:pidPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+
                     int status;
                     waitpid(pid, &status, 0);
+
+                    [[NSFileManager defaultManager] removeItemAtPath:pidPath error:nil];
+
                     if (WIFEXITED(status)) {
                         code = WEXITSTATUS(status);
                     } else {
                         code = 252;
+                        if (WIFSIGNALED(status)) {
+                            [self emitConsole:[NSString stringWithFormat:@"\nJVM process terminated by signal: %d\n", WTERMSIG(status)]];
+                        } else if (WIFSTOPPED(status)) {
+                            [self emitConsole:[NSString stringWithFormat:@"\nJVM process stopped by signal: %d\n", WSTOPSIG(status)]];
+                        } else {
+                            [self emitConsole:[NSString stringWithFormat:@"\nJVM process ended with wait status: %d\n", status]];
+                        }
                     }
                 } else {
                     code = 253;
@@ -500,6 +584,66 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
         [self.console setString:@"Console cleared.\n"];
         [self.delegate serverServiceDidUpdateConsole:self.console];
     });
+}
+
+- (NSString *)cleanupStaleJVMProcessesOnMac {
+    if (!jessi_is_running_on_macos()) {
+        return @"Cleanup is only available on macOS builds.";
+    }
+
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *root = [self serversRoot];
+    NSArray<NSString *> *entries = [fm contentsOfDirectoryAtPath:root error:nil] ?: @[];
+
+    NSMutableSet<NSNumber *> *targetPIDs = [NSMutableSet set];
+    NSMutableArray<NSString *> *pidFiles = [NSMutableArray array];
+
+    for (NSString *name in entries) {
+        NSString *dir = [root stringByAppendingPathComponent:name];
+        BOOL isDir = NO;
+        if (![fm fileExistsAtPath:dir isDirectory:&isDir] || !isDir) continue;
+
+        NSString *pidFile = jessi_server_pid_file_path(dir);
+        [pidFiles addObject:pidFile];
+
+        NSString *pidText = [[NSString stringWithContentsOfFile:pidFile encoding:NSUTF8StringEncoding error:nil]
+                             stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (pidText.length) {
+            pid_t pid = (pid_t)[pidText intValue];
+            if (pid > 1) [targetPIDs addObject:@(pid)];
+        }
+    }
+
+    [targetPIDs unionSet:[jessi_pids_listening_on_port(25565) mutableCopy]];
+    [targetPIDs unionSet:[jessi_pids_listening_on_port(25575) mutableCopy]];
+
+    int checked = 0;
+    int killed = 0;
+    for (NSNumber *n in targetPIDs) {
+        pid_t pid = (pid_t)n.intValue;
+        checked++;
+
+        NSString *cmd = jessi_command_for_pid(pid);
+        if (cmd.length > 0 && !jessi_looks_like_jessi_java(cmd)) {
+            continue;
+        }
+
+        if (jessi_terminate_pid(pid)) {
+            killed++;
+        }
+    }
+
+    for (NSString *pidFile in pidFiles) {
+        [fm removeItemAtPath:pidFile error:nil];
+    }
+
+    if (killed > 0) {
+        return [NSString stringWithFormat:@"Stopped %d stale JVM process(es). Port 25565 should now be clear.", killed];
+    }
+    if (checked > 0) {
+        return @"No stale JESSI JVM process needed termination.";
+    }
+    return @"No stale JESSI JVM processes found.";
 }
 
 - (void)importServerJarFromURL:(NSURL *)url serverNameHint:(NSString *)nameHint completion:(void (^)(NSError * _Nullable, NSString * _Nullable))completion {

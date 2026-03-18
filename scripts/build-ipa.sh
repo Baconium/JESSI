@@ -37,9 +37,9 @@ SDK="iphoneos"
 DESTINATION="generic/platform=iOS"
 PRODUCT_SUBDIR="${CONFIGURATION}-iphoneos"
 if [[ "$BUILD_MACOS" == "1" ]]; then
-  SDK="iphoneos"
-  DESTINATION="platform=macOS"
-  PRODUCT_SUBDIR="${CONFIGURATION}-iphoneos"
+  SDK="macosx"
+  DESTINATION="platform=macOS,variant=Mac Catalyst"
+  PRODUCT_SUBDIR="${CONFIGURATION}-maccatalyst"
 fi
 
 JESSI_LDID_SIGN="${JESSI_LDID_SIGN:-1}"
@@ -68,26 +68,37 @@ run_xcodebuild() {
     CODE_SIGN_STYLE=Manual
 }
 
-if [[ "$BUILD_MACOS" == "1" ]]; then
-  MAC_DEST_ID="$({
-    xcodebuild -project "$PROJECT_DIR/JESSI.xcodeproj" -scheme "$SCHEME" -showdestinations 2>/dev/null || true
-  } | sed -n 's/.*platform:macOS[^}]*id:\([^,}]*\).*/\1/p' | head -n 1 | tr -d '[:space:]')"
-  if [[ -n "$MAC_DEST_ID" ]]; then
-    DESTINATION="id=$MAC_DEST_ID"
+prepare_maccatalyst_linker_path_workaround() {
+  local products_dir="$DERIVED_DATA_DIR/Build/Products"
+  local intermediates_dir="$DERIVED_DATA_DIR/Build/Intermediates.noindex"
+
+  mkdir -p "$products_dir"
+  if [[ ! -e "$products_dir/Release" ]]; then
+    ln -s "Release-maccatalyst" "$products_dir/Release"
   fi
-fi
+
+  local pkg
+  for pkg in ZIPFoundation SWCompression BitByteData; do
+    local release_dir="$intermediates_dir/${pkg}.build/Release"
+    local macabi_dir="$intermediates_dir/${pkg}.build/Release-maccatalyst"
+    mkdir -p "$release_dir"
+    if [[ -d "$macabi_dir" && ! -e "$release_dir/${pkg}.build" ]]; then
+      ln -s "../Release-maccatalyst/${pkg}.build" "$release_dir/${pkg}.build"
+    fi
+  done
+}
 
 set +e
 if [[ "$BUILD_MACOS" == "1" ]]; then
-  XCODEBUILD_STATUS=1
-  for TRY_DESTINATION in "$DESTINATION" "platform=macOS,name=My Mac" "platform=macOS,variant=Mac Catalyst"; do
-    echo "Building with destination: $TRY_DESTINATION"
-    run_xcodebuild "$TRY_DESTINATION" 2>&1 | tee "$XCODEBUILD_LOG"
+  echo "Building with destination: $DESTINATION"
+  run_xcodebuild "$DESTINATION" 2>&1 | tee "$XCODEBUILD_LOG"
+  XCODEBUILD_STATUS=${PIPESTATUS[0]}
+  if [[ $XCODEBUILD_STATUS -ne 0 ]] && grep -q "Build input files cannot be found" "$XCODEBUILD_LOG"; then
+    echo "Retrying macOS build with linker path workaround for Swift package object products"
+    prepare_maccatalyst_linker_path_workaround
+    run_xcodebuild "$DESTINATION" 2>&1 | tee "$XCODEBUILD_LOG"
     XCODEBUILD_STATUS=${PIPESTATUS[0]}
-    if [[ $XCODEBUILD_STATUS -eq 0 ]]; then
-      break
-    fi
-  done
+  fi
 else
   run_xcodebuild "$DESTINATION" 2>&1 | tee "$XCODEBUILD_LOG"
   XCODEBUILD_STATUS=${PIPESTATUS[0]}
@@ -102,9 +113,6 @@ if [[ $XCODEBUILD_STATUS -ne 0 ]]; then
 fi
 
 APP_DIR="$DERIVED_DATA_DIR/Build/Products/${PRODUCT_SUBDIR}/${APP_NAME}.app"
-if [[ "$BUILD_MACOS" == "1" && ! -d "$APP_DIR" ]]; then
-  APP_DIR="$DERIVED_DATA_DIR/Build/Products/${CONFIGURATION}-maccatalyst/${APP_NAME}.app"
-fi
 if [[ ! -d "$APP_DIR" ]]; then
   echo "ERROR: Could not find built ${APP_NAME}.app at: $APP_DIR" >&2
   exit 1

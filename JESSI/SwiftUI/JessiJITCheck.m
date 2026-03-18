@@ -9,10 +9,6 @@
 #import <string.h>
 #import <mach-o/dyld.h>
 #import <TargetConditionals.h>
-#include <errno.h>
-#if TARGET_OS_OSX || TARGET_OS_MACCATALYST
-#include <sys/ptrace.h>
-#endif
 #if __has_include(<sys/codesign.h>)
 #import <sys/codesign.h>
 #else
@@ -94,10 +90,9 @@ BOOL jessi_is_running_on_macos(void) {
 
 static BOOL jessi_try_enable_jit_on_macos(void) {
 #if TARGET_OS_OSX || TARGET_OS_MACCATALYST
-    errno = 0;
-    int rc = ptrace(PT_TRACE_ME, 0, 0, 0);
-    if (rc == 0) return YES;
-    return errno == EPERM || errno == EBUSY;
+    
+    
+    return YES;
 #else
     return NO;
 #endif

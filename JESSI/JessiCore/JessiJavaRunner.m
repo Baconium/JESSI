@@ -25,6 +25,7 @@
 #import <dirent.h>
 #import <limits.h>
 #import <sys/ucontext.h>
+#import <sys/wait.h>
 #import <TargetConditionals.h>
 #if __has_include(<sys/fcntl.h>)
 #import <sys/fcntl.h>
@@ -1241,6 +1242,41 @@ static BOOL jessi_args_contain_prefix(NSArray<NSString *> *args, NSString *prefi
 }
 
 static NSString *bundleJavaHomeForVersion(NSString *javaVersion) {
+    if (jessi_is_running_on_macos()) {
+        NSString *requested = javaVersion.length ? javaVersion : @"21";
+        NSString *cmd = [NSString stringWithFormat:@"/usr/libexec/java_home -v %@ 2>/dev/null", requested];
+        FILE *fp = popen(cmd.UTF8String, "r");
+        if (fp) {
+            char buf[PATH_MAX] = {0};
+            if (fgets(buf, sizeof(buf), fp)) {
+                pclose(fp);
+                NSString *home = [[NSString stringWithUTF8String:buf ?: ""] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                if (home.length > 0 && [[NSFileManager defaultManager] fileExistsAtPath:home]) {
+                    return home;
+                }
+            } else {
+                pclose(fp);
+            }
+        }
+
+        // Fallback to macOS default Java if the exact requested major version is unavailable.
+        FILE *defaultFp = popen("/usr/libexec/java_home 2>/dev/null", "r");
+        if (defaultFp) {
+            char buf[PATH_MAX] = {0};
+            if (fgets(buf, sizeof(buf), defaultFp)) {
+                pclose(defaultFp);
+                NSString *home = [[NSString stringWithUTF8String:buf ?: ""] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                if (home.length > 0 && [[NSFileManager defaultManager] fileExistsAtPath:home]) {
+                    return home;
+                }
+            } else {
+                pclose(defaultFp);
+            }
+        }
+
+        return nil;
+    }
+
     NSString *bundleRoot = [[NSBundle mainBundle] bundlePath];
 
     NSString *versioned = [bundleRoot stringByAppendingPathComponent:[NSString stringWithFormat:@"java%@", javaVersion]];
@@ -1293,6 +1329,50 @@ static NSArray<NSString *> *readArgsFile(NSString *path) {
         [out addObject:t];
     }
     return out;
+}
+
+static int jessi_spawn_external_java_args(NSArray<NSString *> *args) {
+    if (args.count == 0) return 2;
+
+    int argc = (int)args.count;
+    char **argv = (char **)calloc((size_t)argc + 1, sizeof(char *));
+    if (!argv) return 8;
+
+    for (int i = 0; i < argc; i++) {
+        NSString *s = args[(NSUInteger)i] ?: @"";
+        argv[i] = strdup(s.UTF8String ?: "");
+        if (!argv[i]) {
+            for (int j = 0; j < i; j++) free(argv[j]);
+            free(argv);
+            return 8;
+        }
+    }
+    argv[argc] = NULL;
+
+    pid_t pid = 0;
+    extern char **environ;
+    int ret = posix_spawn(&pid, argv[0], NULL, NULL, argv, environ);
+    if (ret != 0) {
+        fprintf(stderr, "Failed to spawn Java process: %s\n", strerror(ret));
+        for (int i = 0; i < argc; i++) free(argv[i]);
+        free(argv);
+        return 253;
+    }
+
+    int status = 0;
+    int code = 252;
+    if (waitpid(pid, &status, 0) >= 0) {
+        if (WIFEXITED(status)) {
+            code = WEXITSTATUS(status);
+        } else if (WIFSIGNALED(status)) {
+            fprintf(stderr, "Java process terminated by signal: %d\n", WTERMSIG(status));
+            code = 252;
+        }
+    }
+
+    for (int i = 0; i < argc; i++) free(argv[i]);
+    free(argv);
+    return code;
 }
 
 int jessi_server_main(int argc, char *argv[]) {
@@ -1360,6 +1440,101 @@ int jessi_server_main(int argc, char *argv[]) {
 
             chdir(workingDirC);
 
+            if (jessi_is_running_on_macos()) {
+                NSString *javaPath = [javaHome stringByAppendingPathComponent:@"bin/java"];
+                if (![[NSFileManager defaultManager] fileExistsAtPath:javaPath]) {
+                    fprintf(stderr, "Error: Java executable not found at %s\n", javaPath.fileSystemRepresentation);
+                    return 3;
+                }
+
+                NSInteger heapMB = 768;
+                @try {
+                    heapMB = [[NSUserDefaults standardUserDefaults] integerForKey:@"jessi.maxHeapMB"];
+                    if (heapMB <= 0) heapMB = 768;
+                } @catch (__unused NSException *e) {
+                    heapMB = 768;
+                }
+
+                NSInteger initialHeapMB = MIN(heapMB, 256);
+                @try {
+                    NSInteger configuredInitial = [[NSUserDefaults standardUserDefaults] integerForKey:@"jessi.initialHeapMB"];
+                    if (configuredInitial > 0) initialHeapMB = configuredInitial;
+                } @catch (__unused NSException *e) {
+                }
+                if (initialHeapMB <= 0) initialHeapMB = MIN(heapMB, 256);
+                if (initialHeapMB > heapMB) initialHeapMB = heapMB;
+
+                NSString *xmx = [NSString stringWithFormat:@"-Xmx%ldM", (long)heapMB];
+                NSString *xms = [NSString stringWithFormat:@"-Xms%ldM", (long)initialHeapMB];
+                NSString *userDirArg = [@"-Duser.dir=" stringByAppendingString:workingDir];
+                NSString *userHomeArg = [@"-Duser.home=" stringByAppendingString:workingDir];
+                NSString *javaHomeArg = [@"-Djava.home=" stringByAppendingString:javaHome];
+                NSString *tmpArg = [@"-Djava.io.tmpdir=" stringByAppendingString:tmpDir];
+
+                NSString *frameworks = [[NSBundle mainBundle] privateFrameworksPath];
+                NSString *frameworksPath = frameworks ?: @"";
+                NSString *libPathArg = frameworksPath.length ? [@"-Djava.library.path=" stringByAppendingString:frameworksPath] : nil;
+
+                BOOL flagNettyNoNative = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jvm.flagNettyNoNative"];
+                BOOL flagJnaNoSys = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jvm.flagJnaNoSys"];
+
+                BOOL isPaperServer = NO;
+                @try {
+                    NSString *cfgPath = [workingDir stringByAppendingPathComponent:@"jessiserverconfig.json"];
+                    NSData *cfgData = [NSData dataWithContentsOfFile:cfgPath options:0 error:nil];
+                    if (cfgData.length) {
+                        id obj = [NSJSONSerialization JSONObjectWithData:cfgData options:0 error:nil];
+                        if ([obj isKindOfClass:[NSDictionary class]]) {
+                            NSString *sw = [((NSDictionary *)obj)[@"software"] lowercaseString];
+                            isPaperServer = [sw isEqualToString:@"paper"];
+                        }
+                    }
+                } @catch (__unused NSException *e) {
+                }
+
+                NSString *launchArgsPath = [workingDir stringByAppendingPathComponent:@"jessi-launch-args.txt"];
+                NSMutableArray<NSString *> *extra = [[NSFileManager defaultManager] fileExistsAtPath:launchArgsPath] ? [readArgsFile(launchArgsPath) mutableCopy] : [NSMutableArray array];
+                NSString *savedArgs = [JessiSettings shared].launchArguments ?: @"";
+                if (savedArgs.length) {
+                    NSArray<NSString *> *parts = [savedArgs componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+                    for (NSString *p in parts) if (p.length) [extra addObject:p];
+                }
+                BOOL userSetPaperIgnoreJavaVersion = jessi_args_contain_prefix(extra, @"-DPaper.IgnoreJavaVersion");
+
+                NSMutableArray<NSString *> *args = [NSMutableArray array];
+                [args addObject:javaPath];
+                [args addObject:xmx];
+                [args addObject:xms];
+                [args addObject:@"-XX:+UseSerialGC"];
+                if (flagNettyNoNative) [args addObject:@"-Dio.netty.transport.noNative=true"];
+                if (flagJnaNoSys) {
+                    [args addObject:@"-Djna.nosys=true"];
+                    [args addObject:@"-Djna.nounpack=true"];
+                }
+                if (isPaperServer && !userSetPaperIgnoreJavaVersion) [args addObject:@"-DPaper.IgnoreJavaVersion=true"];
+                [args addObject:@"-XX:MaxGCPauseMillis=50"];
+                [args addObject:userDirArg];
+                [args addObject:userHomeArg];
+                [args addObject:javaHomeArg];
+                [args addObject:tmpArg];
+                if (libPathArg) [args addObject:libPathArg];
+                [args addObject:@"-Djava.awt.headless=true"];
+                [args addObject:@"-Djava.net.preferIPv4Stack=true"];
+                [args addObject:@"-Dsun.net.client.defaultConnectTimeout=30000"];
+                [args addObject:@"-Dsun.net.client.defaultReadTimeout=30000"];
+                [args addObject:@"-Dsun.nio.ch.disableSystemWideOverlappingFileLockCheck=true"];
+
+                if (extra.count) {
+                    [args addObjectsFromArray:extra];
+                } else {
+                    [args addObject:@"-jar"];
+                    [args addObject:[NSString stringWithUTF8String:jarPathC ?: ""]];
+                    [args addObject:@"nogui"];
+                }
+
+                return jessi_spawn_external_java_args(args);
+            }
+
             NSString *libjliPath8 = [javaHome stringByAppendingPathComponent:@"lib/jli/libjli.dylib"];
             NSString *libjliPath11 = [javaHome stringByAppendingPathComponent:@"lib/libjli.dylib"];
             NSString *libjliPath = [[NSFileManager defaultManager] fileExistsAtPath:libjliPath8] ? libjliPath8 : libjliPath11;
@@ -1404,6 +1579,9 @@ int jessi_server_main(int argc, char *argv[]) {
             if (!libjli) {
                 const char *err = dlerror();
                 fprintf(stderr, "Error: dlopen(libjli) failed: %s\n", err ? err : "unknown");
+                if (jessi_is_running_on_macos() && err && strstr(err, "incompatible platform")) {
+                    fprintf(stderr, "[JESSI] This JVM runtime is not compatible with Mac Catalyst. Install a macOS/Catalyst runtime build in Settings.\n");
+                }
                 JESSI_TXM_LOG("[JESSI] Hint: iOS enforces code signing/library validation for Mach-O dylibs.\n");
                 JESSI_TXM_LOG("[JESSI] If this JVM was downloaded into Application Support, it may need to be installed/signed via TrollStore with appropriate entitlements (e.g. disable library validation).\n");
                 return 4;
@@ -1674,6 +1852,54 @@ int jessi_tool_main(int argc, char *argv[]) {
 
             chdir(workingDirC);
 
+            if (jessi_is_running_on_macos()) {
+                NSString *javaPath = [javaHome stringByAppendingPathComponent:@"bin/java"];
+                if (![[NSFileManager defaultManager] fileExistsAtPath:javaPath]) {
+                    fprintf(stderr, "Error: Java executable not found at %s\n", javaPath.fileSystemRepresentation);
+                    return 3;
+                }
+
+                NSString *userDirArg = [@"-Duser.dir=" stringByAppendingString:workingDir];
+                NSString *userHomeArg = [@"-Duser.home=" stringByAppendingString:workingDir];
+                NSString *javaHomeArg = [@"-Djava.home=" stringByAppendingString:javaHome];
+                NSString *tmpArg = [@"-Djava.io.tmpdir=" stringByAppendingString:tmpDir];
+                NSString *xmx = @"-Xmx512M";
+                NSString *xms = @"-Xms16M";
+                NSString *maxMeta = @"-XX:MaxMetaspaceSize=256M";
+
+                NSString *frameworks = [[NSBundle mainBundle] privateFrameworksPath];
+                NSString *frameworksPath = frameworks ?: @"";
+                NSString *libPathArg = frameworksPath.length ? [@"-Djava.library.path=" stringByAppendingString:frameworksPath] : nil;
+
+                BOOL flagNettyNoNative = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jvm.flagNettyNoNative"];
+                BOOL flagJnaNoSys = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jvm.flagJnaNoSys"];
+                NSArray<NSString *> *extra = argsPathC ? readArgsFile([NSString stringWithUTF8String:argsPathC]) : @[];
+
+                NSMutableArray<NSString *> *args = [NSMutableArray array];
+                [args addObject:javaPath];
+                [args addObject:xmx];
+                [args addObject:xms];
+                [args addObject:@"-XX:+UseSerialGC"];
+                if (flagNettyNoNative) [args addObject:@"-Dio.netty.transport.noNative=true"];
+                if (flagJnaNoSys) {
+                    [args addObject:@"-Djna.nosys=true"];
+                    [args addObject:@"-Djna.nounpack=true"];
+                }
+                [args addObject:maxMeta];
+                [args addObject:userDirArg];
+                [args addObject:userHomeArg];
+                [args addObject:javaHomeArg];
+                [args addObject:tmpArg];
+                if (libPathArg) [args addObject:libPathArg];
+                [args addObject:@"-Djava.awt.headless=true"];
+                [args addObject:@"-Djava.net.preferIPv4Stack=true"];
+                [args addObject:@"-jar"];
+                [args addObject:[NSString stringWithUTF8String:jarPathC ?: ""]];
+                [args addObjectsFromArray:extra];
+
+                return jessi_spawn_external_java_args(args);
+            }
+
             NSString *libjliPath8 = [javaHome stringByAppendingPathComponent:@"lib/jli/libjli.dylib"];
             NSString *libjliPath11 = [javaHome stringByAppendingPathComponent:@"lib/libjli.dylib"];
             NSString *libjliPath = [[NSFileManager defaultManager] fileExistsAtPath:libjliPath8] ? libjliPath8 : libjliPath11;
@@ -1708,6 +1934,9 @@ int jessi_tool_main(int argc, char *argv[]) {
             if (!libjli) {
                 const char *err = dlerror();
                 fprintf(stderr, "Error: dlopen(libjli) failed: %s\n", err ? err : "unknown");
+                if (jessi_is_running_on_macos() && err && strstr(err, "incompatible platform")) {
+                    fprintf(stderr, "[JESSI] This JVM runtime is not compatible with Mac Catalyst. Install a macOS/Catalyst runtime build in Settings.\n");
+                }
                 return 4;
             }
 
