@@ -1233,6 +1233,13 @@ static NSArray<NSString *> *jessi_filter_extra_jvm_args(NSArray<NSString *> *arg
     return out;
 }
 
+static BOOL jessi_is_modern_java_version(NSString *javaVersion) {
+    if (javaVersion.length == 0) return NO;
+    return [javaVersion isEqualToString:@"17"] ||
+           [javaVersion isEqualToString:@"21"] ||
+           [javaVersion isEqualToString:@"25"];
+}
+
 static BOOL jessi_args_contain_prefix(NSArray<NSString *> *args, NSString *prefix) {
     if (args.count == 0 || prefix.length == 0) return NO;
     for (NSString *arg in args) {
@@ -1635,7 +1642,7 @@ int jessi_server_main(int argc, char *argv[]) {
             NSString *xms = [NSString stringWithFormat:@"-Xms%ldM", (long)initialHeapMB];
 
             NSString *javaVersionStr = javaVersion;
-            BOOL isJava17Plus = [javaVersionStr isEqualToString:@"17"] || [javaVersionStr isEqualToString:@"21"];
+            BOOL isJava17Plus = jessi_is_modern_java_version(javaVersionStr);
             BOOL ios26OrLater = jessi_is_ios26_or_later_core();
             BOOL txmSupport = [JessiSettings shared].txmSupport;
 
@@ -1742,6 +1749,7 @@ int jessi_server_main(int argc, char *argv[]) {
             const char *dotver = "1.8";
             if ([javaVersionStr isEqualToString:@"17"]) { fullver = "17.0.0"; dotver = "17"; }
             if ([javaVersionStr isEqualToString:@"21"]) { fullver = "21.0.0"; dotver = "21"; }
+            if ([javaVersionStr isEqualToString:@"25"]) { fullver = "25.0.0"; dotver = "25"; }
 
             JessiJliLaunchCtx launchCtx = {
                 .fn = JLI_Launch,
@@ -1969,19 +1977,32 @@ int jessi_tool_main(int argc, char *argv[]) {
             NSString *maxMeta = @"-XX:MaxMetaspaceSize=256M";
 
             NSString *javaVersionStr = javaVersion;
+            BOOL isJava17Plus = jessi_is_modern_java_version(javaVersionStr);
             BOOL ios26OrLater = jessi_is_ios26_or_later_core();
+            BOOL txmSupport = [JessiSettings shared].txmSupport;
 
             BOOL flagNettyNoNative = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jvm.flagNettyNoNative"];
             BOOL flagJnaNoSys = [[NSUserDefaults standardUserDefaults] boolForKey:@"jessi.jvm.flagJnaNoSys"];
 
             NSArray<NSString *> *extraRaw = argsPathC ? readArgsFile([NSString stringWithUTF8String:argsPathC]) : @[];
-            NSArray<NSString *> *extra = jessi_filter_extra_jvm_args(extraRaw, ios26OrLater, [javaVersionStr isEqualToString:@"17"] || [javaVersionStr isEqualToString:@"21"]);
+            NSArray<NSString *> *extra = jessi_filter_extra_jvm_args(extraRaw, ios26OrLater, isJava17Plus);
 
             const char *jargv[96];
             int idx = 0;
             jargv[idx++] = javaPath.UTF8String;
             jargv[idx++] = xmx.UTF8String;
             jargv[idx++] = xms.UTF8String;
+
+            if (ios26OrLater && txmSupport) {
+                jargv[idx++] = "-XX:+UnlockExperimentalVMOptions";
+                jargv[idx++] = "-XX:+DisablePrimordialThreadGuardPages";
+            }
+            if (ios26OrLater && txmSupport && isJava17Plus) {
+                jargv[idx++] = "-XX:+MirrorMappedCodeCache";
+            }
+            if (isJava17Plus && !jessi_has_extended_va_entitlement()) {
+                jargv[idx++] = "-XX:-UseCompressedClassPointers";
+            }
             jargv[idx++] = "-XX:+UseSerialGC";
 
             if (flagNettyNoNative) {
@@ -2018,6 +2039,7 @@ int jessi_tool_main(int argc, char *argv[]) {
             const char *dotver = "1.8";
             if ([javaVersionStr isEqualToString:@"17"]) { fullver = "17.0.0"; dotver = "17"; }
             if ([javaVersionStr isEqualToString:@"21"]) { fullver = "21.0.0"; dotver = "21"; }
+            if ([javaVersionStr isEqualToString:@"25"]) { fullver = "25.0.0"; dotver = "25"; }
 
             JessiJliLaunchCtx launchCtx = {
                 .fn = JLI_Launch,

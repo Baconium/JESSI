@@ -315,7 +315,13 @@ final class SettingsModel: ObservableObject {
     private var activeJVMDelegate: JVMDownloadProgressDelegate? = nil
     private var isInstallPipelineRunning: Bool = false
 
-    let allJVMVersions: [String] = ["8", "17", "21"]
+    let supportedJVMVersions: [String] = ["8", "17", "21", "25"]
+    var downloadableJVMVersions: [String] {
+        if isMacCatalyst {
+            return ["8", "17", "21", "25"]
+        }
+        return ["8", "17", "21"]
+    }
 
     init() {
         let s = JessiSettings.shared()
@@ -535,7 +541,7 @@ final class SettingsModel: ObservableObject {
 
     func refreshInstalledJVMVersions() {
         var installed: Set<String> = []
-        for ver in allJVMVersions {
+        for ver in supportedJVMVersions {
             let dir = runtimeDir(for: ver)
             if FileManager.default.fileExists(atPath: dir.path) {
                 installed.insert(ver)
@@ -546,8 +552,8 @@ final class SettingsModel: ObservableObject {
 
     func deleteInstalledJVMVersions(at offsets: IndexSet) {
         for index in offsets {
-            guard index >= 0 && index < allJVMVersions.count else { continue }
-            let ver = allJVMVersions[index]
+            guard index >= 0 && index < supportedJVMVersions.count else { continue }
+            let ver = supportedJVMVersions[index]
             guard installedJVMVersions.contains(ver) else { continue }
 
             let dir = runtimeDir(for: ver)
@@ -567,11 +573,17 @@ final class SettingsModel: ObservableObject {
     }
 
     private func runtimeDownloadURLs(for version: String) -> [URL] {
-        let bases = [
+        let defaultBases = [
             "https://crystall1ne.dev/cdn/amethyst-ios",
             "https://baconium.dev/jessi/jvm",
             "https://roooot.dev/jessi/jvm"
         ]
+        let java25Bases = [
+            "https://baconium.dev/jessi/jvm",
+            "https://crystall1ne.dev/cdn/amethyst-ios",
+            "https://roooot.dev/jessi/jvm"
+        ]
+        let bases = (!isMacCatalyst && version == "25") ? java25Bases : defaultBases
 
         let filenames: [String]
         if isMacCatalyst {
@@ -593,6 +605,8 @@ final class SettingsModel: ObservableObject {
                 filenames = ["jre17-ios-aarch64.zip"]
             case "21":
                 filenames = ["jre21-ios-aarch64.zip"]
+            case "25":
+                filenames = ["jre25-ios-aarch64.zip", "jre25-ios-aarch64.tar.xz"]
             default:
                 return []
             }
@@ -1714,8 +1728,8 @@ struct SettingsView: View {
                     .normalizedSeparator()
 
                     if showInstallDropdown {
-                        let nonInstalled = model.allJVMVersions.filter { !model.installedJVMVersions.contains($0) }
-                        let installed = model.allJVMVersions.filter { model.installedJVMVersions.contains($0) }
+                        let nonInstalled = model.downloadableJVMVersions.filter { !model.installedJVMVersions.contains($0) }
+                        let installed = model.supportedJVMVersions.filter { model.installedJVMVersions.contains($0) }
 
                         ForEach(nonInstalled, id: \.self) { ver in
                             InstallJVMRow(
@@ -1823,7 +1837,7 @@ struct SettingsView: View {
                     if model.isMacCatalyst {
                         Text("JESSI requires Java to function. This macOS build uses the Java runtime installed on your system.")
                     } else {
-                        Text("JESSI requires Java to function. Please install a JVM in the menu above. If you're unsure which version to select, select Java 21.")
+                        Text("JESSI requires Java to function. Please install a JVM in the menu above. If you're unsure which version to select, select Java 25.")
                     }
 
                     if model.isIOS26 && !model.isMacCatalyst {
@@ -2328,7 +2342,7 @@ struct SettingsView: View {
                                 .font(.headline)
                             Text(model.isMacCatalyst
                                  ? "This macOS build uses the Java runtime installed on your system. Make sure Java is installed to run servers."
-                                 : "In order to run a Minecraft server, JESSI needs a JVM (Java Virtual Machine). If you don't know which one to install, install Java 21.")
+                                 : "In order to run a Minecraft server, JESSI needs a JVM (Java Virtual Machine). If you don't know which one to install, install Java 25.")
                                 .multilineTextAlignment(.center)
                                 .font(.subheadline)
                             

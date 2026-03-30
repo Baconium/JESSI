@@ -133,7 +133,7 @@ final class LaunchModel: NSObject, ObservableObject {
 
         let available = JessiSettings.availableJavaVersions()
         if available.isEmpty {
-            activeAlert = .runtime("Please install a JVM in settings before launching your server! If you're unsure of which version to install, pick Java 21.")
+            activeAlert = .runtime("Please install a JVM in settings before launching your server. Newer Minecraft releases need Java 25.")
             return
         }
 

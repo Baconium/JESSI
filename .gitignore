@@ -15,6 +15,9 @@ Payload/
 
 # this prolly doesnt even need to exist anymore
 Runtimes/
+jdk-build/
+openjdk-25-clone/
+patch_icache.sh
 
 # logs
 *.log

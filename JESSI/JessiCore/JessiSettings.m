@@ -41,7 +41,7 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
         if (![roots containsObject:resourcesUnderBundle]) [roots addObject:resourcesUnderBundle];
     }
 
-    for (NSString *ver in @[@"8", @"17", @"21"]) {
+    for (NSString *ver in @[@"8", @"17", @"21", @"25"]) {
         if (isIOS26OrLater && [ver isEqualToString:@"8"]) {
             continue;
         }
@@ -54,7 +54,7 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
         }
     }
 
-    if (!isIOS26OrLater && ![available containsObject:@"8"] && ![available containsObject:@"17"] && ![available containsObject:@"21"]) {
+    if (!isIOS26OrLater && ![available containsObject:@"8"] && ![available containsObject:@"17"] && ![available containsObject:@"21"] && ![available containsObject:@"25"]) {
         NSString *genericPath = nil;
         for (NSString *root in roots) {
             NSString *candidate = [root stringByAppendingPathComponent:@"java"];
@@ -74,6 +74,8 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
                 [available addObject:@"17"];
             } else if ([releaseContent containsString:@"\"21."]) {
                 [available addObject:@"21"];
+            } else if ([releaseContent containsString:@"\"25."]) {
+                [available addObject:@"25"];
             }
         }
     }
@@ -81,7 +83,7 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
     NSURL *appSupport = [[fm URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask] firstObject];
     NSString *runtimesRoot = [[appSupport URLByAppendingPathComponent:@"Runtimes" isDirectory:YES] path];
     if (runtimesRoot.length) {
-        for (NSString *ver in @[@"8", @"17", @"21"]) {
+        for (NSString *ver in @[@"8", @"17", @"21", @"25"]) {
             if (isIOS26OrLater && [ver isEqualToString:@"8"]) {
                 continue;
             }
@@ -104,6 +106,7 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
     NSArray<NSString *> *available = [JessiSettings availableJavaVersions];
 
     NSString *(^pickBestAvailable)(void) = ^NSString *{
+        if ([available containsObject:@"25"]) return @"25";
         if ([available containsObject:@"21"]) return @"21";
         if ([available containsObject:@"17"]) return @"17";
         if ([available containsObject:@"8"]) return @"8";
