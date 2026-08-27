@@ -44,6 +44,7 @@ struct DoneToolbarTextField: UIViewRepresentable {
         let tf = UITextField(frame: .zero)
         tf.borderStyle = .none
         tf.backgroundColor = .clear
+        tf.clipsToBounds = true
         tf.textColor = UIColor.label
         tf.font = font
         tf.keyboardType = keyboardType
@@ -52,6 +53,8 @@ struct DoneToolbarTextField: UIViewRepresentable {
         tf.placeholder = placeholder
         tf.textAlignment = textAlignment
         tf.returnKeyType = .done
+        tf.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        tf.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         tf.delegate = context.coordinator
         tf.addTarget(context.coordinator, action: #selector(Coordinator.textChanged(_:)), for: .editingChanged)
 
@@ -136,6 +139,7 @@ struct FocusableDoneToolbarTextField: UIViewRepresentable {
         let tf = UITextField(frame: .zero)
         tf.borderStyle = .none
         tf.backgroundColor = .clear
+        tf.clipsToBounds = true
         tf.textColor = UIColor.label
         tf.font = font
         tf.keyboardType = keyboardType
@@ -144,6 +148,8 @@ struct FocusableDoneToolbarTextField: UIViewRepresentable {
         tf.placeholder = placeholder
         tf.textAlignment = textAlignment
         tf.returnKeyType = .done
+        tf.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        tf.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         tf.delegate = context.coordinator
         tf.addTarget(context.coordinator, action: #selector(Coordinator.textChanged(_:)), for: .editingChanged)
 

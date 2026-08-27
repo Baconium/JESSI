@@ -54,11 +54,17 @@ struct CreateServerView: View {
     @State private var showJarImportError: Bool = false
 
     @State private var showForgeWarning: Bool = false
+    @State private var showForgeJITRequired: Bool = false
     @State private var pendingCreateServer: Bool = false
     @State private var showSeedEasterEgg: Bool = false
     @State private var seedEasterEggTitle: String = ""
     @State private var seedEasterEggMessage: String = ""
     @State private var lastTriggeredSeedKey: String? = nil
+
+    @State private var showJVMInstallPrompt: Bool = false
+    @State private var missingJVMVersion: String = ""
+    @State private var isInstallingJVM: Bool = false
+    @State private var jvmInstaller: SettingsModel? = nil
 
     @Environment(\.presentationMode) private var presentation
 
@@ -414,11 +420,28 @@ struct CreateServerView: View {
                 })
             )
         }
+        .alert(isPresented: $showForgeJITRequired) {
+            Alert(
+                title: Text("JIT Required"),
+                message: Text("Creating a Forge or NeoForge server requires JIT to be enabled! Please enable JIT and try again."),
+                dismissButton: .default(Text("OK"))
+            )
+        }
         .alert(isPresented: $showSeedEasterEgg) {
             Alert(
                 title: Text(seedEasterEggTitle),
                 message: Text(seedEasterEggMessage),
                 dismissButton: .default(Text("Dismiss"))
+            )
+        }
+        .alert(isPresented: $showJVMInstallPrompt) {
+            Alert(
+                title: Text("Java \(missingJVMVersion) Required"),
+                message: Text("This Minecraft version requires Java \(missingJVMVersion), which is not currently installed."),
+                primaryButton: .default(Text("Install")) {
+                    installMissingJVM()
+                },
+                secondaryButton: .cancel()
             )
         }
     }
@@ -1120,6 +1143,10 @@ struct CreateServerView: View {
     }
 
     private func createServer() {
+        if (software == .forge || software == .neoforge) && !jessi_check_jit_enabled() {
+            showForgeJITRequired = true
+            return
+        }
         if (software == .forge || software == .neoforge) && !jessi_is_trollstore_installed() {
             pendingCreateServer = true
             showForgeWarning = true
@@ -1147,6 +1174,16 @@ struct CreateServerView: View {
             return
         }
         if software == .customJar && customJarURL == nil { return }
+
+        if software != .customJar && !mcVersion.isEmpty {
+            let needed = Self.effectiveJavaVersion(forMCVersion: mcVersion)
+            let available = JessiSettings.availableJavaVersions()
+            if !available.contains(needed) {
+                missingJVMVersion = needed
+                showJVMInstallPrompt = true
+                return
+            }
+        }
 
         let root = serversRoot()
         var dir = (root as NSString).appendingPathComponent(name)
@@ -1408,6 +1445,99 @@ struct CreateServerView: View {
         return a.localizedStandardCompare(b) == .orderedDescending
     }
 
+    private static func mcVersionParts(_ v: String) -> [Int] {
+        v.split(separator: ".").map { Int($0) ?? 0 }
+    }
+
+    private static func isMCVersionAtLeast(_ version: String, _ threshold: String) -> Bool {
+        let a = mcVersionParts(version)
+        let b = mcVersionParts(threshold)
+        let n = max(a.count, b.count)
+        for i in 0..<n {
+            let va = i < a.count ? a[i] : 0
+            let vb = i < b.count ? b[i] : 0
+            if va != vb { return va >= vb }
+        }
+        return true
+    }
+
+    private static func recommendedJavaVersion(forMCVersion mc: String) -> String {
+        if isMCVersionAtLeast(mc, "26.0") { return "25" }
+        if isMCVersionAtLeast(mc, "1.20.5") { return "21" }
+        if isMCVersionAtLeast(mc, "1.17") { return "17" }
+        if jessi_is_ios26_or_later() { return "17" }
+        return "8"
+    }
+
+    private static func javaVersionNumber(_ v: String) -> Int {
+        return Int(v) ?? 8
+    }
+
+    private static func effectiveJavaVersion(forMCVersion mcVersion: String) -> String {
+        if !mcVersion.isEmpty {
+            return recommendedJavaVersion(forMCVersion: mcVersion)
+        }
+        return JessiSettings.shared().javaVersion
+    }
+
+    private func installMissingJVM() {
+        let version = missingJVMVersion
+        isInstallingJVM = true
+        isCreating = true
+        createStatus = "Installing Java \(version)..."
+        createProgress = 0
+
+        let installer = SettingsModel()
+        self.jvmInstaller = installer
+
+        let progressTimer = DispatchSource.makeTimerSource(queue: .main)
+        progressTimer.schedule(deadline: .now(), repeating: .milliseconds(200))
+        progressTimer.setEventHandler { [weak installer] in
+            guard let installer = installer else { return }
+            self.createProgress = installer.jvmDownloadProgress
+            if installer.jvmDownloadProgress > 0 {
+                self.createStatus = "Installing Java \(version)... \(Int(installer.jvmDownloadProgress * 100))%"
+            }
+        }
+        progressTimer.resume()
+
+        installer.installOneRuntime(version: version) { result in
+            progressTimer.cancel()
+            DispatchQueue.main.async {
+                self.jvmInstaller = nil
+                self.isInstallingJVM = false
+                self.isCreating = false
+                self.createProgress = nil
+                switch result {
+                case .success:
+                    self.createServerConfirmed()
+                case .failure(let error):
+                    self.createError = "Failed to install Java \(version): \(error.localizedDescription)"
+                    self.showCreateError = true
+                }
+            }
+        }
+    }
+
+    private func resolveForgeInstallerURL(suffixedURLString: String, plainURLString: String, completion: @escaping (URL?) -> Void) {
+        guard let suffixedURL = URL(string: suffixedURLString) else {
+            completion(URL(string: plainURLString))
+            return
+        }
+
+        var request = URLRequest(url: suffixedURL)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 10
+
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            if let http = response as? HTTPURLResponse, http.statusCode == 200 {
+                completion(suffixedURL)
+            } else {
+                completion(URL(string: plainURLString))
+            }
+        }.resume()
+    }
+
     private func downloadVanillaServerJar(mcVersion: String, to serverDir: URL, completion: @escaping (Result<Void, Error>) -> Void) {
         guard let manifestURL = URL(string: "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json") else {
             completion(.failure(InstallerError.message("Invalid Mojang manifest URL")))
@@ -1599,17 +1729,22 @@ struct CreateServerView: View {
                 }
 
                 let artifactVersion = "\(mcVersion)-\(forgeVersion)"
-                guard let installerURL = URL(string: "https://maven.minecraftforge.net/net/minecraftforge/forge/\(artifactVersion)/forge-\(artifactVersion)-installer.jar") else {
-                    completion(.failure(InstallerError.message("Invalid Forge installer URL")))
-                    return
-                }
+                let suffixedVersion = "\(artifactVersion)-\(mcVersion)"
+                let suffixedURLString = "https://maven.minecraftforge.net/net/minecraftforge/forge/\(suffixedVersion)/forge-\(suffixedVersion)-installer.jar"
+                let plainURLString = "https://maven.minecraftforge.net/net/minecraftforge/forge/\(artifactVersion)/forge-\(artifactVersion)-installer.jar"
 
-                let installerDest = serverDir.appendingPathComponent("forge-installer.jar")
-                self.downloadFile(installerURL, to: installerDest) { dlRes in
-                    switch dlRes {
-                    case .failure(let err): completion(.failure(err))
-                    case .success:
-                        self.runInstallerJar(installerJar: installerDest, serverDir: serverDir, completion: completion)
+                self.resolveForgeInstallerURL(suffixedURLString: suffixedURLString, plainURLString: plainURLString) { resolvedURL in
+                    guard let installerURL = resolvedURL else {
+                        completion(.failure(InstallerError.message("Could not find Forge installer for \(mcVersion) (tried both URL formats).")))
+                        return
+                    }
+                    let installerDest = serverDir.appendingPathComponent("forge-installer.jar")
+                    self.downloadFile(installerURL, to: installerDest) { dlRes in
+                        switch dlRes {
+                        case .failure(let err): completion(.failure(err))
+                        case .success:
+                            self.runInstallerJar(installerJar: installerDest, mcVersion: mcVersion, serverDir: serverDir, completion: completion)
+                        }
                     }
                 }
             }
@@ -1647,7 +1782,7 @@ struct CreateServerView: View {
                 switch dlRes {
                 case .failure(let err): completion(.failure(err))
                 case .success:
-                    self.runInstallerJar(installerJar: installerDest, serverDir: serverDir, completion: completion)
+                    self.runInstallerJar(installerJar: installerDest, mcVersion: mcVersion, serverDir: serverDir, completion: completion)
                 }
             }
         }.resume()
@@ -1674,7 +1809,7 @@ struct CreateServerView: View {
         return out
     }
 
-    private func runInstallerJar(installerJar: URL, serverDir: URL, completion: @escaping (Result<Void, Error>) -> Void) {
+    private func runInstallerJar(installerJar: URL, mcVersion: String = "", serverDir: URL, completion: @escaping (Result<Void, Error>) -> Void) {
         func completeOnMain(_ result: Result<Void, Error>) {
             DispatchQueue.main.async {
                 completion(result)
@@ -1689,7 +1824,15 @@ struct CreateServerView: View {
             return
         }
 
-        let javaVersion = JessiSettings.shared().javaVersion
+        var javaVersion = JessiSettings.shared().javaVersion
+        if !mcVersion.isEmpty {
+            let recommended = Self.recommendedJavaVersion(forMCVersion: mcVersion)
+            let userJavaNum = Self.javaVersionNumber(javaVersion)
+            let recommendedNum = Self.javaVersionNumber(recommended)
+            if userJavaNum > recommendedNum {
+                javaVersion = recommended
+            }
+        }
         
         var bgTask: UIBackgroundTaskIdentifier = .invalid
         if JessiSettings.shared().runInBackground {
@@ -1712,12 +1855,37 @@ struct CreateServerView: View {
                 return
             }
 
-            guard let unixArgsRel = self.findUnixArgsRelativePath(serverDir: serverDir) else {
-                completeOnMain(.failure(InstallerError.message("Installed, but couldn't find unix_args.txt (Forge/NeoForge launcher args).")))
+            if let unixArgsRel = self.findUnixArgsRelativePath(serverDir: serverDir) {
+                let launchArgs = "@\(unixArgsRel)\nnogui\n"
+                do {
+                    try launchArgs.write(to: serverDir.appendingPathComponent("jessi-launch-args.txt"), atomically: true, encoding: .utf8)
+                    completeOnMain(.success(()))
+                } catch {
+                    completeOnMain(.failure(error))
+                }
                 return
             }
 
-            let launchArgs = "@\(unixArgsRel)\nnogui\n"
+            let fm = FileManager.default
+            guard let e = fm.enumerator(at: serverDir, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else {
+                completeOnMain(.failure(InstallerError.message("Installed, but couldn't find launcher args or universal jar.")))
+                return
+            }
+
+            var universalJar: String? = nil
+            for case let url as URL in e {
+                if url.lastPathComponent.hasSuffix("-universal.jar") {
+                    universalJar = url.lastPathComponent
+                    break
+                }
+            }
+
+            guard let jarName = universalJar else {
+                completeOnMain(.failure(InstallerError.message("Installed, but couldn't find unix_args.txt or universal jar. Your Forge version may not be compatible.")))
+                return
+            }
+
+            let launchArgs = "-jar\n\(jarName)\nnogui\n"
             do {
                 try launchArgs.write(to: serverDir.appendingPathComponent("jessi-launch-args.txt"), atomically: true, encoding: .utf8)
                 completeOnMain(.success(()))
@@ -1732,10 +1900,24 @@ struct CreateServerView: View {
         guard let e = fm.enumerator(at: serverDir, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else {
             return nil
         }
+
+        func comparablePath(_ path: String) -> String {
+            var p = (path as NSString).standardizingPath
+            if p.hasPrefix("/private/") {
+                p.removeFirst("/private".count)
+            }
+            return p
+        }
+
+        let rootPath = comparablePath(serverDir.path)
         for case let url as URL in e {
             if url.lastPathComponent == "unix_args.txt" {
-                let rel = url.path.replacingOccurrences(of: serverDir.path + "/", with: "")
-                return rel
+                let filePath = comparablePath(url.path)
+                let rootPrefix = rootPath + "/"
+                if filePath.hasPrefix(rootPrefix) {
+                    return String(filePath.dropFirst(rootPrefix.count))
+                }
+                return nil
             }
         }
         return nil

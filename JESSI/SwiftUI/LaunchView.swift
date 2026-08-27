@@ -9,6 +9,8 @@ enum LaunchAlert: Identifiable {
     case jitNotEnabled
     case runtime(String)
     case mspj(String)
+    case jvmInstallOffer(version: String)
+    case jvmMismatch(selected: String, required: String)
 
     var id: String {
         switch self {
@@ -22,6 +24,10 @@ enum LaunchAlert: Identifiable {
             return "runtime:\(message)"
         case .mspj(let message):
             return "mspj:\(message)"
+        case .jvmInstallOffer(let version):
+            return "jvmInstallOffer:\(version)"
+        case .jvmMismatch(let selected, let required):
+            return "jvmMismatch:\(selected):\(required)"
         }
     }
 }
@@ -72,9 +78,13 @@ final class LaunchModel: NSObject, ObservableObject {
     @Published var commandText: String = ""
     @Published var activeAlert: LaunchAlert? = nil
     @Published var propertiesManager: ServerPropertiesManager?
+    @Published var isInstallingJVM: Bool = false
+    @Published var jvmInstallStatus: String = ""
+    @Published var jvmInstallProgress: Double = 0
 
     private let service: JessiServerService
     private var cancellables = Set<AnyCancellable>()
+    private var jvmInstaller: SettingsModel? = nil
 
     override init() {
         self.service = JessiServerService()
@@ -117,6 +127,18 @@ final class LaunchModel: NSObject, ObservableObject {
         UIApplication.shared.isIdleTimerDisabled = true
         service.startServerNamed(selectedServer)
     }
+
+    func startServerWithJVM(_ version: String) {
+        guard !selectedServer.isEmpty else { return }
+        UIApplication.shared.isIdleTimerDisabled = true
+        service.startServerNamed(selectedServer, withJavaVersion: version)
+    }
+
+    func switchJVMAndStart(_ version: String) {
+        JessiSettings.shared().javaVersion = version
+        JessiSettings.shared().save()
+        startServer()
+    }
     
     func isJITEnabledCheck() -> Bool {
         return jessi_check_jit_enabled()
@@ -137,10 +159,23 @@ final class LaunchModel: NSObject, ObservableObject {
             return
         }
 
-        let selectedJava = JessiSettings.shared().javaVersion
-        if !available.contains(selectedJava) {
-            activeAlert = .runtime("Your selected Java version (Java \(selectedJava)) is not installed. Please install it or pick a different version in settings.")
-            return
+        if let effectiveJava = effectiveJavaVersionForSelectedServer() {
+            if !available.contains(effectiveJava) {
+                activeAlert = .jvmInstallOffer(version: effectiveJava)
+                return
+            }
+            // Warn if the user's selected JVM differs from what this server requires
+            let selectedJava = JessiSettings.shared().javaVersion
+            if selectedJava != effectiveJava {
+                activeAlert = .jvmMismatch(selected: selectedJava, required: effectiveJava)
+                return
+            }
+        } else {
+            let selectedJava = JessiSettings.shared().javaVersion
+            if !available.contains(selectedJava) {
+                activeAlert = .runtime("Your selected Java version (Java \(selectedJava)) is not installed. Please install it or pick a different version in settings.")
+                return
+            }
         }
 
         if !isJITEnabledCheck() {
@@ -173,6 +208,78 @@ final class LaunchModel: NSObject, ObservableObject {
         guard !cmd.isEmpty else { return }
         _ = service.sendRcon(cmd)
         commandText = ""
+    }
+
+    private func effectiveJavaVersionForSelectedServer() -> String? {
+        guard !selectedServer.isEmpty else { return nil }
+        let root = service.serversRoot()
+        let configPath = (root as NSString).appendingPathComponent(selectedServer)
+        let configFile = (configPath as NSString).appendingPathComponent("jessiserverconfig.json")
+
+        guard FileManager.default.fileExists(atPath: configFile),
+              let data = try? Data(contentsOf: URL(fileURLWithPath: configFile)),
+              let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let mcVersion = config["minecraftVersion"] as? String, !mcVersion.isEmpty else {
+            return nil
+        }
+        return recommendedJavaVersion(forMCVersion: mcVersion)
+    }
+
+    private func recommendedJavaVersion(forMCVersion mc: String) -> String {
+        func parts(_ v: String) -> [Int] {
+            v.split(separator: ".").map { Int($0) ?? 0 }
+        }
+        func atLeast(_ version: String, _ threshold: String) -> Bool {
+            let a = parts(version), b = parts(threshold)
+            let n = max(a.count, b.count)
+            for i in 0..<n {
+                let va = i < a.count ? a[i] : 0
+                let vb = i < b.count ? b[i] : 0
+                if va != vb { return va >= vb }
+            }
+            return true
+        }
+        if atLeast(mc, "26.0") { return "25" }
+        if atLeast(mc, "1.20.5") { return "21" }
+        if atLeast(mc, "1.17") { return "17" }
+        if jessi_is_ios26_or_later() { return "17" }
+        return "8"
+    }
+
+    func installMissingJVM(version: String) {
+        isInstallingJVM = true
+        jvmInstallStatus = "Installing Java \(version)..."
+        jvmInstallProgress = 0
+
+        let installer = SettingsModel()
+        self.jvmInstaller = installer
+
+        let progressTimer = DispatchSource.makeTimerSource(queue: .main)
+        progressTimer.schedule(deadline: .now(), repeating: .milliseconds(200))
+        progressTimer.setEventHandler { [weak installer] in
+            guard let installer = installer else { return }
+            self.jvmInstallProgress = installer.jvmDownloadProgress
+            if installer.jvmDownloadProgress > 0 {
+                self.jvmInstallStatus = "Installing Java \(version)... \(Int(installer.jvmDownloadProgress * 100))%"
+            }
+        }
+        progressTimer.resume()
+
+        installer.installOneRuntime(version: version) { result in
+            progressTimer.cancel()
+            DispatchQueue.main.async {
+                self.jvmInstaller = nil
+                self.isInstallingJVM = false
+                self.jvmInstallStatus = ""
+                self.jvmInstallProgress = 0
+                switch result {
+                case .success:
+                    self.start()
+                case .failure(let error):
+                    self.activeAlert = .runtime("Failed to install Java \(version): \(error.localizedDescription)")
+                }
+            }
+        }
     }
 }
 
@@ -527,7 +634,7 @@ struct LaunchView: View {
                         .foregroundColor(.white)
                         .background(model.isRunning ? Color.gray.opacity(0.4) : Color.green)
                         .cornerRadius(12)
-                        .disabled(model.isRunning)
+                        .disabled(model.isRunning || model.isInstallingJVM)
 
                         Button(action: {
                             let isMacBuild = ProcessInfo.processInfo.isMacCatalystApp
@@ -550,6 +657,18 @@ struct LaunchView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.bottom, 16)
+
+                    if model.isInstallingJVM {
+                        VStack(spacing: 8) {
+                            Text(model.jvmInstallStatus)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            ProgressView(value: model.jvmInstallProgress)
+                                .progressViewStyle(LinearProgressViewStyle())
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                    }
                 }
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(16)
@@ -667,6 +786,26 @@ struct LaunchView: View {
                     title: Text("No JVM Installed"),
                     message: Text(message),
                     dismissButton: .default(Text("OK"))
+                )
+            case .jvmInstallOffer(let version):
+                return Alert(
+                    title: Text("Java \(version) Required"),
+                    message: Text("This server requires Java \(version), which is not currently installed."),
+                    primaryButton: .default(Text("Install")) {
+                        model.installMissingJVM(version: version)
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .jvmMismatch(let selected, let required):
+                return Alert(
+                    title: Text("Wrong Java Version"),
+                    message: Text("Your settings have Java \(selected) selected, but this server requires Java \(required). Launch anyway with Java \(selected), or switch to Java \(required)?"),
+                    primaryButton: .default(Text("Use Java \(required)")) {
+                        model.switchJVMAndStart(required)
+                    },
+                    secondaryButton: .destructive(Text("Launch Anyway")) {
+                        model.startServerWithJVM(selected)
+                    }
                 )
             }
         }

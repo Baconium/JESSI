@@ -1338,6 +1338,92 @@ static NSArray<NSString *> *readArgsFile(NSString *path) {
     return out;
 }
 
+static NSArray<NSString *> *jessi_split_args_string(NSString *input) {
+    if (input.length == 0) return @[];
+
+    NSMutableArray<NSString *> *tokens = [NSMutableArray array];
+    NSMutableString *current = [NSMutableString string];
+    BOOL inSingle = NO;
+    BOOL inDouble = NO;
+    BOOL escaping = NO;
+
+    NSUInteger length = input.length;
+    for (NSUInteger i = 0; i < length; i++) {
+        unichar c = [input characterAtIndex:i];
+
+        if (escaping) {
+            [current appendFormat:@"%C", c];
+            escaping = NO;
+            continue;
+        }
+
+        if (c == '\\') {
+            escaping = YES;
+            continue;
+        }
+
+        if (c == '"' && !inSingle) {
+            inDouble = !inDouble;
+            continue;
+        }
+
+        if (c == '\'' && !inDouble) {
+            inSingle = !inSingle;
+            continue;
+        }
+
+        BOOL isWS = [[NSCharacterSet whitespaceAndNewlineCharacterSet] characterIsMember:c];
+        if (isWS && !inSingle && !inDouble) {
+            if (current.length > 0) {
+                [tokens addObject:[current copy]];
+                [current setString:@""];
+            }
+            continue;
+        }
+
+        [current appendFormat:@"%C", c];
+    }
+
+    if (escaping) {
+        [current appendString:@"\\"];
+    }
+    if (current.length > 0) {
+        [tokens addObject:[current copy]];
+    }
+
+    return tokens;
+}
+
+static NSArray<NSString *> *jessi_expand_argfile_entries(NSArray<NSString *> *args, NSString *workingDir) {
+    if (args.count == 0) return @[];
+
+    NSMutableArray<NSString *> *expanded = [NSMutableArray array];
+    NSFileManager *fm = [NSFileManager defaultManager];
+
+    for (NSString *arg in args) {
+        if (arg.length > 1 && [arg hasPrefix:@"@"]) {
+            NSString *ref = [arg substringFromIndex:1];
+            NSString *argFilePath = [ref copy];
+            if (![argFilePath hasPrefix:@"/"]) {
+                argFilePath = [workingDir stringByAppendingPathComponent:argFilePath];
+            }
+
+            if ([fm fileExistsAtPath:argFilePath]) {
+                NSString *content = [NSString stringWithContentsOfFile:argFilePath encoding:NSUTF8StringEncoding error:nil];
+                NSArray<NSString *> *tokens = jessi_split_args_string(content ?: @"");
+                if (tokens.count > 0) {
+                    [expanded addObjectsFromArray:tokens];
+                    continue;
+                }
+            }
+        }
+
+        [expanded addObject:arg];
+    }
+
+    return expanded;
+}
+
 static int jessi_spawn_external_java_args(NSArray<NSString *> *args) {
     if (args.count == 0) return 2;
 
@@ -1506,6 +1592,8 @@ int jessi_server_main(int argc, char *argv[]) {
                     NSArray<NSString *> *parts = [savedArgs componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                     for (NSString *p in parts) if (p.length) [extra addObject:p];
                 }
+                NSArray<NSString *> *expandedExtra = jessi_expand_argfile_entries(extra, workingDir);
+                extra = [expandedExtra mutableCopy] ?: [NSMutableArray array];
                 BOOL userSetPaperIgnoreJavaVersion = jessi_args_contain_prefix(extra, @"-DPaper.IgnoreJavaVersion");
 
                 NSMutableArray<NSString *> *args = [NSMutableArray array];
@@ -1682,6 +1770,8 @@ int jessi_server_main(int argc, char *argv[]) {
                 NSArray<NSString *> *parts = [savedArgs componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
                 for (NSString *p in parts) if (p.length) [extra addObject:p];
             }
+            NSArray<NSString *> *expandedExtra = jessi_expand_argfile_entries(extra, workingDir);
+            extra = [expandedExtra mutableCopy] ?: [NSMutableArray array];
             
             NSMutableArray<NSString *> *filteredExtra = [[jessi_filter_extra_jvm_args(extra, ios26OrLater, isJava17Plus) mutableCopy] mutableCopy];
             if (filteredExtra) {

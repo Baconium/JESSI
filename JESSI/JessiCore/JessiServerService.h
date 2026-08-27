@@ -15,6 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSString *)serversRoot;
 
 - (void)startServerNamed:(NSString *)serverName;
+- (void)startServerNamed:(NSString *)serverName withJavaVersion:(nullable NSString *)javaVersionOverride;
 - (void)stopServer;
 - (void)clearConsole;
 - (BOOL)sendRcon:(NSString *)command;

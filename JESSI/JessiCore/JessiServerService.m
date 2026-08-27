@@ -25,6 +25,28 @@ static NSString *const JessiServerRunningKey = @"jessi.server.running";
 static NSString *const JessiServerRunningChanged = @"JessiServerRunningChanged";
 static BOOL g_serverRunning = NO;
 
+static BOOL jessi_mc_version_at_least(NSString *version, NSString *threshold) {
+    NSArray<NSString *> *a = [version componentsSeparatedByString:@"."];
+    NSArray<NSString *> *b = [threshold componentsSeparatedByString:@"."];
+    NSUInteger n = MAX(a.count, b.count);
+    for (NSUInteger i = 0; i < n; i++) {
+        int va = (i < a.count) ? [a[i] intValue] : 0;
+        int vb = (i < b.count) ? [b[i] intValue] : 0;
+        if (va != vb) return va >= vb;
+    }
+    return YES;
+}
+
+static NSString *jessi_recommended_java_version(NSString *mcVersion) {
+    if (jessi_mc_version_at_least(mcVersion, @"26.0"))  return @"25";
+    if (jessi_mc_version_at_least(mcVersion, @"1.20.5")) return @"21";
+    if (jessi_mc_version_at_least(mcVersion, @"1.17"))   return @"17";
+    // MC < 1.17 requires Java 8, but iOS 26+ doesn't support it — use 17 instead
+    NSOperatingSystemVersion osv = [NSProcessInfo processInfo].operatingSystemVersion;
+    if (osv.majorVersion >= 26) return @"17";
+    return @"8";
+}
+
 static NSString *jessi_server_pid_file_path(NSString *dir) {
     return [dir stringByAppendingPathComponent:@".jessi_server_pid"];
 }
@@ -440,6 +462,10 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
 }
 
 - (void)startServerNamed:(NSString *)serverName {
+    [self startServerNamed:serverName withJavaVersion:nil];
+}
+
+- (void)startServerNamed:(NSString *)serverName withJavaVersion:(nullable NSString *)javaVersionOverride {
     if (self.isRunning) {
         [self emitConsole:@"Server already running.\n"]; 
         return;
@@ -486,7 +512,27 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
     [self startTailingLatestLogInDir:dir];
 
     JessiSettings *settings = [JessiSettings shared];
-    NSString *javaVersion = settings.javaVersion ?: @"8";
+    NSString *javaVersion = javaVersionOverride ?: settings.javaVersion ?: @"8";
+
+    // Auto-select compatible Java version based on MC version requirements (unless overriding)
+    if (!javaVersionOverride) {
+        NSString *configPath = [dir stringByAppendingPathComponent:@"jessiserverconfig.json"];
+        if ([[NSFileManager defaultManager] fileExistsAtPath:configPath]) {
+            @try {
+                NSData *data = [NSData dataWithContentsOfFile:configPath];
+                if (data) {
+                    NSDictionary *config = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+                    NSString *mcVersion = config[@"minecraftVersion"];
+                    if (mcVersion.length) {
+                        // Always use the recommended Java version for the MC version
+                        javaVersion = jessi_recommended_java_version(mcVersion);
+                    }
+                }
+            } @catch (id ex) {
+                // Ignore JSON parsing errors
+            }
+        }
+    }
 
 #if !(TARGET_OS_OSX && !TARGET_OS_MACCATALYST)
     if ([JessiSettings shared].runInBackground) {

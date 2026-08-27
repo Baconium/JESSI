@@ -751,7 +751,7 @@ final class SettingsModel: ObservableObject {
         }
     }
 
-    private func installOneRuntime(version: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    func installOneRuntime(version: String, completion: @escaping (Result<Void, Error>) -> Void) {
         if isIOS26 && version == "8" {
             completion(.failure(NSError(domain: "JESSI", code: 26, userInfo: [NSLocalizedDescriptionKey: "Java 8 is not supported on iOS 26+"])))
             return
