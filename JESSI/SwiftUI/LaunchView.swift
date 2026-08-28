@@ -164,7 +164,6 @@ final class LaunchModel: NSObject, ObservableObject {
                 activeAlert = .jvmInstallOffer(version: effectiveJava)
                 return
             }
-            // Warn if the user's selected JVM differs from what this server requires
             let selectedJava = JessiSettings.shared().javaVersion
             if selectedJava != effectiveJava {
                 activeAlert = .jvmMismatch(selected: selectedJava, required: effectiveJava)
@@ -697,13 +696,18 @@ struct LaunchView: View {
                     .frame(height: 250)
                     .padding(.horizontal, 16)
 
-                HStack(spacing: 0) {
-                     DoneToolbarTextField(
+                HStack(alignment: .bottom, spacing: 0) {
+                    DoneToolbarTextField(
                         text: $model.commandText,
                         placeholder: "Enter command",
-                        keyboardType: .default,
                         textAlignment: .left,
-                        font: UIFont.systemFont(ofSize: 15)
+                        font: UIFont.systemFont(ofSize: 15),
+                        onSubmit: {
+                            if model.isRunning {
+                                model.sendCommand()
+                            }
+                        },
+                        returnKeyType: .send
                     )
                     .frame(maxWidth: .infinity)
                     .padding(.leading, 12)

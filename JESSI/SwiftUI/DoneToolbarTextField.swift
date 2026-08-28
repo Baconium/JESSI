@@ -10,6 +10,9 @@ struct DoneToolbarTextField: UIViewRepresentable {
     var textAlignment: NSTextAlignment = .right
     var font: UIFont = .systemFont(ofSize: 16)
     var onEndEditing: (() -> Void)? = nil
+    // When set, Return triggers this (keyboard stays up) instead of dismissing.
+    var onSubmit: (() -> Void)? = nil
+    var returnKeyType: UIReturnKeyType = .done
 
     final class Coordinator: NSObject, UITextFieldDelegate {
         var parent: DoneToolbarTextField
@@ -27,6 +30,12 @@ struct DoneToolbarTextField: UIViewRepresentable {
         }
 
         func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            if let onSubmit = parent.onSubmit {
+                DispatchQueue.main.async {
+                    onSubmit()
+                }
+                return true
+            }
             textField.resignFirstResponder()
             return true
         }
@@ -52,7 +61,7 @@ struct DoneToolbarTextField: UIViewRepresentable {
         tf.autocorrectionType = .no
         tf.placeholder = placeholder
         tf.textAlignment = textAlignment
-        tf.returnKeyType = .done
+        tf.returnKeyType = returnKeyType
         tf.setContentHuggingPriority(.defaultLow, for: .horizontal)
         tf.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         tf.delegate = context.coordinator
@@ -84,6 +93,9 @@ struct DoneToolbarTextField: UIViewRepresentable {
         }
         if uiView.font != font {
             uiView.font = font
+        }
+        if uiView.returnKeyType != returnKeyType {
+            uiView.returnKeyType = returnKeyType
         }
     }
 }
