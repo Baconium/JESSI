@@ -921,7 +921,7 @@ struct CreateServerView: View {
 
         switch software {
         case .paper:
-            guard let url = URL(string: "https://api.papermc.io/v2/projects/paper") else {
+            guard let url = URL(string: "https://fill.papermc.io/v3/projects/paper") else {
                 finishOnMain([], "Invalid Paper version URL")
                 return
             }
@@ -931,12 +931,20 @@ struct CreateServerView: View {
                     finishOnMain([], "Failed to load Paper versions: \(err.localizedDescription)")
                 case .success(let json):
                     guard let dict = json as? [String: Any],
-                          let versions = dict["versions"] as? [String]
+                          let versionMap = dict["versions"] as? [String: [String]]
                     else {
                         finishOnMain([], "Failed to parse Paper version list")
                         return
                     }
-                    finishOnMain(Array(versions.reversed()), nil)
+                    let all = versionMap.values.flatMap { $0 }
+                    let stable = Set(all.filter { $0.range(of: "-") == nil })
+                    let sorted = all.sorted { a, b in
+                        let sa = stable.contains(a)
+                        let sb = stable.contains(b)
+                        if sa != sb { return sa && !sb }
+                        return self.isVersionHigher(a, than: b)
+                    }
+                    finishOnMain(sorted, nil)
                 }
             }
             return
@@ -1315,7 +1323,9 @@ struct CreateServerView: View {
     }
 
     private func downloadPaperServerJar(mcVersion: String, to serverDir: URL, completion: @escaping (Result<Void, Error>) -> Void) {
-        guard let buildsURL = URL(string: "https://api.papermc.io/v2/projects/paper/versions/\(mcVersion)/builds") else {
+        // v3 fill API. Each build entry carries a ready-to-use download
+        // URL under downloads["server:default"]["url"].
+        guard let buildsURL = URL(string: "https://fill.papermc.io/v3/projects/paper/versions/\(mcVersion)/builds") else {
             completion(.failure(InstallerError.message("Invalid Paper builds URL")))
             return
         }
@@ -1325,35 +1335,20 @@ struct CreateServerView: View {
             case .failure(let err):
                 completion(.failure(err))
             case .success(let json):
-                guard let dict = json as? [String: Any],
-                      let builds = dict["builds"] as? [[String: Any]],
-                      !builds.isEmpty
-                else {
+                guard let builds = json as? [[String: Any]], !builds.isEmpty else {
                     completion(.failure(InstallerError.message("No Paper builds found for \(mcVersion)")))
                     return
                 }
 
                 let chosen = builds.max { a, b in
-                    (a["build"] as? Int ?? 0) < (b["build"] as? Int ?? 0)
+                    (a["id"] as? Int ?? 0) < (b["id"] as? Int ?? 0)
                 } ?? builds.last!
 
-                guard let buildNumber = chosen["build"] as? Int else {
-                    completion(.failure(InstallerError.message("Failed to parse Paper build number")))
-                    return
-                }
-
-                var downloadName: String? = nil
-                if let downloads = chosen["downloads"] as? [String: Any],
-                   let app = downloads["application"] as? [String: Any],
-                   let name = app["name"] as? String {
-                    downloadName = name
-                }
-
-                let name = downloadName ?? "paper-\(mcVersion)-\(buildNumber).jar"
-                let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
-
-                guard let jarURL = URL(string: "https://api.papermc.io/v2/projects/paper/versions/\(mcVersion)/builds/\(buildNumber)/downloads/\(encodedName)") else {
-                    completion(.failure(InstallerError.message("Invalid Paper download URL")))
+                guard let downloads = chosen["downloads"] as? [String: Any],
+                      let server = downloads["server:default"] as? [String: Any],
+                      let rawURL = server["url"] as? String,
+                      let jarURL = URL(string: rawURL) else {
+                    completion(.failure(InstallerError.message("Failed to parse Paper download URL")))
                     return
                 }
 

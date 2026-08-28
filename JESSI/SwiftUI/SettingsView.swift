@@ -320,7 +320,7 @@ final class SettingsModel: ObservableObject {
         if isMacCatalyst {
             return ["8", "17", "21", "25"]
         }
-        return ["8", "17", "21"]
+        return ["8", "17", "21", "25"]
     }
 
     init() {
