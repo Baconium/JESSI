@@ -153,71 +153,107 @@ struct ModrinthVersion: Decodable {
     let game_versions: [String]
     let loaders: [String]
     let files: [ModrinthFile]
+    let dependencies: [ModrinthDependency]?
+}
+
+struct ModrinthDependency: Decodable {
+    let project_id: String
+    let file_id: String?
+    let version: String?
+    let dependency_type: String
+}
+
+struct BaconiumDep: Decodable {
+    let name: String
+    let slug: String
+    let modid: Int
+    let relation: String
+    let required: Bool
+}
+
+enum DepTarget {
+    case modrinth(projectID: String, fileID: String?)
+    case curseForge(modid: Int, name: String)
+
+    var dedupKey: String {
+        switch self {
+        case .modrinth(let p, let f):
+            return "modrinth:\(p):\(f ?? "")"
+        case .curseForge(let id, _):
+            return "cf:\(id)"
+        }
+    }
 }
 
 struct ModrinthFile: Decodable {
+    let id: String
     let url: String
     let filename: String
     let primary: Bool
 }
 
-struct CurseForgeSearchResponse: Decodable {
-    let data: [CurseForgeMod]
+struct BaconiumSearchItem: Decodable {
+    let name: String
+    let slug: String
+    let modid: Int
+    let author: String
+    let description: String
+    let downloads: String
+    let dllink: String
+    let logo: String?
 }
 
-struct CurseForgeMod: Decodable {
+struct BaconiumFile: Decodable {
     let id: Int
+    let filename: String
+    let fileurl: String
+    let versions: [String]
+    let loaders: [String]
+}
+
+struct BaconiumJarURLResponse: Decodable {
+    let url: String
+}
+
+struct BaconiumModpack: Decodable {
     let name: String
-    let summary: String
-    let downloadCount: Int
-    let classId: Int?
-    let classInfo: CurseForgeClassInfo?
-    let logo: CurseForgeLogo?
-    let authors: [CurseForgeAuthor]
+    let version: String?
+    let author: String?
+    let minecraft: String?
+    let modloaders: [BaconiumModLoader]?
+    let overrides: String?
+    let zipfile: String?
+    let zipfileid: Int
+    let filecount: Int?
+    let mods: [BaconiumModpackMod]
+}
+
+struct BaconiumModLoader: Decodable {
+    let id: String
+    let primary: Bool?
+}
+
+struct BaconiumModpackMod: Decodable {
+    let projectID: Int
+    let fileID: Int
+    let required: Bool?
+    let name: String?
+    let slug: String?
+    let filename: String?
+    let downloadUrl: String?
 
     enum CodingKeys: String, CodingKey {
-        case id
+        case projectID = "projectID"
+        case fileID = "fileID"
+        case required
         case name
-        case summary
-        case downloadCount
-        case classId
-        case classInfo = "class"
-        case logo
-        case authors
+        case slug
+        case filename
+        case downloadUrl = "downloadUrl"
     }
 }
 
-struct CurseForgeClassInfo: Decodable {
-    let id: Int
-}
-
-struct CurseForgeLogo: Decodable {
-    let url: String?
-}
-
-struct CurseForgeAuthor: Decodable {
-    let name: String
-}
-
-struct CurseForgeFilesResponse: Decodable {
-    let data: [CurseForgeFile]
-}
-
-struct CurseForgeFile: Decodable {
-    let id: Int
-    let fileName: String
-    let downloadURL: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case fileName
-        case downloadURL = "downloadUrl"
-    }
-}
-
-struct CurseForgeDownloadURLResponse: Decodable {
-    let data: String
-}
+let baconiumURL = "https://baconium.dev/curseclient/api.php"
 
 struct InstalledModRecord: Codable {
     let filename: String
@@ -234,15 +270,6 @@ private struct MrpackFile: Decodable {
     let downloads: [String]
 }
 
-private struct CurseForgeModpackManifest: Decodable {
-    let files: [CurseForgeModpackManifestFile]
-}
-
-private struct CurseForgeModpackManifestFile: Decodable {
-    let projectID: Int
-    let fileID: Int
-}
-
 @MainActor
 final class ModsVM: ObservableObject {
     @Published var query: String = ""
@@ -257,11 +284,11 @@ final class ModsVM: ObservableObject {
     @Published var provider: ModProvider = .modrinth
     @Published var contentType: ContentType = .mod
     
-    private let modrinthBaseURL = "https://api.modrinth.com/v2/search"
-    private let curseForgeBaseURL = "https://api.curseforge.com/v1"
+    private let modrinthURL = "https://api.modrinth.com/v2/search"
     private var offset = 0
     private let limit = 20
     private var canload = true
+    private var cfpage = 0
     
     private var servername: String?
     private var serversoft: String?
@@ -320,24 +347,16 @@ final class ModsVM: ObservableObject {
         }
     }
 
-    var curseForgeAPIKey: String? {
-        let saved = JessiSettings.shared().curseForgeAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !saved.isEmpty {
-            return saved
-        }
-        return Bundle.main.object(forInfoDictionaryKey: "CURSEFORGE_API_KEY") as? String
-    }
-
-    func curseForgeModLoaderType() -> Int? {
+    func curseForgeModLoaderName() -> String? {
         switch parsedserversoft() {
         case .forge:
-            return 1
+            return "Forge"
         case .fabric:
-            return 4
+            return "Fabric"
         case .quilt:
-            return 5
+            return "Quilt"
         case .neoforge:
-            return 6
+            return "NeoForge"
         default:
             return nil
         }
@@ -376,6 +395,7 @@ final class ModsVM: ObservableObject {
     
     func reset() async {
         offset = 0
+        cfpage = 0
         canload = true
         mods = []
         await search(initial: true)
@@ -406,8 +426,10 @@ final class ModsVM: ObservableObject {
             modlogger.log("received \(newItems.count) mods from \(provider.rawValue)")
 
             if newItems.count < limit { canload = false }
-            mods.append(contentsOf: newItems)
-            offset += newItems.count
+            let knownIDs = Set(mods.map { $0.id })
+            let newItemsDeduped = newItems.filter { !knownIDs.contains($0.id) }
+            mods.append(contentsOf: newItemsDeduped)
+            offset += newItemsDeduped.count
             modlogger.divider()
         } catch {
             errmsg = error.localizedDescription
@@ -415,7 +437,7 @@ final class ModsVM: ObservableObject {
     }
 
     private func searchModrinth() async throws -> [ModSearchItem] {
-        var components = URLComponents(string: modrinthBaseURL)!
+        var components = URLComponents(string: modrinthURL)!
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         var queryitems: [URLQueryItem] = [
@@ -475,54 +497,47 @@ final class ModsVM: ObservableObject {
     }
 
     private func searchCurseForge() async throws -> [ModSearchItem] {
-        guard let key = curseForgeAPIKey, !key.isEmpty else {
-            throw NSError(
-                domain: "Missing CurseForge API key in Settings or Info.plist",
-                code: 0
-            )
-        }
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let searchterm = trimmed.isEmpty ? "minecraft" : trimmed
+        let page = cfpage + 1
 
-        var components = URLComponents(string: "\(curseForgeBaseURL)/mods/search")!
-        var items: [URLQueryItem] = [
-            URLQueryItem(name: "gameId", value: "432"),
-            URLQueryItem(name: "classId", value: contentType.curseforgeclassid),
-            URLQueryItem(name: "pageSize", value: "\(limit)"),
-            URLQueryItem(name: "index", value: "\(offset)")
+        var components = URLComponents(string: baconiumURL)!
+        var queryItems = [
+            URLQueryItem(name: "q", value: "search"),
+            URLQueryItem(name: "query", value: searchterm),
+            URLQueryItem(name: "page", value: "\(page)"),
+            URLQueryItem(name: "class", value: contentType.curseforgeclassid)
         ]
 
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmed.isEmpty {
-            items.append(URLQueryItem(name: "searchFilter", value: trimmed))
+        if let version = serverver?.trimmingCharacters(in: .whitespacesAndNewlines), !version.isEmpty {
+            queryItems.append(URLQueryItem(name: "gameversion", value: version))
+        }
+        if contentType == .mod, let loader = curseForgeModLoaderName() {
+            queryItems.append(URLQueryItem(name: "loader", value: loader.lowercased()))
         }
 
-        if let version = serverver, !version.isEmpty {
-            items.append(URLQueryItem(name: "gameVersion", value: version))
-        }
-
-        if contentType == .mod, let loaderType = curseForgeModLoaderType() {
-            items.append(URLQueryItem(name: "modLoaderType", value: "\(loaderType)"))
-        }
-
-        components.queryItems = items
+        components.queryItems = queryItems
         let url = components.url!
         modlogger.log("request: \(url.absoluteString)")
 
         var request = URLRequest(url: url)
-        request.setValue(key, forHTTPHeaderField: "x-api-key")
+        request.setValue("JESSI :3", forHTTPHeaderField: "User-Agent")
         let (data, _) = try await URLSession.shared.data(for: request)
-        let decoded = try JSONDecoder().decode(CurseForgeSearchResponse.self, from: data)
+        let decoded = try JSONDecoder().decode([BaconiumSearchItem].self, from: data)
+        cfpage = page
 
-        return decoded.data.map { mod in
-            ModSearchItem(
-                id: "\(ModProvider.curseForge.rawValue):\(mod.id)",
+        return decoded.map { item in
+            let icon = item.logo?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return ModSearchItem(
+                id: "\(ModProvider.curseForge.rawValue):\(item.modid)",
                 provider: .curseForge,
-                providerID: "\(mod.id)",
-                contentType: ContentType.fromcurseforgeclassid(mod.classId ?? mod.classInfo?.id),
-                title: mod.name,
-                description: mod.summary,
-                downloads: Int(mod.downloadCount),
-                iconURL: mod.logo?.url,
-                author: mod.authors.first?.name,
+                providerID: "\(item.modid)",
+                contentType: contentType,
+                title: item.name,
+                description: item.description,
+                downloads: Int(item.downloads) ?? 0,
+                iconURL: (icon?.isEmpty == false) ? icon : nil,
+                author: item.author,
                 follows: 0
             )
         }
@@ -858,70 +873,110 @@ private struct Mod: View {
         if mod.contentType == .datapack, file.filename.lowercased().hasSuffix(".zip") {
             return try installdatapackzip(data: moddata, filename: file.filename)
         }
+        if mod.contentType == .mod {
+            var visited: Set<String> = []
+            await installDependencies(visited: &visited)
+        }
         return try writeModFile(data: moddata, filename: file.filename)
     }
 
     private func curseforgeinstall() async throws -> InstalledModRecord {
-        guard let key = model.curseForgeAPIKey, !key.isEmpty else {
-            throw NSError(domain: "Missing CurseForge API key in Settings or Info.plist", code: 0)
-        }
-
         guard let modid = Int(mod.providerID) else {
             throw NSError(domain: "invalid CurseForge mod id", code: 0)
         }
 
-        var filecomponents = URLComponents(string: "https://api.curseforge.com/v1/mods/\(modid)/files")!
-        var queryitems = [
-            URLQueryItem(name: "pageSize", value: "50"),
-            URLQueryItem(name: "index", value: "0")
-        ]
+        let mcversion = model.serverver?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let loadername = model.contentType == .mod ? model.curseForgeModLoaderName()?.lowercased() : nil
 
-        if let mcversion = model.serverver?.trimmingCharacters(in: .whitespacesAndNewlines), !mcversion.isEmpty {
-            queryitems.append(URLQueryItem(name: "gameVersion", value: mcversion))
-        }
-        if mod.contentType == .mod, let loader = model.curseForgeModLoaderType() {
-            queryitems.append(URLQueryItem(name: "modLoaderType", value: "\(loader)"))
-        }
-        filecomponents.queryItems = queryitems
-
-        var filerequest = URLRequest(url: filecomponents.url!)
-        filerequest.setValue(key, forHTTPHeaderField: "x-api-key")
-        let (filedata, _) = try await URLSession.shared.data(for: filerequest)
-        let files = try JSONDecoder().decode(CurseForgeFilesResponse.self, from: filedata).data
-
-        guard !files.isEmpty else {
-            throw NSError(domain: "no compatible CurseForge file found", code: 0)
+        if mod.contentType == .modpack {
+            let manifest = try await baconiummodpack(modid: modid)
+            let zippage = "https://www.curseforge.com/minecraft/mc-mods/\(modid)/files/\(manifest.zipfileid)"
+            guard let zipurl = try await resolveBaconiumFileURL(fileurl: zippage) else {
+                throw NSError(domain: "could not resolve modpack download URL", code: 0)
+            }
+            let zipname = manifest.zipfile ?? "\(modid).zip"
+            let (zipdata, _) = try await URLSession.shared.data(from: zipurl)
+            return try await installBaconiumModpack(manifest: manifest, data: zipdata, filename: zipname)
         }
 
-        let preferred = files.filter { isPreferredCurseForgeFile($0) }
-        let candidateFiles = preferred.isEmpty ? files : preferred
-        var selected: (file: CurseForgeFile, url: URL)? = nil
-        for file in candidateFiles {
-            if let resolved = try await resolveCurseForgeFileURL(modid: modid, file: file, key: key) {
+        let files = try await baconiumfiles(forModID: modid, gameversion: mcversion, loader: loadername)
+
+        let candidates = files.filter { file in
+            isPreferredBaconiumFile(file) &&
+            (mcversion?.isEmpty == true || file.versions.contains(where: { $0.lowercased() == mcversion!.lowercased() })) &&
+            (loadername == nil || file.loaders.contains(where: { $0.lowercased() == loadername! }))
+        }
+
+        var selected: (file: BaconiumFile, url: URL)? = nil
+        for file in candidates {
+            if let resolved = try await resolveBaconiumFileURL(fileurl: file.fileurl) {
                 selected = (file, resolved)
                 break
             }
         }
 
         guard let selected else {
-            throw NSError(domain: "invalid CurseForge file URL", code: 0)
+            throw NSError(domain: "no CurseForge file found for this version and loader", code: 0)
         }
 
         let (moddata, _) = try await URLSession.shared.data(from: selected.url)
-        if mod.contentType == .modpack, selected.file.fileName.lowercased().hasSuffix(".mrpack") {
-            return try await installModpackFromMrpack(data: moddata, filename: selected.file.fileName)
+        if mod.contentType == .modpack, selected.file.filename.lowercased().hasSuffix(".mrpack") {
+            return try await installModpackFromMrpack(data: moddata, filename: selected.file.filename)
         }
-        if mod.contentType == .modpack, selected.file.fileName.lowercased().hasSuffix(".zip") {
-            return try await installcurseforgemodpackzip(data: moddata, filename: selected.file.fileName, key: key)
+        if mod.contentType == .datapack, selected.file.filename.lowercased().hasSuffix(".zip") {
+            return try await installdatapackzip(data: moddata, filename: selected.file.filename)
         }
-        if mod.contentType == .datapack, selected.file.fileName.lowercased().hasSuffix(".zip") {
-            return try installdatapackzip(data: moddata, filename: selected.file.fileName)
+        if mod.contentType == .mod {
+            var visited: Set<String> = []
+            await installDependencies(visited: &visited)
         }
-        return try writeModFile(data: moddata, filename: selected.file.fileName)
+        return try writeModFile(data: moddata, filename: selected.file.filename)
     }
 
-    private func isPreferredCurseForgeFile(_ file: CurseForgeFile) -> Bool {
-        let name = file.fileName.lowercased()
+    private func baconiumfiles(forModID modid: Int, gameversion: String? = nil, loader: String? = nil) async throws -> [BaconiumFile] {
+        var components = URLComponents(string: baconiumURL)!
+        var items = [
+            URLQueryItem(name: "q", value: "files"),
+            URLQueryItem(name: "url", value: "\(modid)")
+        ]
+        if let gameversion, !gameversion.isEmpty {
+            items.append(URLQueryItem(name: "gameversion", value: gameversion))
+        }
+        if let loader, !loader.isEmpty {
+            items.append(URLQueryItem(name: "loader", value: loader))
+        }
+        components.queryItems = items
+        let url = components.url!
+        modlogger.log("request: \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.setValue("JESSI :3", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let files = try JSONDecoder().decode([BaconiumFile].self, from: data)
+
+        guard !files.isEmpty else {
+            throw NSError(domain: "no CurseForge files found for this mod", code: 0)
+        }
+        return files
+    }
+
+    private func baconiummodpack(modid: Int) async throws -> BaconiumModpack {
+        var components = URLComponents(string: baconiumURL)!
+        components.queryItems = [
+            URLQueryItem(name: "q", value: "modpack"),
+            URLQueryItem(name: "url", value: "\(modid)")
+        ]
+        let url = components.url!
+        modlogger.log("request: \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.setValue("JESSI :3", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await URLSession.shared.data(for: request)
+        return try JSONDecoder().decode(BaconiumModpack.self, from: data)
+    }
+
+    private func isPreferredBaconiumFile(_ file: BaconiumFile) -> Bool {
+        let name = file.filename.lowercased()
         switch mod.contentType {
         case .mod:
             return name.hasSuffix(".jar")
@@ -932,58 +987,251 @@ private struct Mod: View {
         }
     }
 
-    private func resolveCurseForgeFileURL(modid: Int, file: CurseForgeFile, key: String) async throws -> URL? {
-        if let inline = file.downloadURL?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !inline.isEmpty,
-           let url = URL(string: inline) {
-            return url
-        }
-
-        let downloadurl = URL(string: "https://api.curseforge.com/v1/mods/\(modid)/files/\(file.id)/download-url")!
-        var downloadrequest = URLRequest(url: downloadurl)
-        downloadrequest.setValue(key, forHTTPHeaderField: "x-api-key")
-        let (downloaddata, _) = try await URLSession.shared.data(for: downloadrequest)
-
-        guard let parsed = parseCurseForgeDownloadPath(from: downloaddata),
-              let url = URL(string: parsed) else {
-            return fallbackCurseForgeFileURL(fileID: file.id, fileName: file.fileName)
-        }
-        return url
-    }
-
-    private func fallbackCurseForgeFileURL(fileID: Int, fileName: String) -> URL? {
-        let bucket = fileID / 1000
-        let tail = fileID % 1000
-        let encodedName = fileName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? fileName
-
-        let candidates = [
-            "https://mediafilez.forgecdn.net/files/\(bucket)/\(tail)/\(encodedName)",
-            "https://edge.forgecdn.net/files/\(bucket)/\(tail)/\(encodedName)"
+    private func resolveBaconiumFileURL(fileurl: String) async throws -> URL? {
+        var components = URLComponents(string: baconiumURL)!
+        components.queryItems = [
+            URLQueryItem(name: "q", value: "jarurl"),
+            URLQueryItem(name: "url", value: fileurl)
         ]
+        let url = components.url!
+        modlogger.log("request: \(url.absoluteString)")
 
-        for raw in candidates {
-            if let url = URL(string: raw) {
-                return url
-            }
+        var request = URLRequest(url: url)
+        request.setValue("JESSI :3", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await URLSession.shared.data(for: request)
+
+        guard let decoded = try? JSONDecoder().decode(BaconiumJarURLResponse.self, from: data),
+              !decoded.url.isEmpty,
+              let direct = URL(string: decoded.url) else {
+            return nil
         }
-        return nil
+        return direct
     }
 
-    private func parseCurseForgeDownloadPath(from data: Data) -> String? {
-        if let decoded = try? JSONDecoder().decode(CurseForgeDownloadURLResponse.self, from: data) {
-            let value = decoded.data.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !value.isEmpty { return value }
-        }
+    private func baconiumdeps(modid: Int) async throws -> [BaconiumDep] {
+        var components = URLComponents(string: baconiumURL)!
+        components.queryItems = [
+            URLQueryItem(name: "q", value: "deps"),
+            URLQueryItem(name: "url", value: "\(modid)")
+        ]
+        let url = components.url!
+        modlogger.log("request: \(url.absoluteString)")
 
-        if let raw = String(data: data, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) {
-            let unquoted = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-            if !unquoted.isEmpty, unquoted.hasPrefix("http") {
-                return unquoted
+        var request = URLRequest(url: url)
+        request.setValue("JESSI :3", forHTTPHeaderField: "User-Agent")
+        let (data, _) = try await URLSession.shared.data(for: request)
+        return try JSONDecoder().decode([BaconiumDep].self, from: data)
+    }
+
+    private func pickModrinthVersion(_ projectID: String) async throws -> ModrinthVersion {
+        let versionsurl = URL(string: "https://api.modrinth.com/v2/project/\(projectID)/version")!
+        let (data, _) = try await URLSession.shared.data(from: versionsurl)
+        let versions = try JSONDecoder().decode([ModrinthVersion].self, from: data)
+
+        let loader = modloader()
+        let mcversion = model.serverver?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let first = versions.first { version in
+            let matchesVersion = mcversion?.isEmpty != false || version.game_versions.contains(mcversion!)
+            let matchesLoader = loader == nil || version.loaders.contains(loader!)
+            return matchesVersion && matchesLoader
+        }
+        if let first {
+            return first
+        }
+        if let any = versions.first {
+            return any
+        }
+        throw NSError(domain: "no compatible modrinth version found", code: 0)
+    }
+
+    private func modsDirURL() -> URL? {
+        let fm = FileManager.default
+        guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return docs.appendingPathComponent("servers")
+            .appendingPathComponent(servername)
+            .appendingPathComponent("mods")
+    }
+
+    private func installDependencies(visited: inout Set<String>) async {
+        guard mod.contentType == .mod else { return }
+        let mainKey = mod.provider == .curseForge
+            ? "cf:\(mod.providerID)"
+            : "modrinth:\(mod.providerID):"
+        visited.insert(mainKey)
+
+        let mainTargets = await depTargets(for: mod.provider, providerID: mod.providerID)
+        guard !mainTargets.isEmpty else { return }
+        modlogger.enclosedlog("installing \(mainTargets.count) required dependency(ies) for \(mod.title)")
+
+        for target in mainTargets {
+            let key = target.dedupKey
+            if visited.contains(key) { continue }
+            visited.insert(key)
+            await installDepTarget(target, visited: &visited)
+        }
+    }
+
+    private func depTargets(for provider: ModProvider, providerID: String) async -> [DepTarget] {
+        switch provider {
+        case .modrinth:
+            guard let version = try? await pickModrinthVersion(providerID) else { return [] }
+            return (version.dependencies ?? [])
+                .filter { isRequiredModrinthType($0.dependency_type) }
+                .map { DepTarget.modrinth(projectID: $0.project_id, fileID: $0.file_id) }
+        case .curseForge:
+            guard let modid = Int(providerID) else { return [] }
+            do {
+                let deps = try await baconiumdeps(modid: modid)
+                return deps
+                    .filter { isRequiredBaconium($0) }
+                    .map { DepTarget.curseForge(modid: $0.modid, name: $0.name) }
+            } catch {
+                modlogger.enclosedlog("warning: could not fetch dependency list for CurseForge mod \(modid): \(error.localizedDescription)")
+                modlogger.flushdivider()
+                return []
             }
         }
+    }
 
-        return nil
+    private func isRequiredModrinthType(_ t: String) -> Bool {
+        let s = t.lowercased()
+        return s == "required" || s == "server-side" || s == "common"
+    }
+
+    private func isRequiredBaconium(_ d: BaconiumDep) -> Bool {
+        return d.required || d.relation.lowercased() == "required"
+    }
+
+    private func installDepTarget(_ target: DepTarget, visited: inout Set<String>) async {
+        switch target {
+        case .modrinth(let projectID, let fileID):
+            await installModrinthDep(projectID: projectID, fileID: fileID, visited: &visited)
+        case .curseForge(let modid, let name):
+            await installCurseForgeDep(modid: modid, name: name, visited: &visited)
+        }
+    }
+
+    private func installModrinthDep(projectID: String, fileID: String?, visited: inout Set<String>) async {
+        guard let version = try? await pickModrinthVersion(projectID) else {
+            modlogger.enclosedlog("warning: skipped modrinth dep \(projectID) (no compatible version)")
+            modlogger.flushdivider()
+            return
+        }
+
+        var data: Data
+        var filename: String
+        if let fileID,
+           let file = version.files.first(where: { $0.id == fileID }),
+           let url = URL(string: file.url) {
+            do {
+                (data, _) = try await URLSession.shared.data(from: url)
+                filename = file.filename
+            } catch {
+                modlogger.enclosedlog("warning: skipped modrinth dep \(projectID) file \(fileID) (download failed)")
+                modlogger.flushdivider()
+                return
+            }
+        } else {
+            guard let file = version.files.first(where: { $0.primary }) ?? version.files.first,
+                  let url = URL(string: file.url) else {
+                modlogger.enclosedlog("warning: skipped modrinth dep \(projectID) (no downloadable file)")
+                modlogger.flushdivider()
+                return
+            }
+            do {
+                (data, _) = try await URLSession.shared.data(from: url)
+            } catch {
+                modlogger.enclosedlog("warning: skipped modrinth dep \(projectID) (download failed)")
+                modlogger.flushdivider()
+                return
+            }
+            filename = file.filename
+        }
+
+        do {
+            try writeDepFile(data: data, filename: filename)
+        } catch {
+            modlogger.enclosedlog("warning: failed to write modrinth dep \(projectID): \(error.localizedDescription)")
+            modlogger.flushdivider()
+            return
+        }
+
+        let subTargets = (version.dependencies ?? [])
+            .filter { isRequiredModrinthType($0.dependency_type) }
+            .map { DepTarget.modrinth(projectID: $0.project_id, fileID: $0.file_id) }
+        for sub in subTargets {
+            let key = sub.dedupKey
+            if visited.contains(key) { continue }
+            visited.insert(key)
+            await installDepTarget(sub, visited: &visited)
+        }
+    }
+
+    private func installCurseForgeDep(modid: Int, name: String, visited: inout Set<String>) async {
+        let mcversion = model.serverver?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let loadername = model.curseForgeModLoaderName()?.lowercased()
+
+        guard let files = try? await baconiumfiles(forModID: modid) else {
+            modlogger.enclosedlog("warning: skipped dep \(name) (no CurseForge files found)")
+            modlogger.flushdivider()
+            return
+        }
+
+        let candidates = files.filter { file in
+            file.filename.lowercased().hasSuffix(".jar") &&
+            (mcversion?.isEmpty == true || file.versions.contains(where: { $0.lowercased() == mcversion!.lowercased() })) &&
+            (loadername == nil || file.loaders.contains(where: { $0.lowercased() == loadername! }))
+        }
+
+        var picked: (file: BaconiumFile, url: URL)? = nil
+        for file in candidates {
+            if let resolved = try? await resolveBaconiumFileURL(fileurl: file.fileurl) {
+                picked = (file, resolved)
+                break
+            }
+        }
+        if picked == nil, let first = candidates.first, let resolved = try? await resolveBaconiumFileURL(fileurl: first.fileurl) {
+            picked = (first, resolved)
+        }
+
+        guard let picked else {
+            modlogger.enclosedlog("warning: skipped dep \(name) (no compatible file)")
+            modlogger.flushdivider()
+            return
+        }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: picked.url)
+            try writeDepFile(data: data, filename: picked.file.filename)
+        } catch {
+            modlogger.enclosedlog("warning: failed to download dep \(name): \(error.localizedDescription)")
+            modlogger.flushdivider()
+            return
+        }
+
+        guard let subDeps = try? await baconiumdeps(modid: modid) else { return }
+        for sub in subDeps.filter(isRequiredBaconium) {
+            let key = "cf:\(sub.modid)"
+            if visited.contains(key) { continue }
+            visited.insert(key)
+            await installCurseForgeDep(modid: sub.modid, name: sub.name, visited: &visited)
+        }
+    }
+
+    private func writeDepFile(data: Data, filename: String) throws {
+        let dir = modsDirURL()
+        guard let dir else {
+            throw NSError(domain: "documents directory not found", code: 0)
+        }
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        let path = dir.appendingPathComponent(filename)
+        try data.write(to: path)
+        modlogger.enclosedlog("installed dependency \(filename) to \(path.path)")
+        modlogger.flushdivider()
     }
 
     private func installModpackFromMrpack(data: Data, filename: String) async throws -> InstalledModRecord {
@@ -1056,7 +1304,7 @@ private struct Mod: View {
         return InstalledModRecord(filename: manifestName, contentType: .modpack, managedPaths: managedPaths)
     }
 
-    private func installcurseforgemodpackzip(data: Data, filename: String, key: String) async throws -> InstalledModRecord {
+    private func installBaconiumModpack(manifest: BaconiumModpack, data: Data, filename: String) async throws -> InstalledModRecord {
         let fm = FileManager.default
         guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else {
             throw NSError(domain: "documents directory not found", code: 0)
@@ -1077,18 +1325,10 @@ private struct Mod: View {
         try data.write(to: archiveurl, options: [.atomic])
         let archive = try Archive(url: archiveurl, accessMode: .read)
 
-        guard let manifestentry = archive["manifest.json"] else {
-            throw NSError(domain: "invalid curseforge modpack: missing manifest.json", code: 0)
-        }
-
-        let manifestdata = try dataForEntry(manifestentry, in: archive)
-        let manifest = try JSONDecoder().decode(CurseForgeModpackManifest.self, from: manifestdata)
-
-        var managed = Set<String>()
-
+        var managed: Set<String> = []
         for entry in archive {
             if entry.path.hasSuffix("/") { continue }
-            guard let relative = stripMrpackOverridePrefix(entry.path) ?? stripPrefix("overrides", from: entry.path) else { continue }
+            guard let relative = stripMrpackOverridePrefix(entry.path) ?? stripPrefix(manifest.overrides ?? "overrides", from: entry.path) else { continue }
             let normalized = try normalizedRelativePath(relative)
             let destination = serverroot.appendingPathComponent(normalized)
             try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -1102,20 +1342,84 @@ private struct Mod: View {
         let modsdir = serverroot.appendingPathComponent(ContentType.mod.dirname)
         try fm.createDirectory(at: modsdir, withIntermediateDirectories: true)
 
-        var unresolvedFiles: [String] = []
-        for file in manifest.files {
-            guard let fileurl = try await resolveCurseForgeManifestFileURL(projectID: file.projectID, fileID: file.fileID, key: key) else {
-                unresolvedFiles.append("\(file.projectID):\(file.fileID)")
-                continue
-            }
-            let (filedata, _) = try await URLSession.shared.data(from: fileurl)
-            let filename = fileurl.lastPathComponent.isEmpty ? "\(file.fileID).jar" : fileurl.lastPathComponent
-            let destination = modsdir.appendingPathComponent(filename)
-            try filedata.write(to: destination, options: [.atomic])
-            managed.insert("mods/\(filename)")
+        struct ModDownload {
+            let id: String
+            let url: URL
+            let filename: String
         }
 
-        if !manifest.files.isEmpty, unresolvedFiles.count == manifest.files.count {
+        var downloads: [ModDownload] = []
+        var unresolvedCount = 0
+        for modEntry in manifest.mods {
+            guard let downloadUrlString = modEntry.downloadUrl,
+                  let fileurl = URL(string: downloadUrlString) else {
+                unresolvedCount += 1
+                continue
+            }
+            let decodedName = fileurl.lastPathComponent.removingPercentEncoding
+            let name = (decodedName?.isEmpty ?? true)
+                ? "\(modEntry.fileID).jar"
+                : (decodedName ?? "\(modEntry.fileID).jar")
+            downloads.append(ModDownload(
+                id: "\(modEntry.projectID):\(modEntry.fileID)",
+                url: fileurl,
+                filename: name
+            ))
+        }
+
+        final class ModpackDownloadState: @unchecked Sendable {
+            var managed: Set<String>
+            var failures: [String] = []
+            private let lock = NSLock()
+
+            init(overrides: Set<String>) {
+                managed = overrides
+            }
+
+            func addManaged(_ path: String) {
+                lock.lock()
+                defer { lock.unlock() }
+                managed.insert(path)
+            }
+
+            func addFailure(_ id: String) {
+                lock.lock()
+                defer { lock.unlock() }
+                failures.append(id)
+            }
+        }
+        let downloadState = ModpackDownloadState(overrides: managed)
+
+        await withTaskGroup(of: Void.self) { group in
+            var iterator = downloads.makeIterator()
+            let maxConcurrent = 8
+
+            func spawnNext() {
+                guard let entry = iterator.next() else { return }
+                group.addTask {
+                    do {
+                        let (filedata, _) = try await URLSession.shared.data(from: entry.url)
+                        let destination = modsdir.appendingPathComponent(entry.filename)
+                        try filedata.write(to: destination, options: [.atomic])
+                        downloadState.addManaged("mods/\(entry.filename)")
+                    } catch {
+                        downloadState.addFailure(entry.id)
+                    }
+                }
+            }
+
+            for _ in 0..<min(maxConcurrent, downloads.count) {
+                spawnNext()
+            }
+            while await group.next() != nil {
+                spawnNext()
+            }
+        }
+
+        managed = downloadState.managed
+        let totalUnresolved = unresolvedCount + downloadState.failures.count
+
+        if !manifest.mods.isEmpty, totalUnresolved == manifest.mods.count {
             for relativePath in managed {
                 let path = serverroot.appendingPathComponent(relativePath)
                 if fm.fileExists(atPath: path.path) {
@@ -1123,13 +1427,13 @@ private struct Mod: View {
                 }
             }
             throw NSError(
-                domain: "could not resolve any CurseForge modpack files",
+                domain: "could not download any CurseForge modpack mods",
                 code: 0
             )
         }
 
-        if !unresolvedFiles.isEmpty {
-            modlogger.enclosedlog("warning: skipped \(unresolvedFiles.count) unresolved CurseForge modpack files")
+        if totalUnresolved > 0 {
+            modlogger.enclosedlog("warning: skipped \(totalUnresolved) unresolved CurseForge modpack mods")
             modlogger.flushdivider()
         }
 
@@ -1144,19 +1448,6 @@ private struct Mod: View {
         modlogger.enclosedlog("installed modpack \(mod.title) with \(managedpaths.count) files")
         modlogger.flushdivider()
         return InstalledModRecord(filename: markername, contentType: .modpack, managedPaths: managedpaths)
-    }
-
-    private func resolveCurseForgeManifestFileURL(projectID: Int, fileID: Int, key: String) async throws -> URL? {
-        let downloadurl = URL(string: "https://api.curseforge.com/v1/mods/\(projectID)/files/\(fileID)/download-url")!
-        var downloadrequest = URLRequest(url: downloadurl)
-        downloadrequest.setValue(key, forHTTPHeaderField: "x-api-key")
-        let (downloaddata, _) = try await URLSession.shared.data(for: downloadrequest)
-
-        guard let parsed = parseCurseForgeDownloadPath(from: downloaddata),
-              let url = URL(string: parsed) else {
-            return nil
-        }
-        return url
     }
 
     private func stripPrefix(_ prefix: String, from path: String) -> String? {

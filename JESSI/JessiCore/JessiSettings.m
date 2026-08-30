@@ -6,7 +6,6 @@ static NSString *const kJessiFlagNettyNoNative = @"jessi.jvm.flagNettyNoNative";
 static NSString *const kJessiFlagJnaNoSys = @"jessi.jvm.flagJnaNoSys";
 static NSString *const kJessiLaunchArgs = @"jessi.jvm.launchArgs";
 static NSString *const kJessiTXMSupport = @"jessi.txmSupport";
-static NSString *const kJessiCurseForgeAPIKey = @"jessi.mods.curseforgeApiKey";
 static NSString *const kJessiRunInBackground = @"jessi.runInBackground";
 static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm.disableSeparateProcessOnTrollStore";
 
@@ -158,9 +157,6 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
 
     NSString *args = [d stringForKey:kJessiLaunchArgs];
     if (args) self.launchArguments = args; else self.launchArguments = @"";
-
-    NSString *key = [d stringForKey:kJessiCurseForgeAPIKey];
-    if (key) self.curseForgeAPIKey = key; else self.curseForgeAPIKey = @"";
 }
 
 - (void)save {
@@ -174,7 +170,6 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
     [d setBool:self.disableSeparateJVMProcessOnTrollStore forKey:kJessiDisableSeparateJVMProcessOnTrollStore];
     [d setObject:self.launchArguments ?: @"" forKey:kJessiLaunchArgs];
     [d setBool:self.txmSupport forKey:kJessiTXMSupport];
-    [d setObject:self.curseForgeAPIKey ?: @"" forKey:kJessiCurseForgeAPIKey];
 }
 
 @end
