@@ -9,7 +9,7 @@ final class TunnelingModel: ObservableObject {
         let id: String
         let name: String
         let fileName: String?
-        let downloadURL: URL?
+        let downloadURLs: [URL]?
     }
 
     static let services: [ServiceInfo] = [
@@ -17,19 +17,23 @@ final class TunnelingModel: ObservableObject {
             id: "playit",
             name: "Playit",
             fileName: "libplayit_agent.dylib",
-            downloadURL: URL(string: "https://github.com/rooootdev/playit-ios/releases/download/latest/libplayit_agent.dylib")
+            // if baconium dot dev doesnt have the shit for whatever reason, download the shit from github instead (israeli signature missing version)
+            downloadURLs: [
+                URL(string: "https://baconium.dev/jessi/playit/libplayit_agent.dylib"),
+                URL(string: "https://github.com/rooootdev/playit-ios/releases/download/latest/libplayit_agent.dylib")
+            ].compactMap { $0 }
         ),
         ServiceInfo(
             id: "upnp",
             name: "UPnP",
             fileName: nil,
-            downloadURL: nil
+            downloadURLs: nil
         ),
         ServiceInfo(
             id: "none",
             name: "None",
             fileName: nil,
-            downloadURL: nil
+            downloadURLs: nil
         )
     ]
 
@@ -106,8 +110,8 @@ final class TunnelingModel: ObservableObject {
     }
 
     private func installoneservice(id: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        guard let info = info(for: id), let downloadURL = info.downloadURL, let fileName = info.fileName else {
-            completion(.failure(NSError(domain: "JESSI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown service: \(id)"])) )
+        guard let info = info(for: id), let downloadURLs = info.downloadURLs, !downloadURLs.isEmpty, let fileName = info.fileName else {
+            completion(.failure(NSError(domain: "JESSI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown service: \(id)"])))
             return
         }
 
@@ -116,47 +120,102 @@ final class TunnelingModel: ObservableObject {
         let workDir = tmpRoot.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let downloadPath = workDir.appendingPathComponent(fileName)
 
-        let task = URLSession.shared.downloadTask(with: downloadURL) { tempURL, _, error in
-            if let error {
-                completion(.failure(error))
-                return
-            }
-            guard let tempURL else {
-                completion(.failure(NSError(domain: "JESSI", code: 2, userInfo: [NSLocalizedDescriptionKey: "Download failed"])))
-                return
+        var lastError: Error?
+
+        func finalizeInstalledFile() throws {
+            guard machoHasCodeSignature(atPath: downloadPath.path) else {
+                throw NSError(domain: "JESSI", code: 3, userInfo: [NSLocalizedDescriptionKey: "Downloaded \(fileName) has no code signature, so it would not be loadable. It needs to be ad-hoc signed."])
             }
 
-            do {
-                try fm.createDirectory(at: workDir, withIntermediateDirectories: true)
-                defer { try? fm.removeItem(at: workDir) }
+            let finalDir = self.serviceDir(for: id)
+            let staging = self.servicesDir.appendingPathComponent("\(id).staging-\(UUID().uuidString)", isDirectory: true)
+            if fm.fileExists(atPath: staging.path) { try? fm.removeItem(at: staging) }
+            try fm.createDirectory(at: staging, withIntermediateDirectories: true)
 
-                if fm.fileExists(atPath: downloadPath.path) { try? fm.removeItem(at: downloadPath) }
-                try fm.moveItem(at: tempURL, to: downloadPath)
+            let stagedFile = staging.appendingPathComponent(fileName, isDirectory: false)
+            if fm.fileExists(atPath: stagedFile.path) { try? fm.removeItem(at: stagedFile) }
+            try fm.moveItem(at: downloadPath, to: stagedFile)
 
-                let finalDir = self.serviceDir(for: id)
-                let staging = self.servicesDir.appendingPathComponent("\(id).staging-\(UUID().uuidString)", isDirectory: true)
-                if fm.fileExists(atPath: staging.path) { try? fm.removeItem(at: staging) }
-                try fm.createDirectory(at: staging, withIntermediateDirectories: true)
+            if fm.fileExists(atPath: finalDir.path) {
+                let backup = self.servicesDir.appendingPathComponent("\(id).backup-\(UUID().uuidString)", isDirectory: true)
+                try? fm.removeItem(at: backup)
+                try fm.moveItem(at: finalDir, to: backup)
+                try? fm.removeItem(at: backup)
+            }
 
-                let stagedFile = staging.appendingPathComponent(fileName, isDirectory: false)
-                if fm.fileExists(atPath: stagedFile.path) { try? fm.removeItem(at: stagedFile) }
-                try fm.moveItem(at: downloadPath, to: stagedFile)
+            try fm.moveItem(at: staging, to: finalDir)
+        }
 
-                if fm.fileExists(atPath: finalDir.path) {
-                    let backup = self.servicesDir.appendingPathComponent("\(id).backup-\(UUID().uuidString)", isDirectory: true)
-                    try? fm.removeItem(at: backup)
-                    try fm.moveItem(at: finalDir, to: backup)
-                    try? fm.removeItem(at: backup)
+        func attemptDownload(at index: Int) {
+            guard index < downloadURLs.count else {
+                try? fm.removeItem(at: workDir)
+                completion(.failure(lastError ?? NSError(domain: "JESSI", code: 2, userInfo: [NSLocalizedDescriptionKey: "Download failed"])))
+                return
+            }
+
+            let url = downloadURLs[index]
+            let task = URLSession.shared.downloadTask(with: url) { tempURL, _, error in
+                if let error {
+                    lastError = error
+                    attemptDownload(at: index + 1)
+                    return
+                }
+                guard let tempURL else {
+                    lastError = NSError(domain: "JESSI", code: 2, userInfo: [NSLocalizedDescriptionKey: "Download failed"])
+                    attemptDownload(at: index + 1)
+                    return
                 }
 
-                try fm.moveItem(at: staging, to: finalDir)
-                completion(.success(()))
-            } catch {
-                completion(.failure(error))
+                do {
+                    try fm.createDirectory(at: workDir, withIntermediateDirectories: true)
+                    if fm.fileExists(atPath: downloadPath.path) { try? fm.removeItem(at: downloadPath) }
+                    try fm.moveItem(at: tempURL, to: downloadPath)
+
+                    try finalizeInstalledFile()
+                    try? fm.removeItem(at: workDir)
+                    completion(.success(()))
+                } catch {
+                    lastError = error
+                    attemptDownload(at: index + 1)
+                }
+            }
+            task.resume()
+        }
+        attemptDownload(at: 0)
+    }
+
+    private func machoHasCodeSignature(atPath path: String) -> Bool {
+
+        let mhMagic64: UInt32 = 0xFEEDFACF
+        let lcCodeSignature: UInt32 = 0x1D
+
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path), options: .mappedIfSafe) else {
+            return false
+        }
+        guard data.count >= 32 else { return false }
+
+        func u32(_ off: Int) -> UInt32? {
+            guard off >= 0, off + 4 <= data.count else { return nil }
+            return data.withUnsafeBytes { raw -> UInt32 in
+                let p = raw.baseAddress!.advanced(by: off).assumingMemoryBound(to: UInt32.self)
+                return UInt32(littleEndian: p.pointee)
             }
         }
 
-        task.resume()
+        guard u32(0) == mhMagic64 else { return false }
+        guard let ncmds = u32(16) else { return false }
+
+        var off = 32
+        for _ in 0..<Int(ncmds) {
+            guard let cmd = u32(off), let cmdsize = u32(off + 4) else { break }
+            let cs = Int(cmdsize)
+            if cs < 8 || off + cs > data.count { break }
+            if cmd == lcCodeSignature {
+                return true
+            }
+            off += cs
+        }
+        return false
     }
 
     func installservices(
@@ -167,7 +226,7 @@ final class TunnelingModel: ObservableObject {
         showErrors: Bool = true
     ) {
         let validIds = Set(allServices.map { $0.id })
-        let queue = services.filter(validIds.contains).filter { info(for: $0)?.downloadURL != nil }
+        let queue = services.filter(validIds.contains).filter { info(for: $0)?.downloadURLs?.isEmpty == false }
 
         func fail(_ message: String) {
             if showErrors {

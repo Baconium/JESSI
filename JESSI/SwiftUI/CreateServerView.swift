@@ -1323,8 +1323,6 @@ struct CreateServerView: View {
     }
 
     private func downloadPaperServerJar(mcVersion: String, to serverDir: URL, completion: @escaping (Result<Void, Error>) -> Void) {
-        // v3 fill API. Each build entry carries a ready-to-use download
-        // URL under downloads["server:default"]["url"].
         guard let buildsURL = URL(string: "https://fill.papermc.io/v3/projects/paper/versions/\(mcVersion)/builds") else {
             completion(.failure(InstallerError.message("Invalid Paper builds URL")))
             return

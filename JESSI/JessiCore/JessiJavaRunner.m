@@ -1,4 +1,11 @@
 // skid me once, shame on you; skid me twice, shame on me
+//
+// WARNING: all brain damage recieved from looking at this fucking disgusting mess
+// of a file is your own fault. by reading this code, you agree to the
+// Baconium Enterprises Terms of Service. we takes zero responsibility
+// for any and all damage caused to your retinas, stomach, or mental state.
+//
+// Baconium Enterprises ToS: https://baconium.dev/tos
 
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
@@ -1266,7 +1273,6 @@ static NSString *bundleJavaHomeForVersion(NSString *javaVersion) {
             }
         }
 
-        // Fallback to macOS default Java if the exact requested major version is unavailable.
         FILE *defaultFp = popen("/usr/libexec/java_home 2>/dev/null", "r");
         if (defaultFp) {
             char buf[PATH_MAX] = {0};
