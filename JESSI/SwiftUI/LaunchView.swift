@@ -165,7 +165,7 @@ final class LaunchModel: NSObject, ObservableObject {
                 return
             }
             let selectedJava = JessiSettings.shared().javaVersion
-            if selectedJava != effectiveJava {
+            if selectedJava < effectiveJava {
                 activeAlert = .jvmMismatch(selected: selectedJava, required: effectiveJava)
                 return
             }
