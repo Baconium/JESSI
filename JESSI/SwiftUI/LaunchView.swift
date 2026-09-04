@@ -74,6 +74,7 @@ final class LaunchModel: NSObject, ObservableObject {
     @Published var servers: [String] = []
     @Published var selectedServer: String = ""
     @Published var isRunning: Bool = false
+    @Published var isPreparingResourcePack: Bool = false
     @Published var consoleText: String = ""
     @Published var commandText: String = ""
     @Published var activeAlert: LaunchAlert? = nil
@@ -124,14 +125,40 @@ final class LaunchModel: NSObject, ObservableObject {
 
     func startServer() {
         guard !selectedServer.isEmpty else { return }
-        UIApplication.shared.isIdleTimerDisabled = true
-        service.startServerNamed(selectedServer)
+        launchAfterPreparingResourcePack { [weak self] in
+            guard let self else { return }
+            UIApplication.shared.isIdleTimerDisabled = true
+            self.service.startServerNamed(self.selectedServer)
+        }
     }
 
     func startServerWithJVM(_ version: String) {
         guard !selectedServer.isEmpty else { return }
-        UIApplication.shared.isIdleTimerDisabled = true
-        service.startServerNamed(selectedServer, withJavaVersion: version)
+        launchAfterPreparingResourcePack { [weak self] in
+            guard let self else { return }
+            UIApplication.shared.isIdleTimerDisabled = true
+            self.service.startServerNamed(self.selectedServer, withJavaVersion: version)
+        }
+    }
+
+    private func launchAfterPreparingResourcePack(_ launch: @escaping () -> Void) {
+        guard let properties = propertiesManager else {
+            launch()
+            return
+        }
+
+        let packs = ResourcePackManager.shared(for: properties)
+        guard packs.hasPacks else {
+            launch()
+            return
+        }
+
+        isPreparingResourcePack = true
+        Task { @MainActor in
+            await packs.prepareForLaunch()
+            self.isPreparingResourcePack = false
+            launch()
+        }
     }
 
     func switchJVMAndStart(_ version: String) {
@@ -296,6 +323,7 @@ extension LaunchModel: JessiServerServiceDelegate {
     func serverServiceDidChangeRunning(_ isRunning: Bool) {
         DispatchQueue.main.async {
             self.isRunning = isRunning
+            RelaySession.shared.setServerRunning(isRunning, serverRoot: self.propertiesManager?.serverRoot)
             if !isRunning {
                 UIApplication.shared.isIdleTimerDisabled = false
             }
@@ -306,7 +334,13 @@ extension LaunchModel: JessiServerServiceDelegate {
 
 struct QuickSettingsView: View {
     @ObservedObject var manager: ServerPropertiesManager
+    @StateObject private var packs: ResourcePackManager
     @State private var showingIconImporter = false
+
+    init(manager: ServerPropertiesManager) {
+        self.manager = manager
+        _packs = StateObject(wrappedValue: ResourcePackManager.shared(for: manager))
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -496,12 +530,67 @@ struct QuickSettingsView: View {
                     ))
                     .multilineTextAlignment(.trailing)
                 }
+
+                if packs.hasPacks {
+
+                    if packs.needsHosting {
+                        Divider()
+
+                        SettingRow(title: "Serve Resource Packs From") {
+                            Menu {
+                                Picker("Serve Resource Packs From", selection: $packs.hosting) {
+                                    ForEach(ResourcePackHosting.allCases) { option in
+                                        Text(option.title).tag(option)
+                                    }
+                                }
+                            } label: {
+                                HStack {
+                                    Text(packs.hosting.title)
+                                        .foregroundColor(.green)
+                                    Image(systemName: "chevron.up.chevron.down")
+                                        .font(.caption)
+                                        .foregroundColor(.green)
+                                }
+                            }
+                        }
+                    }
+
+                    Divider()
+
+                    SettingRow(title: "Require Resource Packs") {
+                        Menu {
+                            Picker("Require Resource Packs", selection: $packs.prompt) {
+                                ForEach(ResourcePackPrompt.allCases) { option in
+                                    Text(option.title).tag(option)
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                Text(packs.prompt.title)
+                                    .foregroundColor(.green)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption)
+                                    .foregroundColor(.green)
+                            }
+                        }
+                    }
+
+                    if let status = packs.status {
+                        Divider()
+                        Text(status)
+                            .font(.footnote)
+                            .foregroundColor(packs.statusIsError ? .red : .secondary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 12)
+                    }
+                }
             }
             .background(Color(UIColor.tertiarySystemBackground))
             .cornerRadius(12)
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
+        .onAppear { packs.reload() }
         .sheet(isPresented: $showingIconImporter) {
             ImagePicker(onPick: { image in
                 manager.updateIcon(image)
@@ -625,15 +714,22 @@ struct LaunchView: View {
                                 model.start()
                             }
                         }) {
-                            Text("Start")
-                                .font(.system(size: 17, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
+                            HStack(spacing: 8) {
+                                if model.isPreparingResourcePack {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                }
+                                Text(model.isPreparingResourcePack ? "Preparing pack..." : "Start")
+                                    .font(.system(size: 17, weight: .semibold))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
                         }
                         .foregroundColor(.white)
-                        .background(model.isRunning ? Color.gray.opacity(0.4) : Color.green)
+                        .background(model.isRunning || model.isPreparingResourcePack
+                                    ? Color.gray.opacity(0.4) : Color.green)
                         .cornerRadius(12)
-                        .disabled(model.isRunning || model.isInstallingJVM)
+                        .disabled(model.isRunning || model.isInstallingJVM || model.isPreparingResourcePack)
 
                         Button(action: {
                             let isMacBuild = ProcessInfo.processInfo.isMacCatalystApp
@@ -735,6 +831,7 @@ struct LaunchView: View {
 
                 if let manager = model.propertiesManager {
                     QuickSettingsView(manager: manager)
+                        .id(manager.serverRoot.path)
                     
                     Button(action: { showAdvancedSettings = true }) {
                         Text("Advanced Settings")

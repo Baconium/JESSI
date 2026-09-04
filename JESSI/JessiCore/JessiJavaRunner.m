@@ -23,6 +23,7 @@
 #import <mach-o/dyld_images.h>
 #import <libkern/OSCacheControl.h>
 #import <pthread.h>
+#import <execinfo.h>
 #import <mach/arm/thread_status.h>
 #import <mach-o/fat.h>
 #import <mach-o/loader.h>
@@ -1477,6 +1478,21 @@ static int jessi_spawn_external_java_args(NSArray<NSString *> *args) {
 int jessi_server_main(int argc, char *argv[]) {
     (void)[NSBundle mainBundle];
     (void)[NSFileManager defaultManager];
+    {
+        static volatile int32_t s_serverMainEntries = 0;
+        int32_t entry = __sync_add_and_fetch(&s_serverMainEntries, 1);
+        if (entry > 1) {
+            NSLog(@"[JESSI] [reentry] jessi_server_main entered %d times in pid %d (thread %p) - expect a create_vm crash",
+                  (int)entry, (int)getpid(), (void *)pthread_self());
+            void *frames[32];
+            int n = backtrace(frames, 32);
+            char **syms = backtrace_symbols(frames, n);
+            for (int i = 0; i < n; i++) {
+                NSLog(@"[JESSI] [reentry]   %s", syms && syms[i] ? syms[i] : "(null)");
+            }
+            free(syms);
+        }
+    }
 
     @autoreleasepool {
         @try {

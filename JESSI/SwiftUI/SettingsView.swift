@@ -288,6 +288,7 @@ final class SettingsModel: ObservableObject {
     @Published var totalRAM: String = ""
     @Published var freeRAM: String = ""
     @Published var launchArgs: String = ""
+    @Published var curseForgeAPIKey: String = ""
     @Published var runInBackground: Bool = false
     @Published var disableSeparateJVMProcessOnTrollStore: Bool = false
     @Published var isIOS26: Bool = false
@@ -355,6 +356,7 @@ final class SettingsModel: ObservableObject {
         totalRAM = formatRAM(ProcessInfo.processInfo.physicalMemory)
         refreshSystemStats()
         launchArgs = s.launchArguments
+        curseForgeAPIKey = s.curseForgeAPIKey
         runInBackground = s.runInBackground
         disableSeparateJVMProcessOnTrollStore = s.disableSeparateJVMProcessOnTrollStore
         isIOS26 = jessi_is_ios26_or_later()
@@ -374,6 +376,12 @@ final class SettingsModel: ObservableObject {
     func applyAndSaveLaunchArgs() {
         let s = JessiSettings.shared()
         s.launchArguments = launchArgs
+        s.save()
+    }
+
+    func applyAndSaveCurseForgeAPIKey() {
+        let s = JessiSettings.shared()
+        s.curseForgeAPIKey = curseForgeAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
         s.save()
     }
 
@@ -1122,7 +1130,7 @@ struct SettingsView: View {
     @State private var playitclaimsheetitem: PlayitClaimSheetItem? = nil
     @State private var upnpPortsIsFirstResponder: Bool = false
     @State private var showresetplayitconfirmation: Bool = false
-    @State private var showsystemstatuscolors: Bool = false
+    @AppStorage("jessi.oldcoloreasteregg.imkeepingthislowercasebecauseroothatescamelcaseandheaddedthiseasteregg") private var showsystemstatuscolors: Bool = false
     @State private var showrooootmenu: Bool = false
     @State private var simulatormirrorbase: String = "https://crystall1ne.dev/cdn/amethyst-ios"
 
@@ -1200,9 +1208,24 @@ struct SettingsView: View {
         )
     }
 
-    private func refreshkeepaliveauthstat() {
+    private func refreshkeepaliveauthstat() { // thank you for this incredible function rooootdeveloper, incredibly useful
         keepaliveauthstat = keepalivemgr.shared.authstat
     }
+
+    private func currentDeviceModelIdentifier() -> String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+
+        let mirror = Mirror(reflecting: systemInfo.machine)
+
+        return mirror.children.reduce(into: "") { identifier, element in
+            guard let value = element.value as? Int8, value != 0 else {
+                return
+            }
+
+            identifier.append(Character(UnicodeScalar(UInt8(value))))
+    }
+}
 
     private func fetchPublicIPIfNeeded(force: Bool = false) {
         if isFetchingPublicIP { return }
@@ -1433,24 +1456,13 @@ struct SettingsView: View {
                 Text("Service")
                 Spacer()
                 
-                if tunnelingmodel.availableserviceids.isEmpty {
-                    if isplayitinstalling {
-                        ProgressView()
-                        Text("Installing…")
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text("Unavailable")
-                            .foregroundColor(.secondary)
+                Picker("Tunneling", selection: $tunnelingmodel.selectedserviceid) {
+                    ForEach(tunnelingmodel.availableserviceids, id: \.self) { id in
+                        Text(tunnelingmodel.displayname(for: id)).tag(id)
                     }
-                } else {
-                    Picker("Tunneling", selection: $tunnelingmodel.selectedserviceid) {
-                        ForEach(tunnelingmodel.availableserviceids, id: \.self) { id in
-                            Text(tunnelingmodel.displayname(for: id)).tag(id)
-                        }
-                    }
-                    .pickerStyle(SegmentedPickerStyle())
-                    .frame(maxWidth: 260)
                 }
+                .pickerStyle(SegmentedPickerStyle())
+                .frame(maxWidth: 260)
             }
             .onChange(of: tunnelingmodel.selectedserviceid) { newval in
                 tunnelingmodel.applyandsaveselectedservice(newval)
@@ -1837,37 +1849,14 @@ struct SettingsView: View {
                     }
                 }
             }
-            
-            if #available(iOS 17.0, *) {
-                Group {
-                    Section {
-                        infosection
-                    } header: {
-                        Text("Connection")
-                    } footer: {
-                        if isnoneselected {
-                            connectionfooter
-                        }
-                    }
-                    
-                    Section {
-                        actionsection
-                    } footer: {
-                        if !isnoneselected {
-                            connectionfooter
-                        }
-                    }
-                }
-                .listSectionSpacing(.custom(5))
-            } else {
-                Section {
-                    infosection
-                    actionsection
-                } header: {
-                    Text("Connection")
-                } footer: {
-                    connectionfooter
-                }
+
+            Section {
+                infosection
+                actionsection
+            } header: {
+                Text("Connection")
+            } footer: {
+                connectionfooter
             }
             
             Section {
@@ -1946,6 +1935,11 @@ struct SettingsView: View {
                     ))
                     .normalizedSeparator()
                 }
+
+                HStack(spacing: 12) {
+                    CurseForgeField(model: model)
+                        .frame(maxWidth: 420)
+                }
                 
                 HStack(spacing: 12) {
                     Text("Allocated RAM")
@@ -1974,7 +1968,7 @@ struct SettingsView: View {
                 }
                 .normalizedSeparator()
             }
-            
+
             Section(header: Text("System")) {
                 HStack {
                     Text("JIT Enabled")
@@ -2008,13 +2002,20 @@ struct SettingsView: View {
                 }
                 .normalizedSeparator()
                 HStack {
+                    Text("Device Model")
+                    Spacer()
+                    Text(JessiDeviceMarketingNames.marketingName(for: currentDeviceModelIdentifier())
+                         ?? currentDeviceModelIdentifier())
+                        .foregroundColor(infostatuscolor())
+                }
+                .normalizedSeparator()
+                HStack {
                     Text(model.isMacCatalyst ? "macOS Version" : "iOS Version")
                     Spacer()
                     Text(model.iOSVersionString)
                         .foregroundColor(infostatuscolor())
                 }
                 .normalizedSeparator()
-                
                 HStack {
                     Text("Total RAM")
                     Spacer()
@@ -2028,8 +2029,7 @@ struct SettingsView: View {
                     Text(model.freeRAM)
                         .foregroundColor(infostatuscolor())
                 }
-                .normalizedSeparator()
-                
+                .normalizedSeparator()               
                 HStack {
                     Text("Local IP")
                     Spacer()
@@ -2251,6 +2251,7 @@ struct SettingsView: View {
             model.javaVersion = s.javaVersion
             model.heapMB = s.maxHeapMB
             model.heapText = String(s.maxHeapMB)
+            model.curseForgeAPIKey = s.curseForgeAPIKey
 
             if !model.isTrollStore,
                keepalivemethodraw == keepalivemgr.keepalivemethod.trollstore.rawValue {
@@ -2365,6 +2366,73 @@ struct SettingsView: View {
                 }
             }
         )
+    }
+}
+
+struct CurseForgeField: View {
+    @ObservedObject var model: SettingsModel
+    @State private var isSecure: Bool = true
+    @State private var showeasteregg: Bool = false
+    @State private var eastereggtitle: String = ""
+    @State private var eastereggmsg: String = ""
+    @State private var lasttriggeredkey: String? = nil
+
+    private static let eastereggs: [String: (title: String, message: String)] = [
+        "loveyachilly": (title: "i think youre really pretty lol", message: "whats that mean?"),
+        "fil": (title: "pure hatred.", message: "I FUCKING HATE YOU FIL!!!"),
+        "kravasign": (title: "Permanent Ban", message: "You have been permanently banned from using JESSI, we do not speak that name in this application.")
+    ]
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Group {
+                if isSecure {
+                    SecureField("CurseForge API Key (Optional)", text: $model.curseForgeAPIKey)
+                } else {
+                    TextField("CurseForge API Key (Optional)", text: $model.curseForgeAPIKey)
+                }
+            }
+            .frame(maxWidth: 420)
+            .onChange(of: model.curseForgeAPIKey) { newValue in
+                model.applyAndSaveCurseForgeAPIKey()
+                maybeshoweasteregg(for: newValue)
+            }
+
+            Button(action: { isSecure.toggle() }) {
+                Image(systemName: isSecure ? "eye.slash" : "eye")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .alert(isPresented: $showeasteregg) {
+            Alert(
+                title: Text(eastereggtitle),
+                message: Text(eastereggmsg),
+                dismissButton: .default(Text("yes"))
+            )
+        }
+    }
+
+    private func maybeshoweasteregg(for newValue: String) {
+        let key = newValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !key.isEmpty else {
+            lasttriggeredkey = nil
+            return
+        }
+
+        guard let egg = Self.eastereggs[key] else {
+            if lasttriggeredkey == key {
+                lasttriggeredkey = nil
+            }
+            return
+        }
+
+        guard key != lasttriggeredkey else { return }
+
+        eastereggtitle = egg.title
+        eastereggmsg = egg.message
+        showeasteregg = true
+        lasttriggeredkey = key
     }
 }
 

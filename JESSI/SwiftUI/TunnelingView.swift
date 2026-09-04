@@ -95,7 +95,7 @@ final class TunnelingModel: ObservableObject {
     }
 
     func refreshavailableservices() {
-        availableserviceids = allServices.map { $0.id }.filter(installedserviceids.contains)
+        availableserviceids = allServices.map { $0.id }
 
         if !availableserviceids.contains(selectedserviceid), let first = availableserviceids.first {
             applyandsaveselectedservice(first)
@@ -223,7 +223,8 @@ final class TunnelingModel: ObservableObject {
         updateInProgress: @escaping (Bool) -> Void,
         updateQueueCSV: @escaping (String) -> Void,
         clearSelection: @escaping () -> Void,
-        showErrors: Bool = true
+        showErrors: Bool = true,
+        completion: ((Bool) -> Void)? = nil
     ) {
         let validIds = Set(allServices.map { $0.id })
         let queue = services.filter(validIds.contains).filter { info(for: $0)?.downloadURLs?.isEmpty == false }
@@ -238,6 +239,7 @@ final class TunnelingModel: ObservableObject {
             updateQueueCSV("")
             updateInProgress(false)
             clearSelection()
+            completion?(false)
         }
 
         guard !queue.isEmpty else {
@@ -255,6 +257,7 @@ final class TunnelingModel: ObservableObject {
                 updateQueueCSV("")
                 updateInProgress(false)
                 clearSelection()
+                completion?(true)
                 return
             }
 
@@ -280,15 +283,19 @@ final class TunnelingModel: ObservableObject {
         next()
     }
 
+    private static var autoinstallattempted = false
+
     static func autoinstallplayitondemand() {
         let defaults = UserDefaults.standard
         let autoKey = "jessi.tunnel.autoInstall.started"
         guard !defaults.bool(forKey: autoKey) else { return }
-        defaults.set(true, forKey: autoKey)
+        guard !autoinstallattempted else { return }
+        autoinstallattempted = true
 
         let model = TunnelingModel()
         model.refreshinstalledservices()
         if model.installedserviceids.contains("playit") {
+            defaults.set(true, forKey: autoKey)
             return
         }
 
@@ -297,7 +304,11 @@ final class TunnelingModel: ObservableObject {
             updateInProgress: { defaults.set($0, forKey: "jessi.tunnel.install.inProgress") },
             updateQueueCSV: { defaults.set($0, forKey: "jessi.tunnel.install.queue") },
             clearSelection: { defaults.set("", forKey: "jessi.tunnel.install.selection") },
-            showErrors: false
+            showErrors: false,
+            completion: { success in
+                guard success else { return }
+                defaults.set(true, forKey: autoKey)
+            }
         )
     }
 }

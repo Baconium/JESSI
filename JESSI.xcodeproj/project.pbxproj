@@ -26,6 +26,7 @@
 		B1C0F700A1B2C3D4E5F60042 /* mach_excServer.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */; };
 		B1C0F700A1B2C3D4E5F60043 /* mach_excUser.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */; };
 		B1C0F700A1B2C3D4E5F60044 /* ModsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60020 /* ModsView.swift */; };
+		B1C0F700A1B2C3D4E5F60091 /* ResourcePacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60090 /* ResourcePacks.swift */; };
 		B1C0F700A1B2C3D4E5F60045 /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60021 /* Logger.swift */; };
 		B1C0F700A1B2C3D4E5F60046 /* RemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60022 /* RemoteImage.swift */; };
 		B1C0F700A1B2C3D4E5F60047 /* TunnelingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60023 /* TunnelingView.swift */; };
@@ -66,6 +67,7 @@
 		B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = mach_excUser.c; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F6001F /* mach_excUser.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = mach_excUser.h; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60020 /* ModsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModsView.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60090 /* ResourcePacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourcePacks.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60021 /* Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logger.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60022 /* RemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImage.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60023 /* TunnelingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelingView.swift; sourceTree = "<group>"; };
@@ -155,6 +157,7 @@
 				B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */,
 				B1C0F700A1B2C3D4E5F60021 /* Logger.swift */,
 				B1C0F700A1B2C3D4E5F60020 /* ModsView.swift */,
+				B1C0F700A1B2C3D4E5F60090 /* ResourcePacks.swift */,
 				B1C0F700A1B2C3D4E5F60022 /* RemoteImage.swift */,
 				B1C0F700A1B2C3D4E5F60023 /* TunnelingView.swift */,
 				B1C0F700A1B2C3D4E5F6000B /* RootTabView.swift */,
@@ -280,6 +283,7 @@
 				B1C0F700A1B2C3D4E5F60036 /* LaunchView.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60045 /* Logger.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60044 /* ModsView.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60091 /* ResourcePacks.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60046 /* RemoteImage.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60047 /* TunnelingView.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60037 /* RootTabView.swift in Sources */,
@@ -429,6 +433,7 @@
 				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = JESSI;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -474,6 +479,7 @@
 				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = JESSI;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (

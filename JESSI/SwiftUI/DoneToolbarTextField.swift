@@ -10,7 +10,6 @@ struct DoneToolbarTextField: UIViewRepresentable {
     var textAlignment: NSTextAlignment = .right
     var font: UIFont = .systemFont(ofSize: 16)
     var onEndEditing: (() -> Void)? = nil
-    // When set, Return triggers this (keyboard stays up) instead of dismissing.
     var onSubmit: (() -> Void)? = nil
     var returnKeyType: UIReturnKeyType = .done
 

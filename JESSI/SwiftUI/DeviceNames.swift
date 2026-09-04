@@ -71,6 +71,7 @@ enum JessiDeviceMarketingNames {
         "iPhone18,1": "iPhone 17 Pro",
         "iPhone18,2": "iPhone 17 Pro Max",
         "iPhone18,4": "iPhone Air",
+        "iPhone18,5": "iPhone 17e",
 
         // iPad
         "iPad6,11": "iPad (5th generation)",
@@ -115,6 +116,10 @@ enum JessiDeviceMarketingNames {
         "iPad15,4": "iPad Air 11-inch (M3)",
         "iPad15,5": "iPad Air 13-inch (M3)",
         "iPad15,6": "iPad Air 13-inch (M3)",
+        "iPad16,8": "iPad Air 11-inch (M4)",
+        "iPad16,9": "iPad Air 11-inch (M4)",
+        "iPad16,10": "iPad Air 13-inch (M4)",
+        "iPad16,11": "iPad Air 13-inch (M4)",
 
         // iPad Pro
         "iPad6,7": "iPad Pro (12.9-inch)",

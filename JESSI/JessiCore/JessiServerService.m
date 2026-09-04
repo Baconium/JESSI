@@ -466,9 +466,12 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
 }
 
 - (void)startServerNamed:(NSString *)serverName withJavaVersion:(nullable NSString *)javaVersionOverride {
-    if (self.isRunning) {
-        [self emitConsole:@"Server already running.\n"]; 
-        return;
+    @synchronized (self) {
+        if (self.isRunning) {
+            [self emitConsole:@"Server already running.\n"];
+            return;
+        }
+        self.running = YES;
     }
 
     NSString *dir = [self.serversRoot stringByAppendingPathComponent:serverName];
@@ -492,7 +495,8 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
     } else {
         jar = [self findJarInServerDir:dir];
         if (!jar) {
-            [self emitConsole:@"No .jar found in this server folder. Put your server jar in the folder (preferably named server.jar).\n"]; 
+            [self emitConsole:@"No .jar found in this server folder. Put your server jar in the folder (preferably named server.jar).\n"];
+            self.running = NO;
             return;
         }
     }
@@ -506,7 +510,6 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
         [self emitConsole:[NSString stringWithFormat:@"Working dir: %@\n", dir]];
     });
 
-    self.running = YES;
     dispatch_async(dispatch_get_main_queue(), ^{ [self.delegate serverServiceDidChangeRunning:YES]; });
 
     [self startTailingLatestLogInDir:dir];

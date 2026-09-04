@@ -11,8 +11,6 @@ struct FileBrowserView: View {
     @State private var isEditingFile: Bool = false
 
     @State private var showingFileImporter: Bool = false
-    @State private var importError: String? = nil
-    @State private var showImportError: Bool = false
     
     @State private var modsSheetItem: SheetItem? = nil
 
@@ -39,7 +37,7 @@ struct FileBrowserView: View {
     @State private var alert: BrowserAlert? = nil
 
     struct FileItem: Identifiable {
-        let id = UUID()
+        var id: String { path }
         let name: String
         let path: String
         let isDirectory: Bool
@@ -80,9 +78,17 @@ struct FileBrowserView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(file.name)
                                         .font(.system(size: 16, weight: .medium))
-                                    Text(formatDate(file.modDate))
-                                        .font(.system(size: 12, weight: .regular))
-                                        .foregroundColor(.secondary)
+                                    if let priority = packPriority(for: file) {
+                                        Text(priority == 1
+                                             ? "Priority 1 - overrides the packs below"
+                                             : "Priority \(priority)")
+                                            .font(.system(size: 12, weight: .regular))
+                                            .foregroundColor(.secondary)
+                                    } else {
+                                        Text(formatDate(file.modDate))
+                                            .font(.system(size: 12, weight: .regular))
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
                                 Spacer()
                             }
@@ -101,6 +107,15 @@ struct FileBrowserView: View {
                             }
                         }
                         .normalizedSeparator()
+                    }
+                    .onMove { source, destination in
+                        guard isPrioritized else { return }
+                        var current = sortedFiles
+                        current.move(fromOffsets: source, toOffset: destination)
+                        packOrder.write(current
+                            .filter { !$0.isDirectory && ResourcePackOrder.isPackFile($0.name) }
+                            .map { $0.name })
+                        reload()
                     }
                     .onDelete { indexSet in
                         guard let idx = indexSet.first else { return }
@@ -143,6 +158,16 @@ struct FileBrowserView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Group {
+                    if isPrioritized {
+                        EditButton()
+                            .foregroundColor(.green)
+                    }
+                }
+            }
+        }
         .navigationBarItems(trailing: Button(action: { showingFileImporter = true }) {
             Image(systemName: "plus")
         })
@@ -153,8 +178,7 @@ struct FileBrowserView: View {
         ) { result in
             switch result {
             case .failure(let err):
-                importError = err.localizedDescription
-                showImportError = true
+                alert = .error(err.localizedDescription)
             case .success(let urls):
                 importPickedFiles(urls)
             }
@@ -209,13 +233,6 @@ struct FileBrowserView: View {
                 )
             }
         }
-        .alert(isPresented: $showImportError) {
-            Alert(
-                title: Text("Import Failed"),
-                message: Text(importError ?? "Unknown error"),
-                dismissButton: .default(Text("OK"))
-            )
-        }
         .onAppear {
             reload()
             startDirectoryMonitor()
@@ -229,10 +246,39 @@ struct FileBrowserView: View {
         24
     }
 
+    private var packOrder: ResourcePackOrder {
+        ResourcePackOrder(directory: URL(fileURLWithPath: directory))
+    }
+
+    private var isPrioritized: Bool {
+        guard URL(fileURLWithPath: directory).lastPathComponent == ContentType.resourcepack.dirname else {
+            return false
+        }
+        return files.filter { !$0.isDirectory && ResourcePackOrder.isPackFile($0.name) }.count > 1
+    }
+
+    private func packPriority(for file: FileItem) -> Int? {
+        guard isPrioritized, !file.isDirectory, ResourcePackOrder.isPackFile(file.name) else { return nil }
+        guard let index = packOrder.resolved().firstIndex(of: file.name) else { return nil }
+        return index + 1
+    }
+
     private var sortedFiles: [FileItem] {
-        files.sorted { a, b in
-            if a.isDirectory != b.isDirectory { return a.isDirectory && !b.isDirectory }
-            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        guard isPrioritized else {
+            return files.sorted { a, b in
+                if a.isDirectory != b.isDirectory { return a.isDirectory && !b.isDirectory }
+                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            }
+        }
+
+        let ranks = Dictionary(uniqueKeysWithValues: packOrder.resolved().enumerated().map { ($0.element, $0.offset) })
+        return files.sorted { a, b in
+            switch (ranks[a.name], ranks[b.name]) {
+            case let (lhs?, rhs?): return lhs < rhs
+            case (_?, nil): return true
+            case (nil, _?): return false
+            default: return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            }
         }
     }
 
@@ -385,14 +431,12 @@ struct FileBrowserView: View {
                 do {
                     try fm.copyItem(at: newURL, to: destURL)
                 } catch {
-                    importError = error.localizedDescription
-                    showImportError = true
+                    alert = .error(error.localizedDescription)
                 }
             }
 
             if let coordError = coordError {
-                importError = coordError.localizedDescription
-                showImportError = true
+                alert = .error(coordError.localizedDescription)
             }
         }
 

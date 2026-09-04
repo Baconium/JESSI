@@ -6,7 +6,6 @@ import UIKit
 
 struct RootTabView: View {
     @StateObject private var tourManager = TourManager()
-    private let minSwipeDistance: CGFloat = 60
 
     init() {
         let appearance = UITabBarAppearance()
@@ -58,13 +57,6 @@ struct RootTabView: View {
                     Label("Settings", systemImage: "gear")
                 }
             }
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 20)
-                    .onEnded { gesture in
-                        if tourManager.isTourActive { return }
-                        handleTabSwipe(gesture)
-                    }
-            )
 
             if tourManager.tourState == 0 {
                 ZStack {
@@ -84,36 +76,6 @@ struct RootTabView: View {
         .onAppear {
             keepalivemgr.shared.startifenabled()
             TunnelingModel.autoinstallplayitondemand()
-        }
-    }
-
-    private func handleTabSwipe(_ gesture: DragGesture.Value) {
-        let horizontalTranslation = gesture.translation.width
-        let verticalTranslation = gesture.translation.height
-
-        guard abs(horizontalTranslation) > abs(verticalTranslation) else {
-            return
-        }
-
-        guard abs(horizontalTranslation) >= minSwipeDistance else {
-            return
-        }
-
-        let isSwipeLeft = horizontalTranslation < 0
-        let newTab: Int
-
-        if isSwipeLeft {
-            newTab = min(tourManager.selectedTab + 1, tourManager.maxTabIndex)
-        } else {
-            newTab = max(tourManager.selectedTab - 1, 0)
-        }
-
-        guard newTab != tourManager.selectedTab else {
-            return
-        }
-
-        withAnimation(.easeInOut(duration: 0.25)) {
-            tourManager.selectedTab = newTab
         }
     }
 }
