@@ -535,8 +535,7 @@ final class SettingsModel: ObservableObject {
     }
 
     private var runtimesDir: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Runtimes", isDirectory: true)
+        URL(fileURLWithPath: JessiPaths.runtimesRoot(), isDirectory: true)
     }
 
     func runtimeDir(for version: String) -> URL {
@@ -886,6 +885,7 @@ final class SettingsModel: ObservableObject {
                         try? fm.removeItem(at: backup)
                     }
                     try fm.moveItem(at: staging, to: finalDir)
+                    JessiPaths.migrateLegacyStorage()  // also keeps the Runtimes folder out of backups
 
                     DispatchQueue.main.async {
                         self.jvmDownloadProgress = 1

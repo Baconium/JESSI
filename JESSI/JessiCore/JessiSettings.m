@@ -1,4 +1,5 @@
 #import "JessiSettings.h"
+#import "JessiPaths.h"
 
 static NSString *const kJessiJavaVersion = @"jessi.javaVersion";
 static NSString *const kJessiMaxHeapMB = @"jessi.maxHeapMB";
@@ -77,9 +78,8 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
         }
     }
 
-    NSURL *appSupport = [[fm URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask] firstObject];
-    NSString *runtimesRoot = [[appSupport URLByAppendingPathComponent:@"Runtimes" isDirectory:YES] path];
-    if (runtimesRoot.length) {
+    for (NSString *runtimesRoot in @[[JessiPaths runtimesRoot], [JessiPaths legacyRuntimesRoot]]) {
+        if (!runtimesRoot.length) continue;
         for (NSString *ver in @[@"8", @"17", @"21", @"25"]) {
             NSString *dir = [runtimesRoot stringByAppendingPathComponent:[NSString stringWithFormat:@"jre%@", ver]];
             if ([fm fileExistsAtPath:dir] && ![available containsObject:ver]) {

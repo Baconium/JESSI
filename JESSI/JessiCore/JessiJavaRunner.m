@@ -8,6 +8,7 @@
 // Baconium Enterprises ToS: https://baconium.dev/tos
 
 #import <Foundation/Foundation.h>
+#import "JessiPaths.h"
 #import <dlfcn.h>
 #import <stdio.h>
 #import <stdlib.h>
@@ -447,7 +448,7 @@ static void jessi_patch_jvm_dylibs_if_needed(NSString *javaHome) {
     if (!jessi_is_ios26_or_later_core()) return;
 
     
-    if ([javaHome rangeOfString:@"/Library/Application Support/"].location == NSNotFound) return;
+    if (![JessiPaths isInstalledRuntimePath:javaHome]) return;
 
     NSArray<NSString *> *roots = @[
         [javaHome stringByAppendingPathComponent:@"lib"],
@@ -530,7 +531,7 @@ static BOOL jessi_magic_is_macho(uint32_t magicLE) {
 
 static void jessi_preflight_jvm_dylibs_if_needed(NSString *javaHome) {
     if (!javaHome.length) return;
-    if ([javaHome rangeOfString:@"/Library/Application Support/"].location == NSNotFound) return;
+    if (![JessiPaths isInstalledRuntimePath:javaHome]) return;
     if (!jessi_dyld_bypass_ready) {
         JESSI_TXM_LOG("[JESSI] Skipping preflight dlopen: dyld bypass not ready\n");
         return;
@@ -1340,10 +1341,8 @@ static NSString *bundleJavaHomeForVersion(NSString *javaVersion) {
     if ([[NSFileManager defaultManager] fileExistsAtPath:generic]) return generic;
 
     
-    NSURL *appSupport = [[[NSFileManager defaultManager] URLsForDirectory:NSApplicationSupportDirectory
-                                                               inDomains:NSUserDomainMask] firstObject];
-    NSString *runtimesRoot = [[appSupport URLByAppendingPathComponent:@"Runtimes" isDirectory:YES] path];
-    if (runtimesRoot.length) {
+    for (NSString *runtimesRoot in @[[JessiPaths runtimesRoot], [JessiPaths legacyRuntimesRoot]]) {
+        if (!runtimesRoot.length) continue;
         NSString *installed = [runtimesRoot stringByAppendingPathComponent:[NSString stringWithFormat:@"jre%@", javaVersion]];
         if ([[NSFileManager defaultManager] fileExistsAtPath:installed]) return installed;
     }
@@ -1695,7 +1694,7 @@ int jessi_server_main(int argc, char *argv[]) {
             jessi_preflight_jvm_dylibs_if_needed(javaHome);
 
             if (jessi_is_ios26_or_later_core() &&
-                [javaHome rangeOfString:@"/Library/Application Support/"].location != NSNotFound &&
+                [JessiPaths isInstalledRuntimePath:javaHome] &&
                 !jessi_dyld_bypass_ready) {
                 JESSI_TXM_LOG("[JESSI] Error: dyld bypass is not active for Application Support runtime on iOS 26; library validation will block dlopen.\n");
                 return 6;
@@ -1703,7 +1702,7 @@ int jessi_server_main(int argc, char *argv[]) {
 
             JESSI_TXM_LOG("[JESSI] Loading libjli from %s\n", libjliPath.fileSystemRepresentation);
 
-            if ([javaHome rangeOfString:@"/Library/Application Support/"].location != NSNotFound) {
+            if ([JessiPaths isInstalledRuntimePath:javaHome]) {
                 unsigned long long sz = 0;
                 uint32_t m = jessi_read_file_magic32(libjliPath.fileSystemRepresentation, &sz);
                 JESSI_TXM_LOG("[JESSI] libjli on-disk size=%llu magic=0x%08x\n", sz, m);
@@ -2065,7 +2064,7 @@ int jessi_tool_main(int argc, char *argv[]) {
             jessi_preflight_jvm_dylibs_if_needed(javaHome);
 
             if (jessi_is_ios26_or_later_core() &&
-                [javaHome rangeOfString:@"/Library/Application Support/"].location != NSNotFound &&
+                [JessiPaths isInstalledRuntimePath:javaHome] &&
                 !jessi_dyld_bypass_ready) {
                 fprintf(stderr, "[JESSI] Error: dyld bypass is not active for Application Support runtime on iOS 26; library validation will block dlopen.\n");
                 return 6;

@@ -349,25 +349,17 @@ enum PairingFileStore {
     ].compactMap { $0 }
 
     private static var storedURL: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("Pairing", isDirectory: true)
-            .appendingPathComponent("pairingFile.plist")
-    }
-
-    private static var documentsURL: URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("pairingFile.plist")
+        URL(fileURLWithPath: JessiPaths.pairingFilePath())
     }
 
     static var exists: Bool {
-        FileManager.default.fileExists(atPath: storedURL.path) || FileManager.default.fileExists(atPath: documentsURL.path)
+        guard let data = try? Data(contentsOf: storedURL) else { return false }
+        return isRemotePairingFile(data)
     }
 
     static func load() -> Data? {
-        if let data = try? Data(contentsOf: documentsURL), isRemotePairingFile(data) {
-            try? store(data)
-            try? FileManager.default.removeItem(at: documentsURL)
-        }
-        return try? Data(contentsOf: storedURL)
+        guard let data = try? Data(contentsOf: storedURL), isRemotePairingFile(data) else { return nil }
+        return data
     }
 
     static func importFile(from url: URL) throws {
@@ -382,13 +374,10 @@ enum PairingFileStore {
 
     static func remove() {
         try? FileManager.default.removeItem(at: storedURL)
-        try? FileManager.default.removeItem(at: documentsURL)
     }
 
     private static func store(_ data: Data) throws {
-        try FileManager.default.createDirectory(at: storedURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try data.write(to: storedURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: storedURL.path)
     }
 
     private static func isRemotePairingFile(_ data: Data) -> Bool {
