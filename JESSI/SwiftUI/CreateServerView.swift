@@ -63,6 +63,7 @@ struct CreateServerView: View {
 
     @State private var showJVMInstallPrompt: Bool = false
     @State private var missingJVMVersion: String = ""
+    @State private var skipJVMCheck: Bool = false
     @State private var isInstallingJVM: Bool = false
     @State private var jvmInstaller: SettingsModel? = nil
 
@@ -435,13 +436,22 @@ struct CreateServerView: View {
             )
         }
         .alert(isPresented: $showJVMInstallPrompt) {
-            Alert(
+            let canDefer = software != .forge && software != .neoforge
+            return Alert(
                 title: Text("Java \(missingJVMVersion) Required"),
-                message: Text("This Minecraft version requires Java \(missingJVMVersion), which is not currently installed."),
+                message: Text(canDefer
+                    ? "This Minecraft version requires Java \(missingJVMVersion), which is not currently installed. You can install it now, or create the server anyway and install it before you start the server."
+                    : "This server software requires Java \(missingJVMVersion) to be set up, and it is not currently installed."),
                 primaryButton: .default(Text("Install")) {
                     installMissingJVM()
                 },
-                secondaryButton: .cancel()
+                secondaryButton: canDefer
+                    ? .default(Text("Install later")) {
+                        skipJVMCheck = true
+                        createServerConfirmed()
+                        skipJVMCheck = false
+                    }
+                    : .cancel()
             )
         }
     }
@@ -456,7 +466,6 @@ struct CreateServerView: View {
         "fuck trump": (title: "Fuck politics", message: "Politics will not be tolerated inside of JESSI, just play minecraft man"),
         "fuck kamala": (title: "Fuck politics", message: "Politics will not be tolerated inside of JESSI, just play minecraft man"),
         "fuck biden": (title: "Fuck politics", message: "Politics will not be tolerated inside of JESSI, just play minecraft man"),
-        "i love abby": (title: "I love you", message: "I hope you're doing well my love"),
         "aspe": (title: "rest in paint", message: "stay up man - lang lebe der STammTisch!")
     ]
 
@@ -1151,7 +1160,7 @@ struct CreateServerView: View {
     }
 
     private func createServer() {
-        if (software == .forge || software == .neoforge) && !jessi_check_jit_enabled() {
+        if (software == .forge || software == .neoforge) && !JITEnabler.isJITUsable {
             showForgeJITRequired = true
             return
         }
@@ -1183,7 +1192,7 @@ struct CreateServerView: View {
         }
         if software == .customJar && customJarURL == nil { return }
 
-        if software != .customJar && !mcVersion.isEmpty {
+        if software != .customJar && !mcVersion.isEmpty && !skipJVMCheck {
             let needed = Self.effectiveJavaVersion(forMCVersion: mcVersion)
             let available = JessiSettings.availableJavaVersions()
             if !available.contains(needed) {

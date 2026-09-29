@@ -7,6 +7,7 @@ enum LaunchAlert: Identifiable {
     case noServer
     case stopConfirm
     case jitNotEnabled
+    case jitAutoEnableFailed(String)
     case runtime(String)
     case mspj(String)
     case jvmInstallOffer(version: String)
@@ -20,6 +21,8 @@ enum LaunchAlert: Identifiable {
             return "stopConfirm"
         case .jitNotEnabled:
             return "jitNotEnabled"
+        case .jitAutoEnableFailed(let message):
+            return "jitAutoEnableFailed:\(message)"
         case .runtime(let message):
             return "runtime:\(message)"
         case .mspj(let message):
@@ -75,6 +78,8 @@ final class LaunchModel: NSObject, ObservableObject {
     @Published var selectedServer: String = ""
     @Published var isRunning: Bool = false
     @Published var isPreparingResourcePack: Bool = false
+    @Published var isEnablingJIT: Bool = false
+    private var jitPhaseObserver: AnyCancellable?
     @Published var consoleText: String = ""
     @Published var commandText: String = ""
     @Published var activeAlert: LaunchAlert? = nil
@@ -168,7 +173,7 @@ final class LaunchModel: NSObject, ObservableObject {
     }
     
     func isJITEnabledCheck() -> Bool {
-        return jessi_check_jit_enabled()
+        return JITEnabler.isJITUsable
     }
 
     func start() {
@@ -205,11 +210,44 @@ final class LaunchModel: NSObject, ObservableObject {
         }
 
         if !isJITEnabledCheck() {
-            activeAlert = .jitNotEnabled
+            if JITEnabler.shared.canAutoEnable {
+                enableJITThenStart()
+            } else {
+                activeAlert = .jitNotEnabled
+            }
             return
         }
 
         startServer()
+    }
+
+    private func enableJITThenStart() {
+        guard !isEnablingJIT else { return }
+        isEnablingJIT = true
+        let enabler = JITEnabler.shared
+        enabler.enableJIT()
+        jitPhaseObserver = enabler.$phase
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] phase in
+                guard let self, self.isEnablingJIT else { return }
+                switch phase {
+                case .enabled, .attached:
+                    self.finishAutoEnable()
+                    self.startServer()
+                case .failed(let message):
+                    self.finishAutoEnable()
+                    self.activeAlert = .jitAutoEnableFailed(message)
+                case .idle:
+                    self.finishAutoEnable()
+                default:
+                    break
+                }
+            }
+    }
+
+    private func finishAutoEnable() {
+        isEnablingJIT = false
+        jitPhaseObserver = nil
     }
 
     func stop() {
@@ -309,10 +347,20 @@ final class LaunchModel: NSObject, ObservableObject {
     }
 }
 
+extension LaunchModel {
+    static func withoutJITLogs(_ text: String) -> String {
+        guard text.contains("[JIT") else { return text }
+        return text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !($0.hasPrefix("[JIT]") || $0.hasPrefix("[JIT26]")) }
+            .joined(separator: "\n")
+    }
+}
+
 extension LaunchModel: JessiServerServiceDelegate {
     func serverServiceDidUpdateConsole(_ consoleText: String) {
         DispatchQueue.main.async {
-            self.consoleText = consoleText
+            self.consoleText = Self.withoutJITLogs(consoleText)
             let serversRoot = self.service.serversRoot()
             let serverPath = (serversRoot as NSString).appendingPathComponent(self.selectedServer)
             let consoleLogPath = (serverPath as NSString).appendingPathComponent("console.log")
@@ -715,21 +763,21 @@ struct LaunchView: View {
                             }
                         }) {
                             HStack(spacing: 8) {
-                                if model.isPreparingResourcePack {
+                                if model.isPreparingResourcePack || model.isEnablingJIT {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 }
-                                Text(model.isPreparingResourcePack ? "Preparing pack..." : "Start")
+                                Text(model.isEnablingJIT ? "Enabling JIT..." : model.isPreparingResourcePack ? "Preparing pack..." : "Start")
                                     .font(.system(size: 17, weight: .semibold))
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                         }
                         .foregroundColor(.white)
-                        .background(model.isRunning || model.isPreparingResourcePack
+                        .background(model.isRunning || model.isPreparingResourcePack || model.isEnablingJIT
                                     ? Color.gray.opacity(0.4) : Color.green)
                         .cornerRadius(12)
-                        .disabled(model.isRunning || model.isInstallingJVM || model.isPreparingResourcePack)
+                        .disabled(model.isRunning || model.isInstallingJVM || model.isPreparingResourcePack || model.isEnablingJIT)
 
                         Button(action: {
                             let isMacBuild = ProcessInfo.processInfo.isMacCatalystApp
@@ -874,13 +922,34 @@ struct LaunchView: View {
                     secondaryButton: .cancel(Text("Cancel"))
                 )
             case .jitNotEnabled:
+                if #available(iOS 17.4, *) {
+                    return Alert(
+                        title: Text("JIT Not Enabled"),
+                        message: Text("JIT is not enabled. The app may crash if you start the server. You can enable it from the JIT section in Settings."),
+                        primaryButton: .default(Text("Open Settings")) {
+                            tourManager.selectedTab = 2
+                        },
+                        secondaryButton: .destructive(Text("Start Anyway")) {
+                            model.startServer()
+                        }
+                    )
+                }
                 return Alert(
                     title: Text("JIT Not Enabled"),
-                    message: Text("Just-In-Time compilation is not enabled. The app may crash if you start the server."),
-                    primaryButton: .destructive(Text("Start Anyway")) {
+                    message: Text("JIT is not enabled. The app may crash if you start the server."),
+                    primaryButton: .cancel(Text("Cancel")),
+                    secondaryButton: .destructive(Text("Start Anyway")) {
                         model.startServer()
-                    },
-                    secondaryButton: .cancel(Text("Cancel"))
+                    }
+                )
+            case .jitAutoEnableFailed(let message):
+                return Alert(
+                    title: Text("AutoJIT failed"),
+                    message: Text("\(message)\n\nThe app may crash if you start the server without JIT."),
+                    primaryButton: .default(Text("OK")),
+                    secondaryButton: .destructive(Text("Start Anyway")) {
+                        model.startServer()
+                    }
                 )
             case .runtime(let message):
                 return Alert(
@@ -945,7 +1014,7 @@ struct LaunchView: View {
                             Text("Step 3: Launch your Server")
                                 .font(.headline)
                             
-                            if jessi_check_jit_enabled() {
+                            if JITEnabler.isJITUsable {
                                 Text("Your server is ready to go! Make sure that the correct server is selected, then tap the Start button.")
                                     .multilineTextAlignment(.center)
                                     .font(.subheadline)

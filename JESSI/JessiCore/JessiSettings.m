@@ -42,9 +42,6 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
     }
 
     for (NSString *ver in @[@"8", @"17", @"21", @"25"]) {
-        if (isIOS26OrLater && [ver isEqualToString:@"8"]) {
-            continue;
-        }
         for (NSString *root in roots) {
             NSString *path = [root stringByAppendingPathComponent:[NSString stringWithFormat:@"java%@", ver]];
             if ([fm fileExistsAtPath:path]) {
@@ -84,9 +81,6 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
     NSString *runtimesRoot = [[appSupport URLByAppendingPathComponent:@"Runtimes" isDirectory:YES] path];
     if (runtimesRoot.length) {
         for (NSString *ver in @[@"8", @"17", @"21", @"25"]) {
-            if (isIOS26OrLater && [ver isEqualToString:@"8"]) {
-                continue;
-            }
             NSString *dir = [runtimesRoot stringByAppendingPathComponent:[NSString stringWithFormat:@"jre%@", ver]];
             if ([fm fileExistsAtPath:dir] && ![available containsObject:ver]) {
                 [available addObject:ver];

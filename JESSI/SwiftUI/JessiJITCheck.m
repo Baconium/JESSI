@@ -151,9 +151,8 @@ BOOL jessi_is_ios26_or_later(void) {
     return NO;
 }
 
-BOOL jessi_is_txm_device(void) {
-    if (!jessi_is_ios26_or_later()) return NO;
-
+static BOOL jessi_probe_txm_firmware(BOOL *known) {
+    *known = NO;
     DIR *d = opendir("/private/preboot");
     if (!d) return NO;
 
@@ -167,7 +166,41 @@ BOOL jessi_is_txm_device(void) {
     }
     closedir(d);
 
-    return txmPath[0] != '\0' && access(txmPath, F_OK) == 0;
+    if (txmPath[0] == '\0') return NO;
+    *known = YES;
+    return access(txmPath, F_OK) == 0;
+}
+
+static BOOL jessi_model_has_txm(void) {
+    struct utsname systemInfo;
+    uname(&systemInfo);
+    const char *machine = systemInfo.machine;
+
+    if (@available(iOS 27, *)) {
+        return strcmp(machine, "iPad8,11") != 0 && strcmp(machine, "iPad8,12") != 0;
+    }
+
+    BOOL isPad = strncmp(machine, "iPad", 4) == 0;
+    int major = 0, minor = 0;
+    if (sscanf(machine + (isPad ? 4 : 6), "%d,%d", &major, &minor) != 2) {
+        return YES;
+    }
+    double divisor = 1;
+    for (int m = minor; m > 0; m /= 10) divisor *= 10;
+    double version = major + minor / divisor;
+    return version >= (isPad ? 14.5 : 14.2);
+}
+
+BOOL jessi_is_txm_device(void) {
+    static BOOL result = NO;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        if (!jessi_is_ios26_or_later()) return;
+        BOOL known = NO;
+        BOOL firmwareHasTxm = jessi_probe_txm_firmware(&known);
+        result = known ? firmwareHasTxm : jessi_model_has_txm();
+    });
+    return result;
 }
 
 BOOL jessi_is_trollstore_installed(void) {

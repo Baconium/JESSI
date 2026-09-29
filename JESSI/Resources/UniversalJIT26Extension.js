@@ -1,10 +1,7 @@
 logLevel = LOG_INFO;
 let detachAfterFirstBr = false;
-
 legacyCommands[0x69] = function(brkResponse) {
-    x1 = x0;
-    x0 = 0;
-    JIT26PrepareRegion(brkResponse);
+    send_command(`P0=${numberToLittleEndianHexString(0n)};thread:${tid};`);
     if (detachAfterFirstBr) {
         JIT26Detach();
     }

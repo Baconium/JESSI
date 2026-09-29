@@ -159,6 +159,12 @@ if [[ "$JESSI_LDID_SIGN" == "1" ]]; then
   fi
   echo "Signing $APP_NAME executable with ldid entitlements: $JESSI_LDID_ENTITLEMENTS"
   ldid -S"$JESSI_LDID_ENTITLEMENTS" "$DEST_APP/$APP_NAME"
+  for appex in "$DEST_APP"/PlugIns/*.appex; do
+    [[ -d "$appex" ]] || continue
+    appex_bin="$appex/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$appex/Info.plist")"
+    echo "Signing $(basename "$appex") with ldid"
+    ldid -S "$appex_bin"
+  done
 fi
 
 mkdir -p "$DIST_DIR"

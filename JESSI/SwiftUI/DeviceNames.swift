@@ -13,6 +13,8 @@ enum JessiDeviceMarketingNames {
         "iPod9,1": "iPod touch (7th generation)",
 
         // iPhone
+        "iPhone1,1": "how the fuck are you running this on an iPhone 2g",
+
         "iPhone8,1": "iPhone 6s",
         "iPhone8,2": "iPhone 6s Plus",
         "iPhone8,4": "iPhone SE 1st gen",
@@ -72,6 +74,11 @@ enum JessiDeviceMarketingNames {
         "iPhone18,2": "iPhone 17 Pro Max",
         "iPhone18,4": "iPhone Air",
         "iPhone18,5": "iPhone 17e",
+
+        "iPhone19,2": "iPhone 18 Pro",
+        "iPhone19,3": "iPhone 18 Pro Max",
+        "iPhone19,4": "iPhone Duo",
+        "iPhone19,7": "iPhone 18 Pro Max",
 
         // iPad
         "iPad6,11": "iPad (5th generation)",

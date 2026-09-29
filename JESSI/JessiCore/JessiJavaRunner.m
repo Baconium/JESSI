@@ -20,6 +20,7 @@
 #import <spawn.h>
 #import <sys/mman.h>
 #import <mach/mach.h>
+#import <mach-o/dyld.h>
 #import <mach-o/dyld_images.h>
 #import <libkern/OSCacheControl.h>
 #import <pthread.h>
@@ -40,6 +41,8 @@
 #endif
 #import "JessiSettings.h"
 #import "../SwiftUI/JessiJITCheck.h"
+#import "JessiPrebootRedirect.h"
+#import "fishhook.h"
 #import "MachExc/mach_excServer.h"
 
 #ifndef JESSI_TXM_DEBUG_LOGGING
@@ -165,6 +168,49 @@ static BOOL jessi_jit26_prepare_region_chunked(void *addr, size_t len) {
     return YES;
 }
 
+static void *(*jessi_orig_libjvm_mmap)(void *, size_t, int, int, int, off_t);
+static uintptr_t jessi_cc_base = 0, jessi_cc_len = 0;
+static void *jessi_libjvm_mmap(void *addr, size_t len, int prot, int flags, int fd, off_t offset) {
+    void *map = jessi_orig_libjvm_mmap(addr, len, prot, flags, fd, offset);
+    if (map != MAP_FAILED && fd == -1 && (flags & MAP_ANON) && (prot & PROT_EXEC)) {
+        if (!jessi_cc_len) { jessi_cc_base = (uintptr_t)map; jessi_cc_len = len; }
+        if (!jessi_jit26_prepare_region_chunked(map, len)) {
+            NSLog(@"[JESSI] libjvm RX mapping %p (%zu bytes) could not be prepared", map, len);
+        }
+        sys_icache_invalidate(map, len);
+    }
+    return map;
+}
+
+static int (*jessi_orig_mprotect)(void *, size_t, int);
+static int (*jessi_orig_madvise)(void *, size_t, int);
+
+static BOOL jessi_cc_overlaps(uintptr_t a, size_t n) {
+    return jessi_cc_len && a < jessi_cc_base + jessi_cc_len && a + n > jessi_cc_base;
+}
+static int jessi_hook_mprotect(void *a, size_t n, int prot) {
+    if (jessi_cc_overlaps((uintptr_t)a, n)) return 0;
+    return jessi_orig_mprotect(a, n, prot);
+}
+static int jessi_hook_madvise(void *a, size_t n, int adv) {
+    if (jessi_cc_overlaps((uintptr_t)a, n)) return 0;
+    return jessi_orig_madvise(a, n, adv);
+}
+
+static void jessi_rebind_libjvm_mmap(const struct mach_header *header, intptr_t slide) {
+    Dl_info info;
+    if (!dladdr(header, &info) || !info.dli_fname) return;
+    const char *name = strrchr(info.dli_fname, '/');
+    if (!name || strcmp(name + 1, "libjvm.dylib") != 0) return;
+    struct rebinding rebinding[] = {
+        {"mmap", (void *)jessi_libjvm_mmap, (void **)&jessi_orig_libjvm_mmap},
+        {"mprotect", (void *)jessi_hook_mprotect, (void **)&jessi_orig_mprotect},
+        {"madvise", (void *)jessi_hook_madvise, (void **)&jessi_orig_madvise},
+    };
+    int rc = rebind_symbols_image((void *)header, slide, rebinding, 3);
+    if (rc != 0) NSLog(@"[JESSI] rebind_symbols_image(libjvm.dylib) failed: %d", rc);
+}
+
 __attribute__((noinline,optnone,naked))
 static void *jessi_jit26_prepare_region(void *addr, size_t len) {
     asm("mov x16, #1 \n"
@@ -199,6 +245,15 @@ static void *jessi_jit26_create_region_legacy(size_t size) {
         "ret");
 }
 
+static BOOL jessi_extra_args_need_default_target(NSArray<NSString *> *extra) {
+    for (NSString *a in extra) {
+        if (![a hasPrefix:@"-"] || [a isEqualToString:@"-jar"] || [a isEqualToString:@"-m"] || [a isEqualToString:@"--module"]) {
+            return NO;
+        }
+    }
+    return YES;
+}
+
 static BOOL jessi_send_jit26_extension_script(void) {
     NSString *scriptPath = [[NSBundle mainBundle] pathForResource:@"UniversalJIT26Extension" ofType:@"js"];
     if (!scriptPath) {
@@ -218,22 +273,8 @@ static BOOL jessi_send_jit26_extension_script(void) {
 
 static BOOL jessi_device_requires_txm_workaround(void) {
     if (!jessi_is_ios26_or_later_core()) return NO;
-
-    DIR *d = opendir("/private/preboot");
-    if (!d) return NO;
-
-    struct dirent *dir = NULL;
-    char txmPath[PATH_MAX] = {0};
-    while ((dir = readdir(d)) != NULL) {
-        if (strlen(dir->d_name) == 96) {
-            snprintf(txmPath, sizeof(txmPath), "/private/preboot/%s/usr/standalone/firmware/FUD/Ap,TrustedExecutionMonitor.img4", dir->d_name);
-            break;
-        }
-    }
-    closedir(d);
-
-    BOOL hasTxm = txmPath[0] != '\0' && access(txmPath, F_OK) == 0;
-    JESSI_TXM_LOG("[JESSI] TXM probe path=%s present=%d\n", txmPath[0] ? txmPath : "(none)", hasTxm ? 1 : 0);
+    BOOL hasTxm = jessi_is_txm_device();
+    JESSI_TXM_LOG("[JESSI] TXM device=%d\n", hasTxm ? 1 : 0);
     return hasTxm;
 }
 
@@ -457,7 +498,8 @@ static void jessi_preflight_dlopen_path(const char *label, const char *path) {
     JessiDlopenCtx dlCtx = { .path = path, .flags = RTLD_GLOBAL | RTLD_NOW };
     void *h = jessi_run_with_hw_breakpoints(jessi_dlopen_trampoline, &dlCtx);
     if (!h) {
-        JESSI_TXM_LOG("[JESSI] Preflight dlopen(%s) failed for %s: %s\n", label ? label : "?", path, err ? err : "unknown");
+        const char *dlErr = dlerror();
+        JESSI_TXM_LOG("[JESSI] Preflight dlopen(%s) failed for %s: %s\n", label ? label : "?", path, dlErr ? dlErr : "unknown");
     } else {
         JESSI_TXM_LOG("[JESSI] Preflight dlopen(%s) OK: %s\n", label ? label : "?", path);
     }
@@ -520,6 +562,7 @@ static void jessi_preflight_jvm_dylibs_if_needed(NSString *javaHome) {
         jessi_for_each_dylib_under_dir(root, ^(NSString *fullPath) {
             if ([seen containsObject:fullPath]) return;
             [seen addObject:fullPath];
+            if ([fullPath.lastPathComponent hasPrefix:@"libjsound"]) return;
             preflightCount++;
             const char *label = fullPath.lastPathComponent.UTF8String;
             jessi_preflight_dlopen_path(label && label[0] ? label : "dylib", fullPath.fileSystemRepresentation);
@@ -1007,7 +1050,6 @@ static void jessi_init_dyld_validation_bypass_if_needed(void) {
             JESSI_TXM_LOG("[JESSI] iOS 26 TXM device: verifying debugger and sending extension script\n");
             jessi_install_sigtrap_fallback_if_needed();
             void *legacyResult = jessi_jit26_create_region_legacy((size_t)getpagesize());
-            JESSI_TXM_LOG("[JESSI] Legacy JIT probe result=%p\n", legacyResult);
             if ((uint32_t)(uintptr_t)legacyResult != 0x690000E0u) {
                 if (legacyResult != NULL && legacyResult != MAP_FAILED) {
                     munmap(legacyResult, (size_t)getpagesize());
@@ -1025,6 +1067,8 @@ static void jessi_init_dyld_validation_bypass_if_needed(void) {
 
             jessi_jit26_set_detach_after_first_br(NO);
             JESSI_TXM_LOG("[JESSI] Set debugger to stay attached\n");
+
+            _dyld_register_func_for_add_image(jessi_rebind_libjvm_mmap);
 
             task_set_exception_ports(mach_task_self(), EXC_MASK_BAD_ACCESS, 0, EXCEPTION_DEFAULT, MACHINE_THREAD_STATE);
 
@@ -1232,10 +1276,6 @@ static NSArray<NSString *> *jessi_filter_extra_jvm_args(NSArray<NSString *> *arg
         }
 
         
-        if (!isJava17Plus && [arg rangeOfString:@"MirrorMappedCodeCache"].location != NSNotFound) {
-            continue;
-        }
-
         [out addObject:arg];
     }
     return out;
@@ -1478,19 +1518,12 @@ static int jessi_spawn_external_java_args(NSArray<NSString *> *args) {
 int jessi_server_main(int argc, char *argv[]) {
     (void)[NSBundle mainBundle];
     (void)[NSFileManager defaultManager];
+    jessi_install_preboot_redirect();
     {
         static volatile int32_t s_serverMainEntries = 0;
         int32_t entry = __sync_add_and_fetch(&s_serverMainEntries, 1);
         if (entry > 1) {
-            NSLog(@"[JESSI] [reentry] jessi_server_main entered %d times in pid %d (thread %p) - expect a create_vm crash",
-                  (int)entry, (int)getpid(), (void *)pthread_self());
-            void *frames[32];
-            int n = backtrace(frames, 32);
-            char **syms = backtrace_symbols(frames, n);
-            for (int i = 0; i < n; i++) {
-                NSLog(@"[JESSI] [reentry]   %s", syms && syms[i] ? syms[i] : "(null)");
-            }
-            free(syms);
+            NSLog(@"[JESSI] WARNING: jessi_server_main entered %d times in pid %d; expected exactly once now that the JLI Cocoa relay is disabled on iOS", (int)entry, (int)getpid());
         }
     }
 
@@ -1641,9 +1674,8 @@ int jessi_server_main(int argc, char *argv[]) {
                 [args addObject:@"-Dsun.net.client.defaultReadTimeout=30000"];
                 [args addObject:@"-Dsun.nio.ch.disableSystemWideOverlappingFileLockCheck=true"];
 
-                if (extra.count) {
-                    [args addObjectsFromArray:extra];
-                } else {
+                [args addObjectsFromArray:extra];
+                if (jessi_extra_args_need_default_target(extra)) {
                     [args addObject:@"-jar"];
                     [args addObject:[NSString stringWithUTF8String:jarPathC ?: ""]];
                     [args addObject:@"nogui"];
@@ -1773,7 +1805,7 @@ int jessi_server_main(int argc, char *argv[]) {
                 jargv[idx++] = "-XX:+DisablePrimordialThreadGuardPages";
             }
             
-            if (ios26OrLater && txmSupport && isJava17Plus) {
+            if (ios26OrLater && txmSupport) {
                 jargv[idx++] = "-XX:+MirrorMappedCodeCache";
             }
             
@@ -1807,6 +1839,8 @@ int jessi_server_main(int argc, char *argv[]) {
                 if (!userSetCodeCache) {
                     jargv[idx++] = "-XX:ReservedCodeCacheSize=64M";
                 }
+            } else if (ios26OrLater && !userSetCodeCache && jessi_device_requires_txm_workaround()) {
+                jargv[idx++] = "-XX:ReservedCodeCacheSize=32M";
             }
 
             if (flagNettyNoNative) {
@@ -1831,12 +1865,11 @@ int jessi_server_main(int argc, char *argv[]) {
             jargv[idx++] = "-Dsun.net.client.defaultConnectTimeout=30000";
             jargv[idx++] = "-Dsun.net.client.defaultReadTimeout=30000";
             jargv[idx++] = "-Dsun.nio.ch.disableSystemWideOverlappingFileLockCheck=true";
-            if (extra.count) {
-                for (NSString *arg in extra) {
-                    if (idx >= 78) break;
-                    jargv[idx++] = arg.UTF8String;
-                }
-            } else {
+            for (NSString *arg in extra) {
+                if (idx >= 74) break;
+                jargv[idx++] = arg.UTF8String;
+            }
+            if (jessi_extra_args_need_default_target(extra)) {
                 jargv[idx++] = "-jar";
                 jargv[idx++] = jarPathC;
                 jargv[idx++] = "nogui";
@@ -1928,6 +1961,7 @@ int jessi_spawn_tool(int argc, char *argv[]) {
 int jessi_tool_main(int argc, char *argv[]) {
     (void)[NSBundle mainBundle];
     (void)[NSFileManager defaultManager];
+    jessi_install_preboot_redirect();
 
     @autoreleasepool {
         @try {
@@ -2109,7 +2143,7 @@ int jessi_tool_main(int argc, char *argv[]) {
                 jargv[idx++] = "-XX:+UnlockExperimentalVMOptions";
                 jargv[idx++] = "-XX:+DisablePrimordialThreadGuardPages";
             }
-            if (ios26OrLater && txmSupport && isJava17Plus) {
+            if (ios26OrLater && txmSupport) {
                 jargv[idx++] = "-XX:+MirrorMappedCodeCache";
             }
             if (isJava17Plus && !jessi_has_extended_va_entitlement()) {

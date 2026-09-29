@@ -26,3 +26,4 @@ patch_icache.sh
 Amethyst-iOS/
 tools/
 *.bak
+stikdebug/

@@ -34,6 +34,7 @@
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_minecraft._tcp</string>
+		<string>_remotepairing._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>JESSI needs access to your local network so other devices on your Wi-Fi can connect to Minecraft servers ran by the app.</string>

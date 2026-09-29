@@ -442,8 +442,12 @@ final class SettingsModel: ObservableObject {
         return "Recommended: approximately half of your device's total ram. if you exceed the amount of ram your device has available, JESSI will crash!"
     }
 
+    func refreshJITStatus() {
+        isJITEnabled = isJITEnabledCheck()
+    }
+
     private func isJITEnabledCheck() -> Bool {
-        return jessi_check_jit_enabled()
+        return JITEnabler.isJITUsable
     }
 
     private func formatRAM(_ bytes: UInt64) -> String {
@@ -752,11 +756,6 @@ final class SettingsModel: ObservableObject {
     }
 
     func installOneRuntime(version: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        if isIOS26 && version == "8" {
-            completion(.failure(NSError(domain: "JESSI", code: 26, userInfo: [NSLocalizedDescriptionKey: "Java 8 is not supported on iOS 26+"])))
-            return
-        }
-
         let candidateURLs = runtimeDownloadURLs(for: version)
         guard !candidateURLs.isEmpty else {
             completion(.failure(NSError(domain: "JESSI", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unknown Java version: \(version)"])))
@@ -928,7 +927,7 @@ final class SettingsModel: ObservableObject {
             return
         }
 
-        let filtered = versions.filter { !(isIOS26 && $0 == "8") }
+        let filtered = versions
         guard !filtered.isEmpty else {
             DispatchQueue.main.async {
                 self.installErrorMessage = "Nothing to install."
@@ -1322,7 +1321,6 @@ struct SettingsView: View {
 
     private func toggleSelection(_ version: String) {
         if model.installedJVMVersions.contains(version) { return }
-        if model.isIOS26 && version == "8" { return }
         if installInProgress { return }
         var next = installSelection
         if next.contains(version) {
@@ -1739,12 +1737,12 @@ struct SettingsView: View {
                             InstallJVMRow(
                                 version: ver,
                                 isInstalled: false,
-                                isUnsupported: model.isIOS26 && ver == "8",
+                                isUnsupported: false,
                                 isSelected: installSelection.contains(ver),
                                 isInstalling: installInProgress && installQueue.contains(ver),
                                 onToggle: { toggleSelection(ver) }
                             )
-                            .disabled(installInProgress || (model.isIOS26 && ver == "8"))
+                            .disabled(installInProgress)
                             .normalizedSeparator()
                         }
 
@@ -1844,10 +1842,11 @@ struct SettingsView: View {
                         Text("JESSI requires Java to function. Please install a JVM in the menu above. If you're unsure which version to select, select Java 25.")
                     }
 
-                    if model.isIOS26 && !model.isMacCatalyst {
-                        Text("Java 8 is not supported on iOS 26+")
-                    }
                 }
+            }
+
+            if #available(iOS 17.4, *), !jessi_is_running_on_macos() {
+                JITSettingsSection(onJITStatusChange: { model.refreshJITStatus() })
             }
 
             Section {
@@ -1892,7 +1891,7 @@ struct SettingsView: View {
                 Toggle("Keep alive in background", isOn: keepAliveEnabledBinding)
                     .normalizedSeparator()
             } header: {
-                Text("keep alive")
+                Text("KeepAlive")
             } footer: {
                 if keepalivemethod == .location {
                     Text("Requires 'Always' [Location permission.](app-settings:) Your location data will not be collected.")

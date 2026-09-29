@@ -7,6 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B1C0F700A1B2C3D4E5F60301 /* fishhook.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60381 /* fishhook.c */; };
+		B1C0F700A1B2C3D4E5F60302 /* JessiPrebootRedirect.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60383 /* JessiPrebootRedirect.m */; };
+		B1C0F700A1B2C3D4E5F60201 /* JITEnabler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60281 /* JITEnabler.swift */; };
+		B1C0F700A1B2C3D4E5F60202 /* JITEnablerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60282 /* JITEnablerView.swift */; };
+		B1C0F700A1B2C3D4E5F60203 /* JITHelperRequestHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60283 /* JITHelperRequestHandler.swift */; };
+		B1C0F700A1B2C3D4E5F60204 /* IdeviceSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60284 /* IdeviceSupport.swift */; };
+		B1C0F700A1B2C3D4E5F60205 /* JITScriptRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60285 /* JITScriptRunner.swift */; };
+		B1C0F700A1B2C3D4E5F60206 /* DeveloperDiskImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60286 /* DeveloperDiskImage.swift */; };
+		B1C0F700A1B2C3D4E5F60207 /* universal.js in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60287 /* universal.js */; };
+		B1C0F700A1B2C3D4E5F60208 /* JITHelper.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60290 /* JITHelper.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B1C0F700A1B2C3D4E5F60032 /* CreateServerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */; };
 		B1C0F700A1B2C3D4E5F60033 /* DoneToolbarTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */; };
 		B1C0F700A1B2C3D4E5F60034 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */; };
@@ -37,7 +47,44 @@
 		B1C0F700A1B2C3D4E5F60111 /* SWCompression in Frameworks */ = {isa = PBXBuildFile; productRef = B1C0F700A1B2C3D4E5F60101 /* SWCompression */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		B1C0F700A1B2C3D4E5F602A0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A6C524872F2873DF0030EE41 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B1C0F700A1B2C3D4E5F602B0;
+			remoteInfo = JITHelper;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B1C0F700A1B2C3D4E5F602A1 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B1C0F700A1B2C3D4E5F60208 /* JITHelper.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		B1C0F700A1B2C3D4E5F60381 /* fishhook.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = fishhook.c; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60382 /* fishhook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = fishhook.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60383 /* JessiPrebootRedirect.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiPrebootRedirect.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60384 /* JessiPrebootRedirect.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiPrebootRedirect.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60281 /* JITEnabler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JITEnabler.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60282 /* JITEnablerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JITEnablerView.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60283 /* JITHelperRequestHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JITHelperRequestHandler.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60284 /* IdeviceSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdeviceSupport.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60285 /* JITScriptRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JITScriptRunner.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60286 /* DeveloperDiskImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeveloperDiskImage.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60287 /* universal.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = universal.js; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60288 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60290 /* JITHelper.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JITHelper.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A6C5248F2F2873DF0030EE41 /* JESSI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JESSI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1C0F700A1B2C3D4E5F60001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60004 /* Bridging.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Bridging.h; sourceTree = "<group>"; };
@@ -77,6 +124,13 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		B1C0F700A1B2C3D4E5F602A2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A6C5248C2F2873DF0030EE41 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -89,6 +143,27 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		B1C0F700A1B2C3D4E5F602C0 /* JITHelper */ = {
+			isa = PBXGroup;
+			children = (
+				B1C0F700A1B2C3D4E5F60286 /* DeveloperDiskImage.swift */,
+				B1C0F700A1B2C3D4E5F60284 /* IdeviceSupport.swift */,
+				B1C0F700A1B2C3D4E5F60283 /* JITHelperRequestHandler.swift */,
+				B1C0F700A1B2C3D4E5F60285 /* JITScriptRunner.swift */,
+				B1C0F700A1B2C3D4E5F60288 /* Info.plist */,
+				B1C0F700A1B2C3D4E5F602C1 /* Resources */,
+			);
+			path = JITHelper;
+			sourceTree = "<group>";
+		};
+		B1C0F700A1B2C3D4E5F602C1 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B1C0F700A1B2C3D4E5F60287 /* universal.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		A6C524862F2873DF0030EE41 = {
 			isa = PBXGroup;
 			children = (
@@ -101,6 +176,7 @@
 			isa = PBXGroup;
 			children = (
 				A6C5248F2F2873DF0030EE41 /* JESSI.app */,
+				B1C0F700A1B2C3D4E5F60290 /* JITHelper.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -110,6 +186,7 @@
 			children = (
 				B1C0F700A1B2C3D4E5F60060 /* App */,
 				B1C0F700A1B2C3D4E5F60061 /* JessiCore */,
+				B1C0F700A1B2C3D4E5F602C0 /* JITHelper */,
 				B1C0F700A1B2C3D4E5F60064 /* Resources */,
 				B1C0F700A1B2C3D4E5F60062 /* SwiftUI */,
 			);
@@ -128,11 +205,15 @@
 			isa = PBXGroup;
 			children = (
 				B1C0F700A1B2C3D4E5F60063 /* MachExc */,
+				B1C0F700A1B2C3D4E5F60381 /* fishhook.c */,
+				B1C0F700A1B2C3D4E5F60382 /* fishhook.h */,
 				B1C0F700A1B2C3D4E5F60010 /* JessiAppDelegate.h */,
 				B1C0F700A1B2C3D4E5F60011 /* JessiAppDelegate.m */,
 				B1C0F700A1B2C3D4E5F60012 /* JessiJavaRunner.m */,
 				B1C0F700A1B2C3D4E5F60013 /* JessiPaths.h */,
 				B1C0F700A1B2C3D4E5F60014 /* JessiPaths.m */,
+				B1C0F700A1B2C3D4E5F60384 /* JessiPrebootRedirect.h */,
+				B1C0F700A1B2C3D4E5F60383 /* JessiPrebootRedirect.m */,
 				B1C0F700A1B2C3D4E5F60015 /* JessiServerService.h */,
 				B1C0F700A1B2C3D4E5F60016 /* JessiServerService.m */,
 				B1C0F700A1B2C3D4E5F60017 /* JessiServerSoftware.h */,
@@ -155,6 +236,8 @@
 				B1C0F700A1B2C3D4E5F60008 /* JessiJITCheck.h */,
 				B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */,
 				B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */,
+				B1C0F700A1B2C3D4E5F60281 /* JITEnabler.swift */,
+				B1C0F700A1B2C3D4E5F60282 /* JITEnablerView.swift */,
 				B1C0F700A1B2C3D4E5F60021 /* Logger.swift */,
 				B1C0F700A1B2C3D4E5F60020 /* ModsView.swift */,
 				B1C0F700A1B2C3D4E5F60090 /* ResourcePacks.swift */,
@@ -190,6 +273,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B1C0F700A1B2C3D4E5F602B0 /* JITHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1C0F700A1B2C3D4E5F602D0 /* Build configuration list for PBXNativeTarget "JITHelper" */;
+			buildPhases = (
+				B1C0F700A1B2C3D4E5F602A4 /* Sources */,
+				B1C0F700A1B2C3D4E5F602A2 /* Frameworks */,
+				B1C0F700A1B2C3D4E5F602A5 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = JITHelper;
+			productName = JITHelper;
+			productReference = B1C0F700A1B2C3D4E5F60290 /* JITHelper.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		A6C5248E2F2873DF0030EE41 /* JESSI */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A6C5249A2F2873E10030EE41 /* Build configuration list for PBXNativeTarget "JESSI" */;
@@ -197,10 +297,12 @@
 				A6C5248B2F2873DF0030EE41 /* Sources */,
 				A6C5248C2F2873DF0030EE41 /* Frameworks */,
 				A6C5248D2F2873DF0030EE41 /* Resources */,
+				B1C0F700A1B2C3D4E5F602A1 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B1C0F700A1B2C3D4E5F602A3 /* PBXTargetDependency */,
 			);
 			name = JESSI;
 			packageProductDependencies = (
@@ -224,6 +326,9 @@
 					A6C5248E2F2873DF0030EE41 = {
 						CreatedOnToolsVersion = 26.2;
 					};
+					B1C0F700A1B2C3D4E5F602B0 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 				};
 			};
 			buildConfigurationList = A6C5248A2F2873DF0030EE41 /* Build configuration list for PBXProject "JESSI" */;
@@ -245,11 +350,20 @@
 			projectRoot = "";
 			targets = (
 				A6C5248E2F2873DF0030EE41 /* JESSI */,
+				B1C0F700A1B2C3D4E5F602B0 /* JITHelper */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		B1C0F700A1B2C3D4E5F602A5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1C0F700A1B2C3D4E5F60207 /* universal.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A6C5248D2F2873DF0030EE41 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -262,6 +376,17 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		B1C0F700A1B2C3D4E5F602A4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1C0F700A1B2C3D4E5F60206 /* DeveloperDiskImage.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60204 /* IdeviceSupport.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60203 /* JITHelperRequestHandler.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60205 /* JITScriptRunner.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		A6C5248B2F2873DF0030EE41 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -271,6 +396,8 @@
 				B1C0F700A1B2C3D4E5F60040 /* main.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003A /* JessiAppDelegate.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003B /* JessiJavaRunner.m in Sources */,
+				B1C0F700A1B2C3D4E5F60301 /* fishhook.c in Sources */,
+				B1C0F700A1B2C3D4E5F60302 /* JessiPrebootRedirect.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003C /* JessiPaths.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003D /* JessiServerService.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003E /* JessiServerSoftware.m in Sources */,
@@ -281,6 +408,8 @@
 				B1C0F700A1B2C3D4E5F60033 /* DoneToolbarTextField.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60034 /* FileBrowserView.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60036 /* LaunchView.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60201 /* JITEnabler.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60202 /* JITEnablerView.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60045 /* Logger.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60044 /* ModsView.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60091 /* ResourcePacks.swift in Sources */,
@@ -295,7 +424,80 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		B1C0F700A1B2C3D4E5F602A3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = B1C0F700A1B2C3D4E5F602B0 /* JITHelper */;
+			targetProxy = B1C0F700A1B2C3D4E5F602A0 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		B1C0F700A1B2C3D4E5F602D1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6XKA3GY3KZ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = JESSI/JITHelper/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = "$(inherited) $(SRCROOT)/Vendor/idevice";
+				MARKETING_VERSION = 1.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lidevice_ffi",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.JITHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/Vendor/idevice";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B1C0F700A1B2C3D4E5F602D2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6XKA3GY3KZ;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = JESSI/JITHelper/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = "$(inherited) $(SRCROOT)/Vendor/idevice";
+				MARKETING_VERSION = 1.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lidevice_ffi",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.JITHelper;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/Vendor/idevice";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		A6C524982F2873E10030EE41 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -512,6 +714,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B1C0F700A1B2C3D4E5F602D0 /* Build configuration list for PBXNativeTarget "JITHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B1C0F700A1B2C3D4E5F602D1 /* Debug */,
+				B1C0F700A1B2C3D4E5F602D2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		A6C5248A2F2873DF0030EE41 /* Build configuration list for PBXProject "JESSI" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
