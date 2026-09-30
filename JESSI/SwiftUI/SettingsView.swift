@@ -1105,7 +1105,7 @@ struct SettingsView: View {
     @StateObject private var playitmodel = PlayitModel()
     @StateObject private var upnpModel = UpnpModel()
     @AppStorage(keepalivemgr.enabledkey) private var keepalive: Bool = false
-    @AppStorage(keepalivemgr.methodkey) private var keepalivemethodraw: String = keepalivemgr.keepalivemethod.location.rawValue
+    @AppStorage(keepalivemgr.methodkey) private var keepalivemethodraw: String = keepalivemgr.keepalivemethod.audio.rawValue
     @AppStorage("jessi.server.running") private var serverRunning: Bool = false
     @AppStorage("jessi.tunnel.install.inProgress") private var tunnelinginstallinprogress: Bool = false
     @AppStorage("jessi.tunnel.install.queue") private var tunnelingInstallQueueCSV: String = ""
@@ -1181,9 +1181,9 @@ struct SettingsView: View {
     private var keepalivemethod: keepalivemgr.keepalivemethod {
         if !model.isTrollStore,
            keepalivemethodraw == keepalivemgr.keepalivemethod.trollstore.rawValue {
-            return .location
+            return .audio
         }
-        return keepalivemgr.keepalivemethod(rawValue: keepalivemethodraw) ?? .location
+        return keepalivemgr.keepalivemethod(rawValue: keepalivemethodraw) ?? .audio
     }
 
     private var keepAliveEnabledBinding: Binding<Bool> {
@@ -1867,7 +1867,7 @@ struct SettingsView: View {
                         get: {
                             if !model.isTrollStore,
                                keepalivemethodraw == keepalivemgr.keepalivemethod.trollstore.rawValue {
-                                return keepalivemgr.keepalivemethod.location.rawValue
+                                return keepalivemgr.keepalivemethod.audio.rawValue
                             }
                             return keepalivemethodraw
                         },
