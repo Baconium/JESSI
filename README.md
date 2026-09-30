@@ -41,19 +41,21 @@ Tutorials for installing JESSI can be found in [the wiki for this repo](https://
 
 # LiveContainer
 
-While this repo won't directly give you a guide on how to use/install LiveContainer, it should be noted that JESSI has full compatibility with LiveContainer. All you need to do is install JESSI inside of LiveContainer, then launch it with JIT.
+While this repo won't directly give you a guide on how to use/install LiveContainer, JESSI should work inside of LiveContainer. Make sure to enable JIT for JESSI inside of LiveContainer, and use [this jit script](https://raw.githubusercontent.com/Baconium/JESSI/refs/heads/main/JESSI/JITHelper/Resources/universal.js) if you're on a TXM device. JESSI's built in JIT enabler has not been tested inside of LiveContainer, but it is unlikely to function properly.
 
 # Features
 
 JESSI is still being actively developed, and plenty of more features will come. Here's a list of some of JESSI's most important features:
 
 - Ability to run minecraft servers (duh)
-- Built in JVM downloader, pick between Java 8, 17, and 21 (or download all of them!)
+- Built in JVM downloader, pick between Java 8, 17, 21, or 25 (or download all of them!)
+- Automatic JIT enabler (iOS 17.4+)
 - Server memory allocation slider
 - Easy to use server creator, with support for several server softwares
 - A file manager that allows you to easily manage several servers
 - Network tunneling via playit.gg and UPnP support
-- Integrated mod, modpack, resource pack, and datapack downloading via Modrinth and curseforge
+- Integrated mod, modpack, resource pack, and datapack downloading via Modrinth and CurseForge
+- Automatic resource pack merger
 - Keep alive, run the server in the background even with the screen off
 - Server config GUI
 
@@ -64,6 +66,6 @@ If you would like to build JESSI yourself, it's pretty simple. Install Xcode and
 - `scripts/build-ipa.sh` for an ipa for iOS/iPadOS
 - `scripts/build-ipa.sh --macos` for an app for macOS
 
-There are some limitations that we're currently running into for jailed iOS, that we're not sure are solvable. The main one is that the JVM must run in the same process as the app itself. Because of this, when the JVM is killed in any way, the app is also killed. So, at least for now, if you stop a server or create a forge/neoforge server in the server setup, the app will crash after the java process ends. You will not lose any data from a crash occuring this way, and in fact Crash Reporter on iOS doesn't even detect it as a crash. This is solvable by running the JVM in a seperate process, which is now automatically used for macOS builds and still available on supported TrollStore setups.
+There are some limitations that we're currently running into for jailed iOS, that we're not sure are solvable. The main one is that the JVM must run in the same process as the app itself. Because of this, when the JVM is killed in any way, the app is also killed. So, at least for now, if you stop a server or create a forge/neoforge server in the server setup, the app will crash after the java process ends. You will not lose any data from a crash occuring this way, and in fact Crash Reporter on iOS doesn't even detect it as a crash. This is solvable by running the JVM in a seperate process, which is done automatically on macOS and TrollStore.
 
 We're open to feedback and suggestions for features, so if you have any ideas on how JESSI could be improved feel free to contact us in the discord server. Thank you for using JESSI!
