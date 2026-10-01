@@ -885,7 +885,7 @@ final class SettingsModel: ObservableObject {
                         try? fm.removeItem(at: backup)
                     }
                     try fm.moveItem(at: staging, to: finalDir)
-                    JessiPaths.migrateLegacyStorage()  // also keeps the Runtimes folder out of backups
+                    JessiPaths.migrateLegacyStorage()
 
                     DispatchQueue.main.async {
                         self.jvmDownloadProgress = 1

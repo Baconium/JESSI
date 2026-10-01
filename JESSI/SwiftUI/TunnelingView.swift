@@ -351,6 +351,14 @@ final class PlayitModel: ObservableObject {
             .path
     }
 
+    /// The library is only ad-hoc signed, which iOS refuses to load unless JESSI's dyld signature workaround is active.
+    /// That workaround normally comes up when a JVM launches, so start it here too if the plain load is refused.
+    private func openlibrary() -> UnsafeMutableRawPointer? {
+        if let handle = dlopen(libraryPath, RTLD_NOW) { return handle }
+        guard JITEnabler.isJITUsable, jessi_prepare_dyld_bypass_for_library_loading() else { return nil }
+        return dlopen(libraryPath, RTLD_NOW)
+    }
+
     @discardableResult
     func verifylibraryreachable(setErrorOnFailure: Bool = true) -> Bool {
         let fm = FileManager.default
@@ -373,11 +381,12 @@ final class PlayitModel: ObservableObject {
         }
 
         if libhandle == nil {
-            guard let handle = dlopen(libraryPath, RTLD_NOW) else {
+            guard let handle = openlibrary() else {
                 islibrarypresent = false
                 if setErrorOnFailure {
                     let err = String(cString: dlerror())
-                    seterror("Playit library not reachable: \(err)")
+                    let hint = JITEnabler.isJITUsable ? "" : "\n\nEnable JIT in Settings first; the library is ad-hoc signed and can only be loaded with JIT enabled."
+                    seterror("Playit library not reachable: \(err)\(hint)")
                 }
                 return false
             }
@@ -513,7 +522,7 @@ final class PlayitModel: ObservableObject {
 
     private func startlibrary(secretkey: String) -> String? {
         if libhandle == nil {
-            libhandle = dlopen(libraryPath, RTLD_NOW)
+            libhandle = openlibrary()
         }
         guard let handle = libhandle else {
             let err = String(cString: dlerror())

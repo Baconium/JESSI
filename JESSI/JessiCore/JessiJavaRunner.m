@@ -1104,6 +1104,11 @@ static void jessi_init_dyld_validation_bypass_if_needed(void) {
     });
 }
 
+bool jessi_prepare_dyld_bypass_for_library_loading(void) {
+    jessi_init_dyld_validation_bypass_if_needed();
+    return jessi_dyld_bypass_ready;
+}
+
 typedef struct {
     JLI_Launch_func *fn;
     int argc;
