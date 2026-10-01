@@ -44,6 +44,7 @@ enum ModProvider: String, CaseIterable, Identifiable {
 
 enum ContentType: String, CaseIterable, Codable, Identifiable {
     case mod
+    case plugin
     case modpack
     case resourcepack
     case datapack
@@ -53,6 +54,7 @@ enum ContentType: String, CaseIterable, Codable, Identifiable {
     var title: String {
         switch self {
         case .mod: return "Mods"
+        case .plugin: return "Plugins"
         case .modpack: return "Modpacks"
         case .resourcepack: return "Resourcepacks"
         case .datapack: return "Datapacks"
@@ -62,6 +64,7 @@ enum ContentType: String, CaseIterable, Codable, Identifiable {
     var dirname: String {
         switch self {
         case .mod: return "mods"
+        case .plugin: return "plugins"
         case .modpack: return "modpacks"
         case .resourcepack: return "resourcepacks"
         case .datapack: return "datapacks"
@@ -75,6 +78,7 @@ enum ContentType: String, CaseIterable, Codable, Identifiable {
     var curseforgeclassid: String {
         switch self {
         case .mod: return "6"
+        case .plugin: return "5"
         case .modpack: return "4471"
         case .resourcepack: return "12"
         case .datapack: return "6945"
@@ -83,6 +87,7 @@ enum ContentType: String, CaseIterable, Codable, Identifiable {
 
     static func fromcurseforgeclassid(_ id: Int?) -> ContentType {
         switch id {
+        case 5: return .plugin
         case 4471: return .modpack
         case 12: return .resourcepack
         case 6945: return .datapack
@@ -551,6 +556,7 @@ final class ModsVM: ObservableObject {
         self.servername = servername
         readconfig(for: servername)
         loadinstalledmods()
+        if isPluginServer { contentType = .plugin }
     }
     
     enum ServerSoftware: String {
@@ -559,8 +565,17 @@ final class ModsVM: ObservableObject {
         case neoforge
         case fabric
         case quilt
+        case paper
         case custom
     }
+
+    var isPluginServer: Bool { parsedserversoft() == .paper }
+
+    var availableContentTypes: [ContentType] {
+        isPluginServer ? [.plugin, .datapack, .resourcepack] : [.mod, .modpack, .resourcepack, .datapack]
+    }
+
+    static let pluginLoaders = ["paper", "spigot", "bukkit"]
 
     func parsedserversoft() -> ServerSoftware? {
         let soft = serversoft?
@@ -578,6 +593,8 @@ final class ModsVM: ObservableObject {
             return .fabric
         case "quilt":
             return .quilt
+        case "paper":
+            return .paper
         case "custom", "custom jar":
             return .custom
         default:
@@ -729,6 +746,10 @@ final class ModsVM: ObservableObject {
         if contentType == .mod, let software = parsedserversoft(), software != .custom,
            let loader = loaderFacet(for: software) {
             facets.append([loader])
+        }
+
+        if contentType == .plugin {
+            facets.append(Self.pluginLoaders.map { "categories:\($0)" })
         }
 
         if let facetsdata = try? JSONSerialization.data(withJSONObject: facets, options: []),
@@ -1131,6 +1152,14 @@ private struct Mod: View {
         }
     }
     
+    private func matchesLoader(_ version: ModrinthVersion) -> Bool {
+        if mod.contentType == .plugin {
+            return version.loaders.contains { ModsVM.pluginLoaders.contains($0.lowercased()) }
+        }
+        guard let loader = modloader() else { return true }
+        return version.loaders.contains(loader)
+    }
+
     func modloader() -> String? {
         if mod.contentType == .datapack { return "datapack" }
         guard mod.contentType == .mod else { return nil }
@@ -1191,12 +1220,10 @@ private struct Mod: View {
         let (data, _) = try await URLSession.shared.data(from: versionsurl)
         let versions = try JSONDecoder().decode([ModrinthVersion].self, from: data)
 
-        let loader = modloader()
         let mcversion = model.serverver?.trimmingCharacters(in: .whitespacesAndNewlines)
         let matching = versions.first { version in
             let matchesVersion = mcversion?.isEmpty != false || version.game_versions.contains(mcversion!)
-            let matchesLoader = loader == nil || version.loaders.contains(loader!)
-            return matchesVersion && matchesLoader
+            return matchesVersion && matchesLoader(version)
         } ?? versions.first
 
         guard let matching else {
@@ -1218,7 +1245,7 @@ private struct Mod: View {
         if mod.contentType == .datapack, file.filename.lowercased().hasSuffix(".zip") {
             return try installdatapackzip(data: moddata, filename: file.filename)
         }
-        if mod.contentType == .mod {
+        if mod.contentType == .mod || mod.contentType == .plugin {
             var visited: Set<String> = ["modrinth:\(mod.providerID):"]
             await installDependencies(targets: modrinthDepTargets(of: matching), visited: &visited)
         }
@@ -1275,7 +1302,7 @@ private struct Mod: View {
         if mod.contentType == .datapack, lowername.hasSuffix(".zip") {
             return try installdatapackzip(data: moddata, filename: filename)
         }
-        if mod.contentType == .mod {
+        if mod.contentType == .mod || mod.contentType == .plugin {
             var visited: Set<String> = ["cf:\(modid)"]
             await installDependencies(targets: curseForgeDepTargets(of: selected.file), visited: &visited)
         }
@@ -1307,7 +1334,7 @@ private struct Mod: View {
     private func isPreferredCurseForgeFile(_ file: CurseForgeFile) -> Bool {
         let name = file.fileName.lowercased()
         switch mod.contentType {
-        case .mod:
+        case .mod, .plugin:
             return name.hasSuffix(".jar")
         case .modpack:
             return name.hasSuffix(".mrpack") || name.hasSuffix(".zip")
@@ -1325,7 +1352,7 @@ private struct Mod: View {
     private func pickModrinthFile(from version: ModrinthVersion) -> ModrinthFile? {
         let wanted: [ModrinthFile]
         switch mod.contentType {
-        case .mod:
+        case .mod, .plugin:
             wanted = version.files.filter { $0.filename.lowercased().hasSuffix(".jar") }
         case .modpack:
             wanted = version.files.filter { $0.filename.lowercased().hasSuffix(".mrpack") }
@@ -1341,12 +1368,10 @@ private struct Mod: View {
         let (data, _) = try await URLSession.shared.data(from: versionsurl)
         let versions = try JSONDecoder().decode([ModrinthVersion].self, from: data)
 
-        let loader = modloader()
         let mcversion = model.serverver?.trimmingCharacters(in: .whitespacesAndNewlines)
         let first = versions.first { version in
             let matchesVersion = mcversion?.isEmpty != false || version.game_versions.contains(mcversion!)
-            let matchesLoader = loader == nil || version.loaders.contains(loader!)
-            return matchesVersion && matchesLoader
+            return matchesVersion && matchesLoader(version)
         }
         if let first {
             return first
@@ -1364,11 +1389,11 @@ private struct Mod: View {
         }
         return docs.appendingPathComponent("servers")
             .appendingPathComponent(servername)
-            .appendingPathComponent("mods")
+            .appendingPathComponent(mod.contentType == .plugin ? ContentType.plugin.dirname : ContentType.mod.dirname)
     }
 
     private func installDependencies(targets: [DepTarget], visited: inout Set<String>) async {
-        guard mod.contentType == .mod, !targets.isEmpty else { return }
+        guard mod.contentType == .mod || mod.contentType == .plugin, !targets.isEmpty else { return }
         modlogger.enclosedlog("installing \(targets.count) required dependency(ies) for \(mod.title)")
 
         for target in targets {
@@ -1888,7 +1913,7 @@ struct ModsView: View {
 
                         Menu {
                             Picker("Type", selection: $model.contentType) {
-                                ForEach(ContentType.allCases) { type in
+                                ForEach(model.availableContentTypes) { type in
                                     Text(type.title).tag(type)
                                 }
                             }
