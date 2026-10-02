@@ -39,6 +39,12 @@ JESSI is designed specifically to be as easy to use as possible, even if you hav
 
 Tutorials for installing JESSI can be found in [the wiki for this repo](https://github.com/Baconium/JESSI/wiki). More tutorials for specific features will be coming shortly, as well as video tutorials!
 
+The project also now has an AltSource! You can also import it by clicking the button below!
+
+<a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/source.json">
+  <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png">
+</a>
+
 # LiveContainer
 
 While this repo won't directly give you a guide on how to use/install LiveContainer, JESSI should work inside of LiveContainer. I strongly recommend launching JESSI *without* JIT inside of LiveContainer, then importing your pairing file into JESSI. You may have to enable the "Fix File Picker" option inside of LiveContainer to do that. You can also just put your pairing file in the root of JESSI's Documents folder in it's data container, named "pairingFile.plist". JESSI's built-in JIT enabler works inside of LiveContainer.
