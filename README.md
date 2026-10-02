@@ -35,13 +35,13 @@ If you would like support, want to request a feature, or just talk to other JESS
 
 JESSI is an iOS app that runs Minecraft: Java Edition servers natively on iOS, targeting iOS 14+. JESSI runs on both jailed and jailbroken iOS, only requiring JIT to do so.
 
-JESSI was designed specifically to be as easy to use as possible, even if you have never hosted a Minecraft server before. The UI is simple to understand and use, making JESSI the best beginner friendly option to host a minecraft server.
+JESSI is designed specifically to be as easy to use as possible, even if you have never hosted a Minecraft server before. The UI is simple to understand and use, making JESSI the best beginner friendly option to host a minecraft server.
 
 Tutorials for installing JESSI can be found in [the wiki for this repo](https://github.com/Baconium/JESSI/wiki). More tutorials for specific features will be coming shortly, as well as video tutorials!
 
 # LiveContainer
 
-While this repo won't directly give you a guide on how to use/install LiveContainer, JESSI should work inside of LiveContainer. Make sure to enable JIT for JESSI inside of LiveContainer, and use [this jit script](https://raw.githubusercontent.com/Baconium/JESSI/refs/heads/main/JESSI/JITHelper/Resources/universal.js) if you're on a TXM device. JESSI's built in JIT enabler has not been tested inside of LiveContainer, but it is unlikely to function properly.
+While this repo won't directly give you a guide on how to use/install LiveContainer, JESSI should work inside of LiveContainer. I strongly recommend launching JESSI *without* JIT inside of LiveContainer, then importing your pairing file into JESSI. You may have to enable the "Fix File Picker" option inside of LiveContainer to do that. You can also just put your pairing file in the root of JESSI's Documents folder in it's data container, named "pairingFile.plist". JESSI's built-in JIT enabler works inside of LiveContainer.
 
 # Features
 
