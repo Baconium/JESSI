@@ -42,7 +42,7 @@ Tutorials for installing JESSI can be found in [the wiki for this repo](https://
 The project also now has an AltSource! You can also import it by clicking the button below!
 
 <a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/source.json">
-  <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png">
+  <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png" width=200>
 </a>
 
 # LiveContainer
