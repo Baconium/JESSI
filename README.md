@@ -39,7 +39,7 @@ JESSI is designed specifically to be as easy to use as possible, even if you hav
 
 Tutorials for installing JESSI can be found in [the wiki for this repo](https://github.com/Baconium/JESSI/wiki). More tutorials for specific features will be coming shortly, as well as video tutorials!
 
-The project also now has an AltSource! You can also import it by clicking the button below!
+The project also now has an AltSource! You can import it by clicking the button below!
 
 <a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/source.json">
   <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png" width=200>
