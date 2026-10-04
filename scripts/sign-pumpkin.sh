@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# signs a pumpkin-embed build and adds it to the versions.json manifest JESSI reads.
-# usage: sign-pumpkin.sh [minecraft-version] [path/to/libpumpkin_embed.dylib]
-# then upload the contents of the output folder to baconium.dev/jessi/pumpkin/
 
 set -euo pipefail
 
@@ -15,7 +12,6 @@ VERSION="${1:-}"
 SRC="${2:-$PUMPKIN_REPO/target/aarch64-apple-ios/release/$FILE_NAME}"
 
 if [[ -z "$VERSION" ]]; then
-  # the generated packet table says which minecraft version the source targets, e.g. V_26_3 -> 26.3
   packets="$PUMPKIN_REPO/crates/pumpkin-data/src/generated/packet.rs"
   VERSION="$(grep -A1 'CURRENT_MC_VERSION' "$packets" 2>/dev/null | grep -o 'V_[0-9_]*' | head -1 | sed 's/^V_//; s/_/./g' || true)"
   if [[ -z "$VERSION" ]]; then
@@ -40,8 +36,6 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 signed="$TMP/$FILE_NAME"
 cp "$SRC" "$signed"
-
-# cargo bakes the absolute build path in as the install name
 install_name_tool -id "@rpath/$FILE_NAME" "$signed"
 
 echo "ad-hoc signing pumpkin..."
@@ -72,7 +66,6 @@ fi
 mkdir -p "$OUT_DIR/$VERSION"
 cp "$signed" "$OUT_DIR/$VERSION/$FILE_NAME"
 
-# start from the live manifest the first time so versions already on the server stay listed
 manifest="$OUT_DIR/versions.json"
 if [[ ! -f "$manifest" ]]; then
   if curl -fsSL -o "$manifest.tmp" "$MANIFEST_URL" 2>/dev/null; then
