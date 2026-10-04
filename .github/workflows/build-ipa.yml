@@ -68,6 +68,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_STYLE=Manual \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
             2>&1 | tee build/xcodebuild.log
           STATUS=${PIPESTATUS[0]}
           set -e

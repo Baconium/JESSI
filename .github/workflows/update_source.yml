@@ -4,30 +4,53 @@ on:
   workflow_dispatch:
   release:
     types: [published]
+  workflow_run:
+    workflows: ["build ipa and release"]
+    types: [completed]
+concurrency:
+  group: update-source
+  cancel-in-progress: false
 jobs:
   test-command:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v6
-      
-      # builds from the template in the repo, so it works even before the source release exists
       - name: Make all source modifications
         run: |
           set -euo pipefail
-          version=$(grep -m1 'MARKETING_VERSION =' JESSI.xcodeproj/project.pbxproj | sed 's/.*MARKETING_VERSION = \(.*\);/\1/')
-          ipa_url="https://github.com/${{ github.repository }}/releases/latest/download/JESSI.ipa"
-          size=$(curl -fsSL "$ipa_url" | wc -c)
-          jq --arg version "$version" --arg date "$(date -I)" --arg url "$ipa_url" --argjson size "$size" \
-            '.apps[].versions[] |= (.version = $version | .date = $date | .size = $size | .downloadURL = $url)' \
-            .github/source-template.json > source.json
-          cat source.json
+          repo="https://github.com/${{ github.repository }}"
+
+          # usage: make_source <ipa url> <output file> [jq filter for source-level overrides]
+          # version and build number come from the ipa itself, since AltStore rejects an ipa that doesn't match the source.
+          # CI builds use the run number as the build number, so every nightly counts as an update.
+          make_source() {
+            local ipa_url="$1" out="$2" overrides="${3:-.}"
+            curl -fsSL -o app.ipa "$ipa_url"
+            unzip -p app.ipa 'Payload/*.app/Info.plist' > Info.plist
+            local version build size
+            version=$(python3 -c "import plistlib; print(plistlib.load(open('Info.plist', 'rb'))['CFBundleShortVersionString'])")
+            build=$(python3 -c "import plistlib; print(plistlib.load(open('Info.plist', 'rb'))['CFBundleVersion'])")
+            size=$(wc -c < app.ipa)
+            jq --arg version "$version" --arg build "$build" --arg date "$(date -I)" --arg url "$ipa_url" --argjson size "$size" \
+              "$overrides | .apps[].versions[] |= (.version = \$version | .buildVersion = \$build | .date = \$date | .size = \$size | .downloadURL = \$url)" \
+              .github/source-template.json > "$out"
+            rm -f app.ipa Info.plist
+            echo "== $out"
+            cat "$out"
+          }
+
+          make_source "$repo/releases/latest/download/JESSI.ipa" source.json
+          # its own identifier so it can be added alongside the stable source
+          make_source "$repo/releases/download/super-beta/JESSI.ipa" nightlysource.json \
+            '.name = "JESSI Nightly" | .identifier = "com.baconmania.jessi.source.nightly" | .subtitle = "Nightly builds of JESSI, straight from main"'
 
       - name: Update source release
         uses: ncipollo/release-action@v1.21.0
         with:
           allowUpdates: true
-          artifacts: "source.json"
+          artifacts: "source.json,nightlysource.json"
           artifactContentType: JSON
           tag: "source"
