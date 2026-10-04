@@ -29,6 +29,39 @@
   <a href="#buildingmiscellaneous-extra-info">Build / Misc</a>
 </p>
 
+<table>
+<tr>
+<td>
+Stable
+</td>
+<td>
+<a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/source.json" target="_blank">
+   <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png" alt="Add AltSource" width="200"/>
+</a>
+</td>
+<td>
+<a href="https://github.com/Baconium/JESSI/releases/latest/download/JESSI.ipa" target="_blank">
+   <img src="https://web.archive.org/web/20260831180343im_/https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
+</a>
+</td>
+</tr>
+<tr>
+<td>
+Nightly
+</td>
+<td>
+<a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/source.json" target="_blank">
+   <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png" alt="Add AltSource" width="200"/>
+</a>
+</td>
+<td>
+<a href="https://web.archive.org/web/20260831180343/https://github.com/LiveContainer/LiveContainer/releases/download/nightly/LiveContainer.ipa" target="_blank">
+   <img src="https://web.archive.org/web/20260831180343im_/https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
+</a>
+</td>
+</tr>
+</table>
+
 If you would like support, want to request a feature, or just talk to other JESSI users you should join the discord: https://discord.gg/aZ9HbYXKur
 
 # Basic Information
@@ -38,12 +71,6 @@ JESSI is an iOS app that runs Minecraft: Java Edition servers natively on iOS, t
 JESSI is designed specifically to be as easy to use as possible, even if you have never hosted a Minecraft server before. The UI is simple to understand and use, making JESSI the best beginner friendly option to host a minecraft server.
 
 Tutorials for installing JESSI can be found in [the wiki for this repo](https://github.com/Baconium/JESSI/wiki). More tutorials for specific features will be coming shortly, as well as video tutorials!
-
-The project also now has an AltSource! You can import it by clicking the button below!
-
-<a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/source.json">
-  <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png" width=200>
-</a>
 
 # LiveContainer
 

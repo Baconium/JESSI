@@ -12,8 +12,17 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       
-      - name: Make all source modifications in one line lol
-        run: curl -L -s https://github.com/${{ github.repository }}/releases/download/source/source.json | jq --arg version $(grep -m1 'MARKETING_VERSION =' JESSI.xcodeproj/project.pbxproj | sed 's/.*MARKETING_VERSION = \(.*\);/\1/') --arg date $(date -I) --arg size $(curl -L -s https://github.com/${{ github.repository }}/releases/latest/download/JESSI.ipa | wc -c) '.apps[].versions[].version = $version | .apps.[].versions[].date = $date | .apps[].versions[].size = ($size | tonumber)' > source.json
+      # builds from the template in the repo, so it works even before the source release exists
+      - name: Make all source modifications
+        run: |
+          set -euo pipefail
+          version=$(grep -m1 'MARKETING_VERSION =' JESSI.xcodeproj/project.pbxproj | sed 's/.*MARKETING_VERSION = \(.*\);/\1/')
+          ipa_url="https://github.com/${{ github.repository }}/releases/latest/download/JESSI.ipa"
+          size=$(curl -fsSL "$ipa_url" | wc -c)
+          jq --arg version "$version" --arg date "$(date -I)" --arg url "$ipa_url" --argjson size "$size" \
+            '.apps[].versions[] |= (.version = $version | .date = $date | .size = $size | .downloadURL = $url)' \
+            .github/source-template.json > source.json
+          cat source.json
 
       - name: Update source release
         uses: ncipollo/release-action@v1.21.0
