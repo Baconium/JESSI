@@ -12,6 +12,7 @@ build/
 dist/
 *.ipa
 Payload/
+pumpkin-upload/
 
 # this prolly doesnt even need to exist anymore
 Runtimes/
@@ -27,3 +28,6 @@ Amethyst-iOS/
 tools/
 *.bak
 stikdebug/
+
+# signed pumpkin builds + versions.json waiting to be uploaded
+pumpkin-upload/

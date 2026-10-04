@@ -9,8 +9,13 @@ enum ServerSoftwareSwift: String, CaseIterable, Identifiable {
     case neoforge = "NeoForge"
     case fabric = "Fabric"
     case quilt = "Quilt"
+    case pumpkin = "Pumpkin"
     case customJar = "Custom Jar"
     var id: String { rawValue }
+}
+
+enum PumpkinRuntime {
+    static let manifestURL = URL(string: "https://baconium.dev/jessi/pumpkin/versions.json")!
 }
 
 struct CreateServerView: View {
@@ -23,6 +28,7 @@ struct CreateServerView: View {
     @State private var loadingVersions: Bool = false
     @State private var versionFetchError: String? = nil
     @State private var versionFetchGeneration: Int = 0
+    @State private var pumpkinBuilds: [String: URL] = [:]
 
     @State private var showSoftwareMenu: Bool = false
     @State private var showVersionMenu: Bool = false
@@ -929,6 +935,39 @@ struct CreateServerView: View {
         }
 
         switch software {
+        case .pumpkin:
+            let request = URLRequest(url: PumpkinRuntime.manifestURL, cachePolicy: .reloadIgnoringLocalCacheData)
+            URLSession.shared.dataTask(with: request) { data, response, error in
+                if let error = error {
+                    finishOnMain([], "Failed to load Pumpkin versions: \(error.localizedDescription)")
+                    return
+                }
+                if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                    finishOnMain([], "Failed to load Pumpkin versions (HTTP \(http.statusCode))")
+                    return
+                }
+                guard let data = data,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let entries = json["versions"] as? [[String: Any]]
+                else {
+                    finishOnMain([], "Failed to parse Pumpkin version list")
+                    return
+                }
+
+                var builds: [String: URL] = [:]
+                for entry in entries {
+                    guard let version = entry["minecraftVersion"] as? String, !version.isEmpty,
+                          let raw = entry["url"] as? String,
+                          let url = URL(string: raw, relativeTo: PumpkinRuntime.manifestURL)?.absoluteURL
+                    else { continue }
+                    builds[version] = url
+                }
+                let sorted = builds.keys.sorted { self.isVersionHigher($0, than: $1) }
+                DispatchQueue.main.async { self.pumpkinBuilds = builds }
+                finishOnMain(sorted, builds.isEmpty ? "No Pumpkin versions are available yet" : nil)
+            }.resume()
+            return
+
         case .paper:
             guard let url = URL(string: "https://fill.papermc.io/v3/projects/paper") else {
                 finishOnMain([], "Invalid Paper version URL")
@@ -1192,7 +1231,7 @@ struct CreateServerView: View {
         }
         if software == .customJar && customJarURL == nil { return }
 
-        if software != .customJar && !mcVersion.isEmpty && !skipJVMCheck {
+        if software != .customJar && software != .pumpkin && !mcVersion.isEmpty && !skipJVMCheck {
             let needed = Self.effectiveJavaVersion(forMCVersion: mcVersion)
             let available = JessiSettings.availableJavaVersions()
             if !available.contains(needed) {
@@ -1219,13 +1258,18 @@ struct CreateServerView: View {
 
         var props: [String: String] = [:]
         let trim: (String) -> String = { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        if !trim(maxPlayers).isEmpty { props["max-players"] = trim(maxPlayers) }
-        if !trim(viewDistance).isEmpty { props["view-distance"] = trim(viewDistance) }
-        if !trim(simulationDistance).isEmpty { props["simulation-distance"] = trim(simulationDistance) }
-        if !trim(spawnProtection).isEmpty { props["spawn-protection"] = trim(spawnProtection) }
-        props["white-list"] = whitelist ? "true" : "false"
-        if !trim(motd).isEmpty { props["motd"] = trim(motd) }
-        if !trim(seed).isEmpty { props["level-seed"] = trim(seed) }
+        if software == .pumpkin {
+            let p = (dir as NSString).appendingPathComponent("pumpkin.toml")
+            try? pumpkinConfigTOML().write(toFile: p, atomically: true, encoding: .utf8)
+        } else {
+            if !trim(maxPlayers).isEmpty { props["max-players"] = trim(maxPlayers) }
+            if !trim(viewDistance).isEmpty { props["view-distance"] = trim(viewDistance) }
+            if !trim(simulationDistance).isEmpty { props["simulation-distance"] = trim(simulationDistance) }
+            if !trim(spawnProtection).isEmpty { props["spawn-protection"] = trim(spawnProtection) }
+            props["white-list"] = whitelist ? "true" : "false"
+            if !trim(motd).isEmpty { props["motd"] = trim(motd) }
+            if !trim(seed).isEmpty { props["level-seed"] = trim(seed) }
+        }
         if !props.isEmpty {
             var out = "# Managed by JESSI\n"
             for k in props.keys.sorted() { out += "\(k)=\(props[k]!)\n" }
@@ -1326,6 +1370,13 @@ struct CreateServerView: View {
         case .neoforge:
             setStatus("Installing NeoForge...")
             installNeoForge(mcVersion: mcVersion, to: serverDir, completion: completion)
+        case .pumpkin:
+            guard let url = pumpkinBuilds[mcVersion] else {
+                completion(.failure(InstallerError.message("No Pumpkin build is available for \(mcVersion)")))
+                return
+            }
+            setStatus("Downloading Pumpkin \(mcVersion)...")
+            downloadPumpkinLibrary(from: url, to: serverDir, completion: completion)
         case .customJar:
             completion(.success(()))
         }
@@ -1365,6 +1416,40 @@ struct CreateServerView: View {
         }
     }
 
+    private func downloadPumpkinLibrary(from url: URL, to serverDir: URL, completion: @escaping (Result<Void, Error>) -> Void) {
+        let dest = serverDir.appendingPathComponent(JessiPumpkinLibraryFileName)
+        downloadFile(url, to: dest) { result in
+            if case .success = result, !TunnelingModel.machoHasCodeSignature(atPath: dest.path) {
+                try? FileManager.default.removeItem(at: dest)
+                completion(.failure(InstallerError.message("The downloaded Pumpkin library has no code signature, so it would not be loadable. It needs to be ad-hoc signed.")))
+                return
+            }
+            completion(result)
+        }
+    }
+
+    private func pumpkinConfigTOML() -> String {
+        func value(_ text: String) -> String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+        func number(_ text: String, _ fallback: Int, _ range: ClosedRange<Int>) -> Int {
+            min(max(Int(value(text)) ?? fallback, range.lowerBound), range.upperBound)
+        }
+        func quoted(_ text: String) -> String {
+            "\"" + text.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+        }
+
+        var out = "# Managed by JESSI\n"
+        if !value(seed).isEmpty { out += "seed = \(quoted(value(seed)))\n" }
+        out += "white_list = \(whitelist)\n"
+        out += "spawn_protection = \(number(spawnProtection, 16, 0...100_000))\n"
+        if serverIcon != nil { out += "favicon_path = \"server-icon.png\"\n" }
+        out += "\n[networking.java]\n"
+        out += "max_players = \(number(maxPlayers, 20, 0...100_000))\n"
+        out += "view_distance = \(number(viewDistance, 10, 2...32))\n"
+        out += "simulation_distance = \(number(simulationDistance, 10, 2...32))\n"
+        out += "motd = \(quoted(value(motd).isEmpty ? "A Minecraft Server" : value(motd)))\n"
+        return out
+    }
+
     private func setStatus(_ s: String) {
         DispatchQueue.main.async {
             self.createStatus = s
@@ -1372,7 +1457,7 @@ struct CreateServerView: View {
     }
 
     private func downloadFile(_ url: URL, to dest: URL, completion: @escaping (Result<Void, Error>) -> Void) {
-        let task = URLSession.shared.downloadTask(with: url) { tmpURL, _, error in
+        let task = URLSession.shared.downloadTask(with: url) { tmpURL, response, error in
             DispatchQueue.main.async {
                 self.createProgress = nil
                 self.createProgressObservation = nil
@@ -1384,6 +1469,10 @@ struct CreateServerView: View {
             }
             guard let tmpURL = tmpURL else {
                 completion(.failure(InstallerError.message("Download failed (no temp file).")))
+                return
+            }
+            if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+                completion(.failure(InstallerError.message("Download of \(url.lastPathComponent) failed (HTTP \(http.statusCode)).")))
                 return
             }
             do {

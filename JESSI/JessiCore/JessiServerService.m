@@ -15,11 +15,22 @@ static const UIBackgroundTaskIdentifier UIBackgroundTaskInvalid = -1;
 #import <sys/time.h>
 #import <unistd.h>
 #import <signal.h>
+#import <fcntl.h>
+#import <dlfcn.h>
 
 #import <spawn.h>
 #import "../SwiftUI/JessiJITCheck.h"
 
 extern int jessi_server_main(int argc, char *argv[]);
+
+NSString *const JessiPumpkinLibraryFileName = @"libpumpkin_embed.dylib";
+
+typedef int (*JessiPumpkinRunFn)(const char *dir);
+typedef void (*JessiPumpkinStopFn)(void);
+static const int JessiPumpkinErrAlreadyStarted = -1;
+static const int JessiPumpkinErrBadDirectory = -2;
+static const int JessiPumpkinErrRuntime = -3;
+static JessiPumpkinStopFn g_pumpkinStop = NULL;
 
 static NSString *const JessiServerRunningKey = @"jessi.server.running";
 static NSString *const JessiServerRunningChanged = @"JessiServerRunningChanged";
@@ -106,6 +117,62 @@ static NSString *jessi_command_for_pid(pid_t pid) {
     return [jessi_capture_cmd(cmd.UTF8String) stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
+static BOOL jessi_server_dir_is_pumpkin(NSString *dir) {
+    NSData *data = [NSData dataWithContentsOfFile:[dir stringByAppendingPathComponent:@"jessiserverconfig.json"]];
+    if (!data) return NO;
+    NSDictionary *config = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    if (![config isKindOfClass:[NSDictionary class]]) return NO;
+    id software = config[@"software"];
+    return [software isKindOfClass:[NSString class]] && [software caseInsensitiveCompare:@"Pumpkin"] == NSOrderedSame;
+}
+
+static void jessi_redirect_stdio_to(NSString *path) {
+    int fd = open(path.fileSystemRepresentation, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd < 0) return;
+    dup2(fd, STDOUT_FILENO);
+    dup2(fd, STDERR_FILENO);
+    close(fd);
+}
+
+static NSString *jessi_toml_set_values(NSString *toml, NSString *section, NSDictionary<NSString *, NSString *> *values) {
+    NSCharacterSet *ws = [NSCharacterSet whitespaceCharacterSet];
+    NSMutableArray<NSString *> *lines = [[toml componentsSeparatedByString:@"\n"] mutableCopy];
+    if (lines.count && [lines.lastObject stringByTrimmingCharactersInSet:ws].length == 0) [lines removeLastObject];
+
+    NSString *header = [NSString stringWithFormat:@"[%@]", section];
+    NSUInteger headerIndex = NSNotFound;
+    for (NSUInteger i = 0; i < lines.count; i++) {
+        if ([[lines[i] stringByTrimmingCharactersInSet:ws] isEqualToString:header]) {
+            headerIndex = i;
+            break;
+        }
+    }
+    if (headerIndex == NSNotFound) {
+        if (lines.count) [lines addObject:@""];
+        [lines addObject:header];
+        headerIndex = lines.count - 1;
+    }
+
+    NSMutableSet<NSString *> *pending = [NSMutableSet setWithArray:values.allKeys];
+    for (NSUInteger i = headerIndex + 1; i < lines.count; i++) {
+        NSString *trimmed = [lines[i] stringByTrimmingCharactersInSet:ws];
+        if ([trimmed hasPrefix:@"["]) break;
+        NSRange eq = [trimmed rangeOfString:@"="];
+        if (eq.location == NSNotFound) continue;
+        NSString *key = [[trimmed substringToIndex:eq.location] stringByTrimmingCharactersInSet:ws];
+        if (!values[key]) continue;
+        lines[i] = [NSString stringWithFormat:@"%@ = %@", key, values[key]];
+        [pending removeObject:key];
+    }
+
+    NSUInteger insertAt = headerIndex + 1;
+    for (NSString *key in [pending.allObjects sortedArrayUsingSelector:@selector(compare:)]) {
+        [lines insertObject:[NSString stringWithFormat:@"%@ = %@", key, values[key]] atIndex:insertAt++];
+    }
+    [lines addObject:@""];
+    return [lines componentsJoinedByString:@"\n"];
+}
+
 static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
     NSString *c = cmd.lowercaseString ?: @"";
     BOOL hasJava = [c containsString:@"/java"] || [c containsString:@" java "];
@@ -165,6 +232,11 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
 
 - (NSString *)serversRoot { return [JessiPaths serversRoot]; }
 
+- (BOOL)isPumpkinServerNamed:(NSString *)serverName {
+    if (serverName.length == 0) return NO;
+    return jessi_server_dir_is_pumpkin([self.serversRoot stringByAppendingPathComponent:serverName]);
+}
+
 - (NSArray<NSString *> *)availableServerFolders {
     NSFileManager *fm = [NSFileManager defaultManager];
     NSArray<NSString *> *items = [fm contentsOfDirectoryAtPath:self.serversRoot error:nil] ?: @[];
@@ -208,10 +280,8 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
     return nil;
 }
 
-- (void)configureServerFilesInDir:(NSString *)dir {
+- (NSString *)rconPasswordForDir:(NSString *)dir {
     NSFileManager *fm = [NSFileManager defaultManager];
-    [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
-
     NSString *rconPassPath = [dir stringByAppendingPathComponent:@".jessi_rcon_password"]; 
     NSString *pw = nil;
     if ([fm fileExistsAtPath:rconPassPath]) {
@@ -228,7 +298,14 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
         pw = s;
         [pw writeToFile:rconPassPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
     }
+    return pw;
+}
 
+- (void)configureServerFilesInDir:(NSString *)dir {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+
+    NSString *pw = [self rconPasswordForDir:dir];
     self.activeServerDir = dir;
     self.activeRconPassword = pw;
     self.activeRconPort = 25575;
@@ -271,6 +348,22 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
             [eulaContent writeToFile:eulaPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
         }
     }
+}
+
+- (void)configurePumpkinFilesInDir:(NSString *)dir {
+    NSString *pw = [self rconPasswordForDir:dir];
+    self.activeServerDir = dir;
+    self.activeRconPassword = pw;
+    self.activeRconPort = 25575;
+
+    NSString *configPath = [dir stringByAppendingPathComponent:@"pumpkin.toml"];
+    NSString *toml = [NSString stringWithContentsOfFile:configPath encoding:NSUTF8StringEncoding error:nil] ?: @"";
+    toml = jessi_toml_set_values(toml, @"networking.rcon", @{
+        @"enabled": @"true",
+        @"address": [NSString stringWithFormat:@"\"127.0.0.1:%d\"", self.activeRconPort],
+        @"password": [NSString stringWithFormat:@"\"%@\"", pw],
+    });
+    [toml writeToFile:configPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
 }
 
 - (void)startTailingLatestLogInDir:(NSString *)dir {
@@ -483,6 +576,11 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
         [fm removeItemAtPath:stdioLogPath error:nil];
     }
 
+    if (jessi_server_dir_is_pumpkin(dir)) {
+        [self startPumpkinServerNamed:serverName inDir:dir];
+        return;
+    }
+
     NSString *launchArgsPath = [dir stringByAppendingPathComponent:@"jessi-launch-args.txt"]; 
     BOOL hasLaunchArgs = [fm fileExistsAtPath:launchArgsPath];
 
@@ -531,14 +629,7 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
         }
     }
 
-#if !(TARGET_OS_OSX && !TARGET_OS_MACCATALYST)
-    if ([JessiSettings shared].runInBackground) {
-        self.bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
-            [[UIApplication sharedApplication] endBackgroundTask:self.bgTask];
-            self.bgTask = UIBackgroundTaskInvalid;
-        }];
-    }
-#endif
+    [self beginBackgroundTaskIfNeeded];
 
     dispatch_async(self.runQueue, ^{
         char *argv0 = strdup("--server");
@@ -598,27 +689,108 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
 
         free(argv0); free(argv1); free(argv2); free(argv3);
 
-        self.running = NO;
-        if (self.logTimer) {
-            dispatch_source_cancel(self.logTimer);
-            self.logTimer = nil;
-        }
-        dispatch_async(dispatch_get_main_queue(), ^{
-            [self emitConsole:[NSString stringWithFormat:@"\nServer exited with code: %d\n", code]];
-            [self.delegate serverServiceDidChangeRunning:NO];
-            
-#if !(TARGET_OS_OSX && !TARGET_OS_MACCATALYST)
-            if (self.bgTask != UIBackgroundTaskInvalid) {
-                [[UIApplication sharedApplication] endBackgroundTask:self.bgTask];
-                self.bgTask = UIBackgroundTaskInvalid;
-            }
-#endif
-        });
+        [self finishServerRunWithCode:code];
     });
+}
+
+- (void)beginBackgroundTaskIfNeeded {
+#if !(TARGET_OS_OSX && !TARGET_OS_MACCATALYST)
+    if ([JessiSettings shared].runInBackground) {
+        self.bgTask = [[UIApplication sharedApplication] beginBackgroundTaskWithExpirationHandler:^{
+            [[UIApplication sharedApplication] endBackgroundTask:self.bgTask];
+            self.bgTask = UIBackgroundTaskInvalid;
+        }];
+    }
+#endif
+}
+
+- (void)finishServerRunWithCode:(int)code {
+    self.running = NO;
+    if (self.logTimer) {
+        dispatch_source_cancel(self.logTimer);
+        self.logTimer = nil;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self emitConsole:[NSString stringWithFormat:@"\nServer exited with code: %d\n", code]];
+        [self.delegate serverServiceDidChangeRunning:NO];
+
+#if !(TARGET_OS_OSX && !TARGET_OS_MACCATALYST)
+        if (self.bgTask != UIBackgroundTaskInvalid) {
+            [[UIApplication sharedApplication] endBackgroundTask:self.bgTask];
+            self.bgTask = UIBackgroundTaskInvalid;
+        }
+#endif
+    });
+}
+
+- (void)startPumpkinServerNamed:(NSString *)serverName inDir:(NSString *)dir {
+    NSString *libraryPath = [dir stringByAppendingPathComponent:JessiPumpkinLibraryFileName];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:libraryPath]) {
+        [self emitConsole:[NSString stringWithFormat:@"%@ is missing from this server folder. Create the server again to download it.\n", JessiPumpkinLibraryFileName]];
+        self.running = NO;
+        return;
+    }
+
+    [self configurePumpkinFilesInDir:dir];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.console setString:@""];
+        [self emitConsole:[NSString stringWithFormat:@"Starting server: %@\n", serverName]];
+        [self emitConsole:@"Software: Pumpkin\n"];
+        [self emitConsole:[NSString stringWithFormat:@"Working dir: %@\n", dir]];
+    });
+
+    dispatch_async(dispatch_get_main_queue(), ^{ [self.delegate serverServiceDidChangeRunning:YES]; });
+
+    [self startTailingLatestLogInDir:dir];
+    [self beginBackgroundTaskIfNeeded];
+
+    dispatch_async(self.runQueue, ^{
+        int code = [self runPumpkinLibraryAtPath:libraryPath inDir:dir];
+        [self finishServerRunWithCode:code];
+    });
+}
+
+- (int)runPumpkinLibraryAtPath:(NSString *)libraryPath inDir:(NSString *)dir {
+    void *handle = jessi_dlopen_with_dyld_bypass(libraryPath.fileSystemRepresentation, RTLD_NOW);
+    if (!handle) {
+        const char *err = dlerror();
+        NSString *hint = jessi_check_jit_enabled() ? @"" : @"\nEnable JIT first; the library is ad-hoc signed and can only be loaded with JIT enabled.";
+        [self emitConsole:[NSString stringWithFormat:@"\nFailed to load %@: %s%@\n", JessiPumpkinLibraryFileName, err ?: "unknown error", hint]];
+        return 254;
+    }
+
+    JessiPumpkinRunFn run = (JessiPumpkinRunFn)dlsym(handle, "pumpkin_run");
+    JessiPumpkinStopFn stop = (JessiPumpkinStopFn)dlsym(handle, "pumpkin_stop");
+    if (!run || !stop) {
+        [self emitConsole:[NSString stringWithFormat:@"\n%@ does not export pumpkin_run/pumpkin_stop.\n", JessiPumpkinLibraryFileName]];
+        return 254;
+    }
+
+    jessi_redirect_stdio_to([dir stringByAppendingPathComponent:@"jessi-stdio.log"]);
+
+    @synchronized ([JessiServerService class]) { g_pumpkinStop = stop; }
+    int code = run(dir.fileSystemRepresentation);
+    @synchronized ([JessiServerService class]) { g_pumpkinStop = NULL; }
+
+    if (code == JessiPumpkinErrAlreadyStarted) {
+        [self emitConsole:@"\nPumpkin can only run once per app launch. Fully close JESSI and reopen it to start this server again.\n"];
+    } else if (code == JessiPumpkinErrBadDirectory) {
+        [self emitConsole:@"\nPumpkin could not open the server folder.\n"];
+    } else if (code == JessiPumpkinErrRuntime) {
+        [self emitConsole:@"\nPumpkin crashed. Check jessi-stdio.log in the server folder for details.\n"];
+    }
+    return code;
 }
 
 - (void)stopServer {
     if (!self.isRunning) return;
+    JessiPumpkinStopFn pumpkinStop;
+    @synchronized ([JessiServerService class]) { pumpkinStop = g_pumpkinStop; }
+    if (pumpkinStop) {
+        pumpkinStop();
+        return;
+    }
     [self sendRcon:@"stop"];
 }
 

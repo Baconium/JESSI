@@ -185,6 +185,11 @@ final class LaunchModel: NSObject, ObservableObject {
 
         guard !selectedServer.isEmpty else { return }
 
+        if service.isPumpkinServerNamed(selectedServer) {
+            startAfterJITCheck()
+            return
+        }
+
         let available = JessiSettings.availableJavaVersions()
         if available.isEmpty {
             activeAlert = .runtime("Please install a JVM in settings before launching your server. Newer Minecraft releases need Java 25.")
@@ -209,6 +214,10 @@ final class LaunchModel: NSObject, ObservableObject {
             }
         }
 
+        startAfterJITCheck()
+    }
+
+    private func startAfterJITCheck() {
         if !isJITEnabledCheck() {
             if JITEnabler.shared.canAutoEnable {
                 enableJITThenStart()

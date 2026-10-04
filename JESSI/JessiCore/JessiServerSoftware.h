@@ -7,6 +7,7 @@ typedef NS_ENUM(NSInteger, JessiServerSoftware) {
     JessiServerSoftwareForge,
     JessiServerSoftwareNeoForge,
     JessiServerSoftwarePaper,
+    JessiServerSoftwarePumpkin,
     JessiServerSoftwareCustomJar,
 };
 

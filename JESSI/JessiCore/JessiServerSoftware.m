@@ -9,6 +9,7 @@ NSString *JessiServerSoftwareDisplayName(JessiServerSoftware software) {
         case JessiServerSoftwareForge: return @"Forge";
         case JessiServerSoftwareNeoForge: return @"NeoForge";
         case JessiServerSoftwarePaper: return @"Paper";
+        case JessiServerSoftwarePumpkin: return @"Pumpkin";
         case JessiServerSoftwareCustomJar: return @"Import Custom Jar";
     }
     return @"Unknown";
@@ -26,6 +27,7 @@ BOOL JessiServerSoftwareIsSupported(JessiServerSoftware software) {
         case JessiServerSoftwareForge:
         case JessiServerSoftwareNeoForge:
         case JessiServerSoftwarePaper:
+        case JessiServerSoftwarePumpkin:
         case JessiServerSoftwareCustomJar:
             return YES;
     }

@@ -1109,6 +1109,13 @@ bool jessi_prepare_dyld_bypass_for_library_loading(void) {
     return jessi_dyld_bypass_ready;
 }
 
+void *jessi_dlopen_with_dyld_bypass(const char *path, int flags) {
+    if (!path) return NULL;
+    if (!jessi_prepare_dyld_bypass_for_library_loading()) return dlopen(path, flags);
+    JessiDlopenCtx dlCtx = { .path = path, .flags = flags };
+    return jessi_run_with_hw_breakpoints(jessi_dlopen_trampoline, &dlCtx);
+}
+
 typedef struct {
     JLI_Launch_func *fn;
     int argc;

@@ -2,6 +2,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+FOUNDATION_EXPORT NSString *const JessiPumpkinLibraryFileName;
+
 @protocol JessiServerServiceDelegate <NSObject>
 - (void)serverServiceDidUpdateConsole:(NSString *)consoleText;
 - (void)serverServiceDidChangeRunning:(BOOL)isRunning;
@@ -13,6 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSArray<NSString *> *)availableServerFolders;
 - (NSString *)serversRoot;
+- (BOOL)isPumpkinServerNamed:(NSString *)serverName;
 
 - (void)startServerNamed:(NSString *)serverName;
 - (void)startServerNamed:(NSString *)serverName withJavaVersion:(nullable NSString *)javaVersionOverride;

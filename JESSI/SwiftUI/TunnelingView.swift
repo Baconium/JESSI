@@ -123,7 +123,7 @@ final class TunnelingModel: ObservableObject {
         var lastError: Error?
 
         func finalizeInstalledFile() throws {
-            guard machoHasCodeSignature(atPath: downloadPath.path) else {
+            guard Self.machoHasCodeSignature(atPath: downloadPath.path) else {
                 throw NSError(domain: "JESSI", code: 3, userInfo: [NSLocalizedDescriptionKey: "Downloaded \(fileName) has no code signature, so it would not be loadable. It needs to be ad-hoc signed."])
             }
 
@@ -184,7 +184,7 @@ final class TunnelingModel: ObservableObject {
         attemptDownload(at: 0)
     }
 
-    private func machoHasCodeSignature(atPath path: String) -> Bool {
+    static func machoHasCodeSignature(atPath path: String) -> Bool {
 
         let mhMagic64: UInt32 = 0xFEEDFACF
         let lcCodeSignature: UInt32 = 0x1D
@@ -352,11 +352,20 @@ final class PlayitModel: ObservableObject {
     }
 
     /// The library is only ad-hoc signed, which iOS refuses to load unless JESSI's dyld signature workaround is active.
-    /// That workaround normally comes up when a JVM launches, so start it here too if the plain load is refused.
+    /// That workaround normally comes up when a JVM launches, so start it here too.
     private func openlibrary() -> UnsafeMutableRawPointer? {
-        if let handle = dlopen(libraryPath, RTLD_NOW) { return handle }
-        guard JITEnabler.isJITUsable, jessi_prepare_dyld_bypass_for_library_loading() else { return nil }
+        if JITEnabler.isJITUsable {
+            return jessi_dlopen_with_dyld_bypass(libraryPath, RTLD_NOW)
+        }
+        // a refused plain load still leaves the signature registered, which breaks loading it later once jit is on,
+        // so only try it where it can actually work
+        guard jessi_is_trollstore_installed() || jessi_is_running_on_macos() else { return nil }
         return dlopen(libraryPath, RTLD_NOW)
+    }
+
+    private func lastloaderror() -> String {
+        guard let err = dlerror() else { return "JIT is not enabled" }
+        return String(cString: err)
     }
 
     @discardableResult
@@ -384,7 +393,7 @@ final class PlayitModel: ObservableObject {
             guard let handle = openlibrary() else {
                 islibrarypresent = false
                 if setErrorOnFailure {
-                    let err = String(cString: dlerror())
+                    let err = lastloaderror()
                     let hint = JITEnabler.isJITUsable ? "" : "\n\nEnable JIT in Settings first; the library is ad-hoc signed and can only be loaded with JIT enabled."
                     seterror("Playit library not reachable: \(err)\(hint)")
                 }
@@ -525,8 +534,7 @@ final class PlayitModel: ObservableObject {
             libhandle = openlibrary()
         }
         guard let handle = libhandle else {
-            let err = String(cString: dlerror())
-            return "Failed to load Playit library: \(err)"
+            return "Failed to load Playit library: \(lastloaderror())"
         }
 
         guard let playitinit = loadsymbol(handle, name: "playit_init", type: PlayitInitFn.self),
