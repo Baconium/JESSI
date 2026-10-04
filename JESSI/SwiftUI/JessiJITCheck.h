@@ -16,6 +16,9 @@ bool jessi_is_txm_device(void);
 bool jessi_is_debugger_attached(void);
 
 bool jessi_is_trollstore_installed(void);
+bool jessi_is_jailbreak_installed(void);
+const char * _Nullable jessi_jailbreak_type(void);
+bool jessi_has_trollstore_privileges(void);
 bool jessi_is_livecontainer_installed(void);
 const char * _Nullable jessi_team_identifier(void);
 

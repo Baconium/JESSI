@@ -1203,7 +1203,7 @@ struct CreateServerView: View {
             showForgeJITRequired = true
             return
         }
-        if (software == .forge || software == .neoforge) && !jessi_is_trollstore_installed() {
+        if (software == .forge || software == .neoforge) && !jessi_has_trollstore_privileges() {
             pendingCreateServer = true
             showForgeWarning = true
             return
@@ -2025,7 +2025,7 @@ struct CreateServerView: View {
             if let a4 = a4 { free(a4) }
         }
 
-        let isTrollStore = jessi_is_trollstore_installed()
+        let isTrollStore = jessi_has_trollstore_privileges()
 
         if let a4 = a4 {
             var argv: [UnsafeMutablePointer<CChar>?] = [a0, a1, a2, a3, a4, nil]

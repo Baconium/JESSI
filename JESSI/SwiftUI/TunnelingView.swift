@@ -359,7 +359,7 @@ final class PlayitModel: ObservableObject {
         }
         // a refused plain load still leaves the signature registered, which breaks loading it later once jit is on,
         // so only try it where it can actually work
-        guard jessi_is_trollstore_installed() || jessi_is_running_on_macos() else { return nil }
+        guard jessi_has_trollstore_privileges() || jessi_is_running_on_macos() else { return nil }
         return dlopen(libraryPath, RTLD_NOW)
     }
 

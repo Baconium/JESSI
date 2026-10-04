@@ -641,7 +641,7 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
         int code = 0;
         @try {
             BOOL shouldUseSeparateProcess = jessi_is_running_on_macos() ||
-                                           (jessi_is_trollstore_installed() && !settings.disableSeparateJVMProcessOnTrollStore);
+                                           (jessi_has_trollstore_privileges() && !settings.disableSeparateJVMProcessOnTrollStore);
             if (shouldUseSeparateProcess) {
                 pid_t pid;
                 NSString *executablePath = [[NSBundle mainBundle] executablePath];

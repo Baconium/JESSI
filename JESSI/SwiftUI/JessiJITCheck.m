@@ -208,6 +208,40 @@ BOOL jessi_is_trollstore_installed(void) {
     return access(tsPath.UTF8String, F_OK) == 0;
 }
 
+static NSString *jessi_jailbreak_scheme(void) {
+    static NSString *scheme = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        id value = [NSBundle.mainBundle objectForInfoDictionaryKey:@"JESSIJailbreakType"];
+        if ([value isKindOfClass:[NSString class]] && [value length] > 0) scheme = [value lowercaseString];
+    });
+    return scheme;
+}
+
+BOOL jessi_is_jailbreak_installed(void) {
+    return jessi_jailbreak_scheme() != nil;
+}
+
+const char *jessi_jailbreak_type(void) {
+    NSString *scheme = jessi_jailbreak_scheme();
+    if (!scheme) return NULL;
+
+    // where the bundle actually lives wins over what the deb was built for
+    NSString *path = NSBundle.mainBundle.bundlePath.stringByResolvingSymlinksInPath;
+    if ([path containsString:@"/.jbroot-"]) return "Roothide";
+    if ([path hasPrefix:@"/var/jb/"] || [path hasPrefix:@"/private/var/jb/"] || [path containsString:@"/procursus/"]) return "Rootless";
+    if ([path hasPrefix:@"/Applications/"]) return "Rootful";
+
+    if ([scheme isEqualToString:@"roothide"]) return "Roothide";
+    if ([scheme isEqualToString:@"rootless"]) return "Rootless";
+    if ([scheme isEqualToString:@"rootful"]) return "Rootful";
+    return "Unknown";
+}
+
+BOOL jessi_has_trollstore_privileges(void) {
+    return jessi_is_trollstore_installed() || jessi_is_jailbreak_installed();
+}
+
 BOOL jessi_is_livecontainer_installed(void) {
     NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
     NSString *logpath = [docs stringByAppendingPathComponent:@"uhislivecontainerinstalledorlikenahnotsomuch.log"];

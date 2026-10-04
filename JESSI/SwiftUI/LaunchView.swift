@@ -790,7 +790,7 @@ struct LaunchView: View {
 
                         Button(action: {
                             let isMacBuild = ProcessInfo.processInfo.isMacCatalystApp
-                            let shouldUseSeparateProcess = jessi_is_trollstore_installed() && !JessiSettings.shared().disableSeparateJVMProcessOnTrollStore
+                            let shouldUseSeparateProcess = jessi_has_trollstore_privileges() && !JessiSettings.shared().disableSeparateJVMProcessOnTrollStore
                             if isMacBuild || shouldUseSeparateProcess {
                                 model.stop()
                             } else {

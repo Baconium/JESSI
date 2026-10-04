@@ -295,12 +295,14 @@ final class SettingsModel: ObservableObject {
     @Published var isMacCatalyst: Bool = false
     @Published var iOSVersionString: String = ""
     @Published var isTrollStore: Bool = false
+    @Published var isJailbreak: Bool = false
+    @Published var jailbreakType: String? = nil
     @Published var islivecontainer: Bool = false
 
+    var hasTrollStorePrivileges: Bool { isTrollStore || isJailbreak }
+
     @Published var installedJVMVersions: Set<String> = []
-
     @Published var heapMaxMB: Int = 8192
-
     @Published var installErrorMessage: String? = nil
     @Published var showinstallerror: Bool = false
     @Published var jvmDownloadProgress: Double = 0
@@ -316,12 +318,7 @@ final class SettingsModel: ObservableObject {
     private var isInstallPipelineRunning: Bool = false
 
     let supportedJVMVersions: [String] = ["8", "17", "21", "25"]
-    var downloadableJVMVersions: [String] {
-        if isMacCatalyst {
-            return ["8", "17", "21", "25"]
-        }
-        return ["8", "17", "21", "25"]
-    }
+    var downloadableJVMVersions: [String] = ["8", "17", "21", "25"]
 
     init() {
         let s = JessiSettings.shared()
@@ -335,6 +332,10 @@ final class SettingsModel: ObservableObject {
             iOSVersionString = "\(os.majorVersion).\(os.minorVersion).\(os.patchVersion)"
         } else {
             iOSVersionString = "\(os.majorVersion).\(os.minorVersion)"
+        }
+
+        if ProcessInfo.processInfo.physicalMemory / (1024 * 1024) > heapMaxMB {
+            heapMaxMB = Int(ProcessInfo.processInfo.physicalMemory / (1024 * 1024))
         }
 
         availableJavaVersions = JessiSettings.availableJavaVersions()
@@ -362,6 +363,8 @@ final class SettingsModel: ObservableObject {
         isIOS26 = jessi_is_ios26_or_later()
         isMacCatalyst = ProcessInfo.processInfo.isMacCatalystApp
         isTrollStore = jessi_is_trollstore_installed()
+        isJailbreak = jessi_is_jailbreak_installed()
+        jailbreakType = jessi_jailbreak_type().map { String(cString: $0) }
         islivecontainer = jessi_is_livecontainer_installed()
 
         refreshInstalledJVMVersions()
@@ -1179,7 +1182,7 @@ struct SettingsView: View {
     }
 
     private var keepalivemethod: keepalivemgr.keepalivemethod {
-        if !model.isTrollStore,
+        if !model.hasTrollStorePrivileges,
            keepalivemethodraw == keepalivemgr.keepalivemethod.trollstore.rawValue {
             return .audio
         }
@@ -1865,7 +1868,7 @@ struct SettingsView: View {
                     
                     Picker("Method", selection: Binding(
                         get: {
-                            if !model.isTrollStore,
+                            if !model.hasTrollStorePrivileges,
                                keepalivemethodraw == keepalivemgr.keepalivemethod.trollstore.rawValue {
                                 return keepalivemgr.keepalivemethod.audio.rawValue
                             }
@@ -1879,8 +1882,8 @@ struct SettingsView: View {
                     )) {
                         Text("Location").tag(keepalivemgr.keepalivemethod.location.rawValue)
                         Text("Audio").tag(keepalivemgr.keepalivemethod.audio.rawValue)
-                        if model.isTrollStore {
-                            Text("TrollStore").tag(keepalivemgr.keepalivemethod.trollstore.rawValue)
+                        if model.hasTrollStorePrivileges {
+                            Text(model.isJailbreak ? "Jailbreak" : "TrollStore").tag(keepalivemgr.keepalivemethod.trollstore.rawValue)
                         }
                     }
                     .pickerStyle(.segmented)
@@ -1900,7 +1903,9 @@ struct SettingsView: View {
                     Text("Plays silent audio while the app is closed to keep it alive.")
                 }
                 if keepalivemethod == .trollstore {
-                    Text("Requires TrollStore. Keeps the app alive using TrollStore entitlements.")
+                    Text(model.isJailbreak
+                         ? "Keeps the app alive using the jailbreak build's entitlements."
+                         : "Requires TrollStore. Keeps the app alive using TrollStore entitlements.")
                 }
             }
             
@@ -1924,7 +1929,7 @@ struct SettingsView: View {
                     .normalizedSeparator()
                 }
 
-                if model.isTrollStore {
+                if model.hasTrollStorePrivileges {
                     Toggle("Disable separate JVM process", isOn: Binding(
                         get: { model.disableSeparateJVMProcessOnTrollStore },
                         set: { newValue in
@@ -1980,13 +1985,13 @@ struct SettingsView: View {
                 }
                 .normalizedSeparator()
                 HStack {
-                    Text("TrollStore Detected")
+                    Text(model.isJailbreak ? "Jailbreak Detected" : "TrollStore Detected")
                     Spacer()
-                    Text(model.isTrollStore ? "Yes" : "No")
-                        .foregroundColor(boolstatuscolor(model.isTrollStore))
+                    Text(model.hasTrollStorePrivileges ? "Yes" : "No")
+                        .foregroundColor(boolstatuscolor(model.hasTrollStorePrivileges))
                 }
                 .onTapGesture(count: 5) {
-                    if model.isTrollStore {
+                    if model.isTrollStore && !model.isJailbreak {
                         if let url = URL(string: "apple-magnifier://install?url=https://baconium.dev/jessi/JESSI.ipa") {
                             UIApplication.shared.open(url)
                         }
@@ -1994,10 +1999,17 @@ struct SettingsView: View {
                 }
                 .normalizedSeparator()
                 HStack {
-                    Text("LiveContainer Detected")
-                    Spacer()
-                    Text(model.islivecontainer ? "Yes" : "No")
-                        .foregroundColor(boolstatuscolor(model.islivecontainer))
+                    if model.isJailbreak {
+                        Text("Jailbreak Type")
+                        Spacer()
+                        Text(model.jailbreakType ?? "Unknown")
+                            .foregroundColor(infostatuscolor())
+                    } else {
+                        Text("LiveContainer Detected")
+                        Spacer()
+                        Text(model.islivecontainer ? "Yes" : "No")
+                            .foregroundColor(boolstatuscolor(model.islivecontainer))
+                    }
                 }
                 .normalizedSeparator()
                 HStack {
@@ -2252,7 +2264,7 @@ struct SettingsView: View {
             model.heapText = String(s.maxHeapMB)
             model.curseForgeAPIKey = s.curseForgeAPIKey
 
-            if !model.isTrollStore,
+            if !model.hasTrollStorePrivileges,
                keepalivemethodraw == keepalivemgr.keepalivemethod.trollstore.rawValue {
                 keepalivemethodraw = keepalivemgr.keepalivemethod.location.rawValue
                 keepalivemgr.shared.setmethod(raw: keepalivemethodraw)
