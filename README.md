@@ -22,6 +22,15 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="#basic-information">Basic Information</a> •
+  <a href="#livecontainer">LiveContainer</a> •
+  <a href="#features">Features</a> •
+  <a href="#buildingmiscellaneous-extra-info">Build / Misc</a>
+  <br>
+  you should like totally join the discord server btw, its a pretty tuff server
+</p>
+
 # Basic Information
 
 JESSI is an iOS app that runs Minecraft: Java Edition servers natively on iOS, targeting iOS 14+. JESSI runs on both jailed and jailbroken iOS, only requiring JIT to do so.
@@ -31,13 +40,6 @@ JESSI is designed specifically to be as easy to use as possible, even if you hav
 Tutorials for installing JESSI can be found in [the wiki for this repo](https://github.com/Baconium/JESSI/wiki). More tutorials for specific features will be coming shortly, as well as video tutorials!
 
 You can download the ipa directly here or add the altsource (nightly pulls from superbeta):
-
-<p align="center">
-  <a href="#basic-information">Basic Information</a> •
-  <a href="#livecontainer">LiveContainer</a> •
-  <a href="#features">Features</a> •
-  <a href="#buildingmiscellaneous-extra-info">Build / Misc</a>
-</p>
 
 <table>
 <tr>
