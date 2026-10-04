@@ -30,39 +30,35 @@
 </p>
 
 <p align="center">
-<table>
-<tr>
-<td>
-Stable
-</td>
-<td>
-<a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/source.json" target="_blank">
+  <table>
+  <tr>
+  <td>Stable</td>
+  <td>
+  <a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/source.json" target="_blank">
    <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png" alt="Add AltSource" width="200"/>
-</a>
-</td>
-<td>
-<a href="https://github.com/Baconium/JESSI/releases/latest/download/JESSI.ipa" target="_blank">
+  </a>
+  </td>
+  <td>
+  <a href="https://github.com/Baconium/JESSI/releases/latest/download/JESSI.ipa" target="_blank">
    <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
-</a>
-</td>
-</tr>
-<tr>
-<td>
-Nightly
-</td>
-<td>
-<a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/nightlysource.json target="_blank">
+  </a>
+  </td>
+  </tr>
+  <tr>
+  <td>Nightly</td>
+  <td>
+  <a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/nightlysource.json target="_blank">
    <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png" alt="Add AltSource" width="200"/>
-</a>
-</td>
-<td>
-<a href="https://github.com/Baconium/JESSI/releases/download/super-beta/JESSI.ipa" target="_blank">
+  </a>
+  </td>
+  <td>
+  <a href="https://github.com/Baconium/JESSI/releases/download/super-beta/JESSI.ipa" target="_blank">
    <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
-</a>
-</td>
-</tr>
-</table>
-</p>
+  </a>
+  </td>
+  </tr>
+  </table>
+  </p>
 
 If you would like support, want to request a feature, or just talk to other JESSI users you should join the discord: https://discord.gg/aZ9HbYXKur
 
