@@ -29,6 +29,7 @@
   <a href="#buildingmiscellaneous-extra-info">Build / Misc</a>
 </p>
 
+<p align="center">
 <table>
 <tr>
 <td>
@@ -61,6 +62,7 @@ Nightly
 </td>
 </tr>
 </table>
+</p>
 
 If you would like support, want to request a feature, or just talk to other JESSI users you should join the discord: https://discord.gg/aZ9HbYXKur
 
