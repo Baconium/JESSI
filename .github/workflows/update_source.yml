@@ -19,6 +19,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Make all source modifications
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           repo="https://github.com/${{ github.repository }}"
@@ -42,7 +44,14 @@ jobs:
             cat "$out"
           }
 
-          make_source "$repo/releases/latest/download/JESSI.ipa" source.json
+          # newest full release that has an ipa; not releases/latest, which breaks whenever another release (like source) becomes latest
+          stable_tag=$(gh api "repos/${{ github.repository }}/releases" \
+            --jq '[.[] | select((.draft or .prerelease) | not) | select(any(.assets[]; .name == "JESSI.ipa"))][0].tag_name')
+          if [[ -z "$stable_tag" || "$stable_tag" == "null" ]]; then
+            echo "no release with JESSI.ipa found" >&2
+            exit 1
+          fi
+          make_source "$repo/releases/download/$stable_tag/JESSI.ipa" source.json
           # its own identifier so it can be added alongside the stable source
           make_source "$repo/releases/download/super-beta/JESSI.ipa" nightlysource.json \
             '.name = "JESSI Nightly" | .identifier = "com.baconmania.jessi.source.nightly" | .subtitle = "Nightly builds of JESSI, straight from main"'
@@ -54,3 +63,5 @@ jobs:
           artifacts: "source.json,nightlysource.json"
           artifactContentType: JSON
           tag: "source"
+          # keep the real app release as latest, so releases/latest/download/JESSI.ipa keeps working
+          makeLatest: "false"

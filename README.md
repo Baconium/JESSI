@@ -28,7 +28,7 @@
   <a href="#features">Features</a> •
   <a href="#buildingmiscellaneous-extra-info">Build / Misc</a>
   <br><br>
-  (you should like totally join the discord server btw, its a pretty tuff server)
+  (you should like totally join the discord btw, its pretty tuff)
 </p>
 
 # Basic Information
@@ -52,7 +52,7 @@ Stable
 </a>
 </td>
 <td>
-<a href="https://github.com/Baconium/releases/latest/download/JESSI.ipa" target="_blank">
+<a href="https://github.com/Baconium/JESSI/releases/latest/download/JESSI.ipa" target="_blank">
    <img src="https://web.archive.org/web/20260831180343im_/https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
 </a>
 </td>
