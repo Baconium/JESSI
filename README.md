@@ -27,8 +27,8 @@
   <a href="#livecontainer">LiveContainer</a> •
   <a href="#features">Features</a> •
   <a href="#buildingmiscellaneous-extra-info">Build / Misc</a>
-  <br>
-  you should like totally join the discord server btw, its a pretty tuff server
+  <br><br>
+  (you should like totally join the discord server btw, its a pretty tuff server)
 </p>
 
 # Basic Information
