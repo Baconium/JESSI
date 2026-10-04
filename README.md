@@ -39,7 +39,7 @@ JESSI is designed specifically to be as easy to use as possible, even if you hav
 
 Tutorials for installing JESSI can be found in [the wiki for this repo](https://github.com/Baconium/JESSI/wiki). More tutorials for specific features will be coming shortly, as well as video tutorials!
 
-You can download the ipa directly here or add the altsource (nightly pulls from superbeta):
+You can download the ipa directly here or add the altsource (nightly pulls from the super beta release):
 
 <table>
 <tr>
@@ -53,7 +53,7 @@ Stable
 </td>
 <td>
 <a href="https://github.com/Baconium/JESSI/releases/latest/download/JESSI.ipa" target="_blank">
-   <img src="https://web.archive.org/web/20260831180343im_/https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
+   <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
 </a>
 </td>
 </tr>
@@ -62,13 +62,13 @@ Stable
 Nightly
 </td>
 <td>
-<a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/source.json" target="_blank">
+<a href="https://altdirect.app/?url=https://github.com/Baconium/JESSI/releases/download/source/nightlysource.json" target="_blank">
    <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/AltSource_Blue.png" alt="Add AltSource" width="200"/>
 </a>
 </td>
 <td>
-<a href="https://web.archive.org/web/20260831180343/https://github.com/LiveContainer/LiveContainer/releases/download/nightly/LiveContainer.ipa" target="_blank">
-   <img src="https://web.archive.org/web/20260831180343im_/https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
+<a href="https://github.com/Baconium/JESSI/releases/download/super-beta/JESSI.ipa" target="_blank">
+   <img src="https://raw.githubusercontent.com/StikStore/altdirect/refs/heads/main/assets/png/Download_Blue.png" alt="Download .ipa" width="200"/>
 </a>
 </td>
 </tr>
