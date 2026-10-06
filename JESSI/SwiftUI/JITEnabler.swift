@@ -11,6 +11,7 @@ final class JITEnabler: ObservableObject {
     private static let osLog = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "JESSI", category: "JIT")
 
     static let localDevVPNURL = URL(string: "https://apps.apple.com/us/app/localdevvpn/id6755608044")!
+    static let defaultTargetIP = "10.7.0.1"
 
     enum Phase: Equatable {
         case idle
@@ -65,28 +66,18 @@ final class JITEnabler: ObservableObject {
         jitEnabled = Self.isJITUsable
     }
 
-    static var isLocalDevVPNConnected: Bool {
-        var list: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&list) == 0, let first = list else { return false }
-        defer { freeifaddrs(list) }
-        var cursor: UnsafeMutablePointer<ifaddrs>? = first
-        while let entry = cursor {
-            defer { cursor = entry.pointee.ifa_next }
-            guard let addr = entry.pointee.ifa_addr, addr.pointee.sa_family == UInt8(AF_INET),
-                  String(cString: entry.pointee.ifa_name).hasPrefix("utun"),
-                  (entry.pointee.ifa_flags & UInt32(IFF_UP)) != 0 else { continue }
-            let ip = addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { UInt32(bigEndian: $0.pointee.sin_addr.s_addr) }
-            if ip >> 16 == 0x0A07 { return true }
-        }
-        return false
-    }
-
-    var canAutoEnable: Bool {
+    func checkCanAutoEnable(completion: @escaping (Bool) -> Void) {
         #if targetEnvironment(macCatalyst)
-        return false
+        completion(false)
         #else
-        guard #available(iOS 17.4, *), !jessi_is_running_on_macos() else { return false }
-        return PairingFileStore.exists && Self.isLocalDevVPNConnected
+        guard #available(iOS 17.4, *), !jessi_is_running_on_macos(), PairingFileStore.exists else {
+            completion(false)
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let found = LoopbackTunnelDetector.find() != nil
+            DispatchQueue.main.async { completion(found) }
+        }
         #endif
     }
 
@@ -129,6 +120,28 @@ final class JITEnabler: ObservableObject {
 
         logLines.removeAll()
         phase = .connecting
+        appendLog("Looking for a loopback VPN…")
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let tunnel = LoopbackTunnelDetector.find()
+            DispatchQueue.main.async {
+                guard let self, case .connecting = self.phase else { return }
+                self.beginHelperSession(pairingData: pairingData, tunnel: tunnel)
+            }
+        }
+        #endif
+    }
+
+    #if !targetEnvironment(macCatalyst)
+    private func beginHelperSession(pairingData: Data, tunnel: LoopbackTunnel?) {
+        let targetIP: String
+        if let tunnel {
+            targetIP = tunnel.peerAddress
+            appendLog("Loopback VPN found on \(tunnel.interface), device address \(tunnel.peerAddress)")
+        } else {
+            targetIP = Self.defaultTargetIP
+            appendLog("No loopback VPN found. Trying \(targetIP) anyway; connect one (such as LocalDevVPN) if this fails.")
+        }
 
         do {
             let listener = try HelperEventListener { [weak self] event in
@@ -156,7 +169,7 @@ final class JITEnabler: ObservableObject {
                     self.appendLog("Couldn't find the RemotePairing port over Bonjour; trying \(chosen)")
                 }
                 do {
-                    try self.launchHelper(pairingData: pairingData, eventPort: listener.port, tunnelPort: chosen)
+                    try self.launchHelper(pairingData: pairingData, targetIP: targetIP, eventPort: listener.port, tunnelPort: chosen)
                 } catch {
                     self.finish(.failed(error.localizedDescription))
                 }
@@ -164,8 +177,8 @@ final class JITEnabler: ObservableObject {
         } catch {
             finish(.failed(error.localizedDescription))
         }
-        #endif
     }
+    #endif
 
     func cancel() {
         guard phase.isBusy else { return }
@@ -179,7 +192,7 @@ final class JITEnabler: ObservableObject {
         finish(.idle)
     }
 
-    private func launchHelper(pairingData: Data, eventPort: UInt16, tunnelPort: UInt16) throws {
+    private func launchHelper(pairingData: Data, targetIP: String, eventPort: UInt16, tunnelPort: UInt16) throws {
         guard let helperID = Self.helperBundleIdentifier else {
             throw HelperLaunchError("The JIT helper extension is missing from this copy of JESSI. Make sure your signing tool keeps app extensions.")
         }
@@ -204,7 +217,7 @@ final class JITEnabler: ObservableObject {
             "pairingFile": pairingData,
             "eventPort": NSNumber(value: eventPort),
             "txm": NSNumber(value: usesJITScript),
-            "targetIP": "10.7.0.1",
+            "targetIP": targetIP,
             "tunnelPort": NSNumber(value: tunnelPort),
         ]
 
@@ -324,11 +337,11 @@ final class JITEnabler: ObservableObject {
             return "\(message)\n\nThe pairing file may be invalid or from another device. Generate a new one and import it again."
         }
         if lowered.contains("connection reset") || code == 54 {
-            return "\(message)\n\nThe device closed the connection, which usually means it doesn't recognise this pairing file. Generate a new pairing file for this device and import it again. If you just did, make sure LocalDevVPN is connected."
+            return "\(message)\n\nThe device closed the connection, which usually means it doesn't recognise this pairing file. Generate a new pairing file for this device and import it again. If you just did, make sure your loopback VPN (such as LocalDevVPN) is connected."
         }
         if lowered.contains("timed out") || lowered.contains("unreachable") || lowered.contains("connection refused")
             || lowered.contains("no route") || code == 61 {
-            return "\(message)\n\nMake sure LocalDevVPN is installed and connected (the VPN icon should be showing), then try again."
+            return "\(message)\n\nMake sure a loopback VPN such as LocalDevVPN or StosVPN is connected (the VPN icon should be showing), then try again."
         }
         return message
     }
@@ -571,5 +584,92 @@ final class RemotePairingDiscovery: NSObject, NetServiceBrowserDelegate, NetServ
             cursor = entry.pointee.ifa_next
         }
         return result
+    }
+}
+
+nonisolated struct LoopbackTunnel: Equatable {
+    let interface: String
+    let peerAddress: String
+}
+
+nonisolated enum LoopbackTunnelDetector {
+    private static let probePort: UInt16 = 62078
+    private static let legacyPeerAddress = "10.7.0.1"
+
+    private struct Tunnel {
+        let name: String
+        let address: UInt32
+        let destination: UInt32?
+    }
+
+    static func find(probeTimeout: TimeInterval = 0.75) -> LoopbackTunnel? {
+        let tunnels = activeTunnels()
+        for tunnel in tunnels {
+            for peer in candidatePeers(of: tunnel) where canConnect(to: peer, timeout: probeTimeout) {
+                return LoopbackTunnel(interface: tunnel.name, peerAddress: format(peer))
+            }
+        }
+
+        if let tunnel = tunnels.first(where: { $0.address >> 16 == 0x0A07 }) {
+            return LoopbackTunnel(interface: tunnel.name, peerAddress: legacyPeerAddress)
+        }
+        return nil
+    }
+
+    private static func activeTunnels() -> [Tunnel] {
+        var list: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&list) == 0, let first = list else { return [] }
+        defer { freeifaddrs(list) }
+        var tunnels: [Tunnel] = []
+        var cursor: UnsafeMutablePointer<ifaddrs>? = first
+        while let entry = cursor {
+            defer { cursor = entry.pointee.ifa_next }
+            guard let addr = entry.pointee.ifa_addr, addr.pointee.sa_family == UInt8(AF_INET),
+                  String(cString: entry.pointee.ifa_name).hasPrefix("utun"),
+                  (entry.pointee.ifa_flags & UInt32(IFF_UP)) != 0 else { continue }
+            let address = addr.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { UInt32(bigEndian: $0.pointee.sin_addr.s_addr) }
+            var destination: UInt32?
+            if (entry.pointee.ifa_flags & UInt32(IFF_POINTOPOINT)) != 0, let peer = entry.pointee.ifa_dstaddr, peer.pointee.sa_family == UInt8(AF_INET) {
+                destination = peer.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { UInt32(bigEndian: $0.pointee.sin_addr.s_addr) }
+            }
+            tunnels.append(Tunnel(name: String(cString: entry.pointee.ifa_name), address: address, destination: destination))
+        }
+        return tunnels
+    }
+
+    private static func candidatePeers(of tunnel: Tunnel) -> [UInt32] {
+        var peers: [UInt32] = []
+        if let destination = tunnel.destination, destination != tunnel.address { peers.append(destination) }
+        if tunnel.address & 0xFF < 0xFE, !peers.contains(tunnel.address + 1) { peers.append(tunnel.address + 1) }
+        return peers
+    }
+
+    private static func canConnect(to address: UInt32, timeout: TimeInterval) -> Bool {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else { return false }
+        defer { Darwin.close(fd) }
+        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK)
+
+        var target = sockaddr_in()
+        target.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        target.sin_family = sa_family_t(AF_INET)
+        target.sin_port = probePort.bigEndian
+        target.sin_addr.s_addr = address.bigEndian
+        let result = withUnsafePointer(to: &target) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size)) }
+        }
+        if result == 0 { return true }
+        guard errno == EINPROGRESS else { return false }
+
+        var pending = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+        guard poll(&pending, 1, Int32(timeout * 1000)) > 0 else { return false }
+        var error: Int32 = 0
+        var length = socklen_t(MemoryLayout<Int32>.size)
+        guard getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &length) == 0 else { return false }
+        return error == 0
+    }
+
+    private static func format(_ address: UInt32) -> String {
+        "\(address >> 24 & 0xFF).\(address >> 16 & 0xFF).\(address >> 8 & 0xFF).\(address & 0xFF)"
     }
 }

@@ -2197,25 +2197,25 @@ struct SettingsView: View {
         .listStyle(InsetGroupedListStyle())
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $playitclaimsheetitem) { item in
+        .hostedSheet(item: $playitclaimsheetitem) { item in
             SafariView(url: item.url)
                 .ignoresSafeArea()
         }
-        .alert(isPresented: showTunnelingInstallErrorAlert) {
+        .hostedAlert(isPresented: showTunnelingInstallErrorAlert) {
             Alert(
                 title: Text("Tunneling Install Failed"),
                 message: Text(tunnelingmodel.installerrormsg ?? "Unknown error"),
                 dismissButton: .default(Text("OK"))
             )
         }
-        .alert(isPresented: showplayitinvalidkeyalert) {
+        .hostedAlert(isPresented: showplayitinvalidkeyalert) {
             Alert(
                 title: Text("Playit Link Invalid"),
                 message: Text("Your Playit link is invalid or expired. Please link again."),
                 dismissButton: .default(Text("OK"))
             )
         }
-        .actionSheet(isPresented: $showrooootmenu) {
+        .hostedActionSheet(isPresented: $showrooootmenu) {
             ActionSheet(
                 title: Text("roooot menu"),
                 buttons: [
@@ -2229,7 +2229,7 @@ struct SettingsView: View {
                 ]
             )
         }
-        .actionSheet(isPresented: $showresetplayitconfirmation) {
+        .hostedActionSheet(isPresented: $showresetplayitconfirmation) {
             ActionSheet(
                 title: Text("Reset Playit"),
                 message: Text("Choose whether to reinstall Playit after reset, or just reset without reinstalling."),
@@ -2244,7 +2244,7 @@ struct SettingsView: View {
                 ]
             )
         }
-        .alert(isPresented: showJvmInstallErrorAlert) {
+        .hostedAlert(isPresented: showJvmInstallErrorAlert) {
             Alert(
                 title: Text("JVM Install Failed"),
                 message: Text(model.installErrorMessage ?? "Unknown error"),

@@ -322,6 +322,91 @@ struct CreateServerView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
+            // iOS 14.0-14.4 only honors one presentation modifier along a view's ancestor chain (the outermost
+            // one wins), so every sheet/alert lives on its own sibling view instead of wrapping the others
+            Color.clear.frame(width: 0, height: 0)
+                .sheet(isPresented: $showingJarImporter) {
+                    DocumentPicker(contentTypes: [.data], onPick: { url in
+                        importCustomJar(from: url)
+                        showingJarImporter = false
+                    }, onCancel: {
+                        showingJarImporter = false
+                    })
+                }
+            Color.clear.frame(width: 0, height: 0)
+                .sheet(isPresented: $showingIconImporter) {
+                    ImagePicker(onPick: { image in
+                        serverIcon = normalizeIcon(image)
+                        showingIconImporter = false
+                    }, onCancel: {
+                        showingIconImporter = false
+                    })
+                }
+            Color.clear.frame(width: 0, height: 0)
+                .alert(isPresented: $showCreateError) {
+                    Alert(
+                        title: Text("Create Server Failed"),
+                        message: Text(createError ?? "Unknown error"),
+                        dismissButton: .default(Text("OK"))
+                    )
+                }
+            Color.clear.frame(width: 0, height: 0)
+                .alert(isPresented: $showJarImportError) {
+                    Alert(
+                        title: Text("Import Failed"),
+                        message: Text(jarImportError ?? "Unknown error"),
+                        dismissButton: .default(Text("OK"))
+                    )
+                }
+            Color.clear.frame(width: 0, height: 0)
+                .alert(isPresented: $showForgeWarning) {
+                    Alert(
+                        title: Text("Warning"),
+                        message: Text("Warning: Creating a Forge/NeoForge server may cause the app to crash after the server is created. Proceed with caution."),
+                        dismissButton: .default(Text("Dismiss"), action: {
+                            if pendingCreateServer {
+                                pendingCreateServer = false
+                                createServerConfirmed()
+                            }
+                        })
+                    )
+                }
+            Color.clear.frame(width: 0, height: 0)
+                .alert(isPresented: $showForgeJITRequired) {
+                    Alert(
+                        title: Text("JIT Required"),
+                        message: Text("Creating a Forge or NeoForge server requires JIT to be enabled! Please enable JIT and try again."),
+                        dismissButton: .default(Text("OK"))
+                    )
+                }
+            Color.clear.frame(width: 0, height: 0)
+                .alert(isPresented: $showSeedEasterEgg) {
+                    Alert(
+                        title: Text(seedEasterEggTitle),
+                        message: Text(seedEasterEggMessage),
+                        dismissButton: .default(Text("Dismiss"))
+                    )
+                }
+            Color.clear.frame(width: 0, height: 0)
+                .alert(isPresented: $showJVMInstallPrompt) {
+                    let canDefer = software != .forge && software != .neoforge
+                    return Alert(
+                        title: Text("Java \(missingJVMVersion) Required"),
+                        message: Text(canDefer
+                            ? "This Minecraft version requires Java \(missingJVMVersion), which is not currently installed. You can install it now, or create the server anyway and install it before you start the server."
+                            : "This server software requires Java \(missingJVMVersion) to be set up, and it is not currently installed."),
+                        primaryButton: .default(Text("Install")) {
+                            installMissingJVM()
+                        },
+                        secondaryButton: canDefer
+                            ? .default(Text("Install later")) {
+                                skipJVMCheck = true
+                                createServerConfirmed()
+                                skipJVMCheck = false
+                            }
+                            : .cancel()
+                    )
+                }
         }
         .onChange(of: isCreating) { creating in
             if creating {
@@ -384,81 +469,6 @@ struct CreateServerView: View {
             if newValue != .customJar {
                 fetchVersions(force: true)
             }
-        }
-        .sheet(isPresented: $showingJarImporter) {
-            DocumentPicker(contentTypes: [.data], onPick: { url in
-                importCustomJar(from: url)
-                showingJarImporter = false
-            }, onCancel: {
-                showingJarImporter = false
-            })
-        }
-        .sheet(isPresented: $showingIconImporter) {
-            ImagePicker(onPick: { image in
-                serverIcon = normalizeIcon(image)
-                showingIconImporter = false
-            }, onCancel: {
-                showingIconImporter = false
-            })
-        }
-        .alert(isPresented: $showCreateError) {
-            Alert(
-                title: Text("Create Server Failed"),
-                message: Text(createError ?? "Unknown error"),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .alert(isPresented: $showJarImportError) {
-            Alert(
-                title: Text("Import Failed"),
-                message: Text(jarImportError ?? "Unknown error"),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .alert(isPresented: $showForgeWarning) {
-            Alert(
-                title: Text("Warning"),
-                message: Text("Warning: Creating a Forge/NeoForge server may cause the app to crash after the server is created. Proceed with caution."),
-                dismissButton: .default(Text("Dismiss"), action: {
-                    if pendingCreateServer {
-                        pendingCreateServer = false
-                        createServerConfirmed()
-                    }
-                })
-            )
-        }
-        .alert(isPresented: $showForgeJITRequired) {
-            Alert(
-                title: Text("JIT Required"),
-                message: Text("Creating a Forge or NeoForge server requires JIT to be enabled! Please enable JIT and try again."),
-                dismissButton: .default(Text("OK"))
-            )
-        }
-        .alert(isPresented: $showSeedEasterEgg) {
-            Alert(
-                title: Text(seedEasterEggTitle),
-                message: Text(seedEasterEggMessage),
-                dismissButton: .default(Text("Dismiss"))
-            )
-        }
-        .alert(isPresented: $showJVMInstallPrompt) {
-            let canDefer = software != .forge && software != .neoforge
-            return Alert(
-                title: Text("Java \(missingJVMVersion) Required"),
-                message: Text(canDefer
-                    ? "This Minecraft version requires Java \(missingJVMVersion), which is not currently installed. You can install it now, or create the server anyway and install it before you start the server."
-                    : "This server software requires Java \(missingJVMVersion) to be set up, and it is not currently installed."),
-                primaryButton: .default(Text("Install")) {
-                    installMissingJVM()
-                },
-                secondaryButton: canDefer
-                    ? .default(Text("Install later")) {
-                        skipJVMCheck = true
-                        createServerConfirmed()
-                        skipJVMCheck = false
-                    }
-                    : .cancel()
-            )
         }
     }
 

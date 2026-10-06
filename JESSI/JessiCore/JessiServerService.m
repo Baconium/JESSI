@@ -32,6 +32,80 @@ static const int JessiPumpkinErrBadDirectory = -2;
 static const int JessiPumpkinErrRuntime = -3;
 static JessiPumpkinStopFn g_pumpkinStop = NULL;
 
+typedef int (*JessiPumpkinPromptFn)(const char *plugin, const char *version, const char *permissions);
+typedef void (*JessiPumpkinSetPromptFn)(JessiPumpkinPromptFn callback);
+static const int JessiPumpkinPromptAllow = 1;
+static const int JessiPumpkinPromptDeny = 0;
+static const int JessiPumpkinPromptSkip = -1;
+static const NSTimeInterval JessiPumpkinPromptTimeout = 600;
+
+static UIViewController *jessi_top_view_controller(void) {
+    UIWindowScene *scene = nil;
+    for (UIScene *candidate in UIApplication.sharedApplication.connectedScenes) {
+        if ([candidate isKindOfClass:[UIWindowScene class]]) { scene = (UIWindowScene *)candidate; break; }
+    }
+    UIWindow *window = nil;
+    for (UIWindow *w in scene.windows) {
+        if (w.isKeyWindow) { window = w; break; }
+    }
+    UIViewController *controller = (window ?: scene.windows.firstObject).rootViewController;
+    while (controller.presentedViewController) controller = controller.presentedViewController;
+    return controller;
+}
+
+static void jessi_when_app_active(void (^block)(void)) {
+    if (UIApplication.sharedApplication.applicationState == UIApplicationStateActive) {
+        block();
+        return;
+    }
+    __block id token = [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification
+                                                                       object:nil
+                                                                        queue:NSOperationQueue.mainQueue
+                                                                   usingBlock:^(NSNotification *note) {
+        [NSNotificationCenter.defaultCenter removeObserver:token];
+        block();
+    }];
+}
+
+static int jessi_pumpkin_permission_prompt(const char *plugin, const char *version, const char *permissions) {
+    NSString *name = plugin ? [NSString stringWithUTF8String:plugin] : @"";
+    NSString *pluginVersion = version ? [NSString stringWithUTF8String:version] : @"";
+    NSMutableString *list = [NSMutableString string];
+    for (NSString *line in [(permissions ? [NSString stringWithUTF8String:permissions] : @"") componentsSeparatedByString:@"\n"]) {
+        if (line.length == 0) continue;
+        NSArray<NSString *> *parts = [line componentsSeparatedByString:@"\t"];
+        [list appendFormat:@"\n• %@", parts[0]];
+        if (parts.count > 1 && parts[1].length > 0) [list appendFormat:@": %@", parts[1]];
+    }
+    NSString *message = [NSString stringWithFormat:@"\"%@\" %@ is asking for these permissions:\n%@\n\nOnly allow plugins you trust. Your answer is remembered for this plugin file.", name, pluginVersion, list];
+
+    dispatch_semaphore_t answered = dispatch_semaphore_create(0);
+    __block int answer = JessiPumpkinPromptSkip;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        jessi_when_app_active(^{
+            UIViewController *presenter = jessi_top_view_controller();
+            if (!presenter) {
+                dispatch_semaphore_signal(answered);
+                return;
+            }
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Allow Plugin Permissions?" message:message preferredStyle:UIAlertControllerStyleAlert];
+            [alert addAction:[UIAlertAction actionWithTitle:@"Deny" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
+                answer = JessiPumpkinPromptDeny;
+                dispatch_semaphore_signal(answered);
+            }]];
+            [alert addAction:[UIAlertAction actionWithTitle:@"Allow" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+                answer = JessiPumpkinPromptAllow;
+                dispatch_semaphore_signal(answered);
+            }]];
+            [presenter presentViewController:alert animated:YES completion:nil];
+        });
+    });
+    if (dispatch_semaphore_wait(answered, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(JessiPumpkinPromptTimeout * NSEC_PER_SEC))) != 0) {
+        return JessiPumpkinPromptSkip;
+    }
+    return answer;
+}
+
 static NSString *const JessiServerRunningKey = @"jessi.server.running";
 static NSString *const JessiServerRunningChanged = @"JessiServerRunningChanged";
 static BOOL g_serverRunning = NO;
@@ -766,6 +840,9 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
         [self emitConsole:[NSString stringWithFormat:@"\n%@ does not export pumpkin_run/pumpkin_stop.\n", JessiPumpkinLibraryFileName]];
         return 254;
     }
+
+    JessiPumpkinSetPromptFn setPrompt = (JessiPumpkinSetPromptFn)dlsym(handle, "pumpkin_set_permission_prompt");
+    if (setPrompt) setPrompt(jessi_pumpkin_permission_prompt);
 
     jessi_redirect_stdio_to([dir stringByAppendingPathComponent:@"jessi-stdio.log"]);
 

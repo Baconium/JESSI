@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import UIKit
+import UniformTypeIdentifiers
 
 struct SheetItem: Identifiable {
     let id = UUID()
@@ -276,56 +277,60 @@ struct ServerManagerView: View {
             .shadow(color: Color.black.opacity(0.5), radius: 8, x: 0, y: 4)
             .padding(.horizontal, 16)
             .padding(.bottom, createButtonBottomPadding)
-        }
-        .sheet(item: $modsSheetItem) { item in
-            NavigationView {
-                ModsView(servername: item.input)
-            }
-        }
-        .sheet(isPresented: $showingCreateServer) {
-            NavigationView {
-                CreateServerView()
-            }
-        }
-        .sheet(isPresented: $showingRenameSheet) {
-            NavigationView {
-                Form {
-                    Section(header: Text("Rename Server")) {
-                        TextField("Server Name", text: $renameText)
-                            .autocapitalization(.words)
+            Color.clear.frame(width: 0, height: 0)
+                .sheet(item: $modsSheetItem) { item in
+                    NavigationView {
+                        ModsView(servername: item.input)
                     }
                 }
-                .navigationTitle("Rename")
-                .navigationBarTitleDisplayMode(.inline)
-                .navigationBarItems(
-                    leading: Button("Cancel") { showingRenameSheet = false },
-                    trailing: Button("Save") {
-                        if let old = renameTarget {
-                            renameServer(oldName: old, newName: renameText)
-                        }
-                        showingRenameSheet = false
+            Color.clear.frame(width: 0, height: 0)
+                .sheet(isPresented: $showingCreateServer) {
+                    NavigationView {
+                        CreateServerView()
                     }
-                )
-            }
-        }
-        .alert(item: $alert) { a in
-            switch a {
-            case .confirmDelete(let name):
-                return Alert(
-                    title: Text("Delete Server"),
-                    message: Text("Delete \"\(name)\"? This cannot be undone."),
-                    primaryButton: .destructive(Text("Delete")) {
-                        deleteServer(name: name)
-                    },
-                    secondaryButton: .cancel()
-                )
-            case .error(let msg):
-                return Alert(
-                    title: Text("Error"),
-                    message: Text(msg),
-                    dismissButton: .default(Text("OK"))
-                )
-            }
+                }
+            Color.clear.frame(width: 0, height: 0)
+                .sheet(isPresented: $showingRenameSheet) {
+                    NavigationView {
+                        Form {
+                            Section(header: Text("Rename Server")) {
+                                TextField("Server Name", text: $renameText)
+                                    .autocapitalization(.words)
+                            }
+                        }
+                        .navigationTitle("Rename")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .navigationBarItems(
+                            leading: Button("Cancel") { showingRenameSheet = false },
+                            trailing: Button("Save") {
+                                if let old = renameTarget {
+                                    renameServer(oldName: old, newName: renameText)
+                                }
+                                showingRenameSheet = false
+                            }
+                        )
+                    }
+                }
+            Color.clear.frame(width: 0, height: 0)
+                .alert(item: $alert) { a in
+                    switch a {
+                    case .confirmDelete(let name):
+                        return Alert(
+                            title: Text("Delete Server"),
+                            message: Text("Delete \"\(name)\"? This cannot be undone."),
+                            primaryButton: .destructive(Text("Delete")) {
+                                deleteServer(name: name)
+                            },
+                            secondaryButton: .cancel()
+                        )
+                    case .error(let msg):
+                        return Alert(
+                            title: Text("Error"),
+                            message: Text(msg),
+                            dismissButton: .default(Text("OK"))
+                        )
+                    }
+                }
         }
         .overlay(
             Group {
@@ -369,5 +374,59 @@ struct ServerManagerView: View {
                 }
             }
         )
+    }
+}
+
+extension View {
+    func hostedSheet<Content: View>(isPresented: Binding<Bool>, @ViewBuilder content: @escaping () -> Content) -> some View {
+        ZStack {
+            self
+            Color.clear.frame(width: 0, height: 0).sheet(isPresented: isPresented, content: content)
+        }
+    }
+
+    func hostedSheet<Item: Identifiable, Content: View>(item: Binding<Item?>, @ViewBuilder content: @escaping (Item) -> Content) -> some View {
+        ZStack {
+            self
+            Color.clear.frame(width: 0, height: 0).sheet(item: item, content: content)
+        }
+    }
+
+    func hostedAlert(isPresented: Binding<Bool>, content: @escaping () -> Alert) -> some View {
+        ZStack {
+            self
+            Color.clear.frame(width: 0, height: 0).alert(isPresented: isPresented, content: content)
+        }
+    }
+
+    func hostedAlert<Item: Identifiable>(item: Binding<Item?>, content: @escaping (Item) -> Alert) -> some View {
+        ZStack {
+            self
+            Color.clear.frame(width: 0, height: 0).alert(item: item, content: content)
+        }
+    }
+
+    func hostedActionSheet(isPresented: Binding<Bool>, content: @escaping () -> ActionSheet) -> some View {
+        ZStack {
+            self
+            Color.clear.frame(width: 0, height: 0).actionSheet(isPresented: isPresented, content: content)
+        }
+    }
+
+    func hostedFileImporter(
+        isPresented: Binding<Bool>,
+        allowedContentTypes: [UTType],
+        allowsMultipleSelection: Bool,
+        onCompletion: @escaping (Result<[URL], Error>) -> Void
+    ) -> some View {
+        ZStack {
+            self
+            Color.clear.frame(width: 0, height: 0).fileImporter(
+                isPresented: isPresented,
+                allowedContentTypes: allowedContentTypes,
+                allowsMultipleSelection: allowsMultipleSelection,
+                onCompletion: onCompletion
+            )
+        }
     }
 }

@@ -219,10 +219,12 @@ final class LaunchModel: NSObject, ObservableObject {
 
     private func startAfterJITCheck() {
         if !isJITEnabledCheck() {
-            if JITEnabler.shared.canAutoEnable {
-                enableJITThenStart()
-            } else {
-                activeAlert = .jitNotEnabled
+            JITEnabler.shared.checkCanAutoEnable { canAutoEnable in
+                if canAutoEnable {
+                    self.enableJITThenStart()
+                } else {
+                    self.activeAlert = .jitNotEnabled
+                }
             }
             return
         }
@@ -906,7 +908,7 @@ struct LaunchView: View {
         }
         .navigationTitle("Launch")
         .navigationBarTitleDisplayMode(.inline)
-        .alert(item: $model.activeAlert) { alert in
+        .hostedAlert(item: $model.activeAlert) { alert in
             switch alert {
             case .mspj(let message):
                 return Alert(
@@ -988,7 +990,7 @@ struct LaunchView: View {
                 )
             }
         }
-        .sheet(isPresented: $showAdvancedSettings) {
+        .hostedSheet(isPresented: $showAdvancedSettings) {
             if let manager = model.propertiesManager {
                 AdvancedSettingsView(manager: manager)
             }

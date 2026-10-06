@@ -38,6 +38,7 @@ struct ModrinthResponse: Decodable {
 enum ModProvider: String, CaseIterable, Identifiable {
     case modrinth
     case curseForge = "curseforge"
+    case pumpkin
 
     var id: String { rawValue }
 }
@@ -108,6 +109,42 @@ struct ModSearchItem: Identifiable {
     let iconURL: String?
     let author: String?
     let follows: Int
+}
+
+nonisolated struct PumpkinMarketPage: Decodable {
+    let items: [PumpkinMarketPlugin]
+    let has_more: Bool?
+}
+
+nonisolated struct PumpkinMarketPlugin: Decodable {
+    let id: Int
+    let name: String
+    let dev_name: String?
+    let downloads: Int?
+    let preview_path: String?
+    let translated_descriptions: [String: String?]?
+    let type: String?
+    let is_preorder: Bool?
+
+    var summary: String {
+        let descriptions = translated_descriptions ?? [:]
+        let markdown = (descriptions["en-US"] ?? nil) ?? descriptions.values.compactMap { $0 }.first ?? ""
+        for rawLine in markdown.components(separatedBy: .newlines) {
+            var line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("#") || line.hasPrefix("```") || line.hasPrefix("![") || line.hasPrefix("---") {
+                continue
+            }
+            for prefix in [">", "- ", "* "] where line.hasPrefix(prefix) {
+                line = String(line.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+            }
+            line = line.replacingOccurrences(of: #"\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
+            for marker in ["**", "__", "`"] {
+                line = line.replacingOccurrences(of: marker, with: "")
+            }
+            if !line.isEmpty { return line }
+        }
+        return ""
+    }
 }
 
 struct ModrinthMod: Decodable, Identifiable {
@@ -543,6 +580,7 @@ final class ModsVM: ObservableObject {
     @Published var contentType: ContentType = .mod
     
     private let modrinthURL = "https://api.modrinth.com/v2/search"
+    static let pumpkinMarketURL = "https://market.pumpkinmc.org/api"
     private var offset = 0
     private let limit = 20
     private var canload = true
@@ -566,10 +604,18 @@ final class ModsVM: ObservableObject {
         case fabric
         case quilt
         case paper
+        case pumpkin
         case custom
     }
 
-    var isPluginServer: Bool { parsedserversoft() == .paper }
+    var isPluginServer: Bool { parsedserversoft() == .paper || isPumpkinServer }
+    var isPumpkinServer: Bool { parsedserversoft() == .pumpkin }
+    var usesPumpkinMarket: Bool { isPumpkinServer && contentType == .plugin }
+
+    var searchSourceName: String {
+        if usesPumpkinMarket { return "PumpkinMC" }
+        return provider == .curseForge ? "CurseForge" : "Modrinth"
+    }
 
     var availableContentTypes: [ContentType] {
         isPluginServer ? [.plugin, .datapack, .resourcepack] : [.mod, .modpack, .resourcepack, .datapack]
@@ -595,6 +641,8 @@ final class ModsVM: ObservableObject {
             return .quilt
         case "paper":
             return .paper
+        case "pumpkin":
+            return .pumpkin
         case "custom", "custom jar":
             return .custom
         default:
@@ -691,11 +739,13 @@ final class ModsVM: ObservableObject {
             while canload, collected.isEmpty, pages < 5 {
                 pages += 1
                 let page: SearchPage
-                switch provider {
+                switch usesPumpkinMarket ? .pumpkin : provider {
                 case .modrinth:
                     page = try await searchModrinth()
                 case .curseForge:
                     page = try await searchCurseForge()
+                case .pumpkin:
+                    page = try await searchPumpkinMarket()
                 }
 
                 if page.rawCount < limit { canload = false }
@@ -705,7 +755,7 @@ final class ModsVM: ObservableObject {
                 collected.append(contentsOf: page.items.filter { !known.contains($0.id) })
             }
 
-            modlogger.log("received \(collected.count) \(contentType.rawValue)s from \(provider.rawValue)")
+            modlogger.log("received \(collected.count) \(contentType.rawValue)s from \(searchSourceName)")
             mods.append(contentsOf: collected)
             modlogger.divider()
         } catch {
@@ -783,6 +833,55 @@ final class ModsVM: ObservableObject {
             )
         }
         return SearchPage(items: items, rawCount: decoded.hits.count)
+    }
+
+    private func searchPumpkinMarket() async throws -> SearchPage {
+        var components = URLComponents(string: "\(Self.pumpkinMarketURL)/plugins")!
+        var queryitems: [URLQueryItem] = [
+            URLQueryItem(name: "paginated", value: "true"),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "offset", value: "\(offset)"),
+            URLQueryItem(name: "type", value: "free")
+        ]
+
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            queryitems.append(URLQueryItem(name: "sort", value: "downloads"))
+        } else {
+            queryitems.append(URLQueryItem(name: "q", value: trimmed))
+        }
+
+        components.queryItems = queryitems
+        let url = components.url!
+        modlogger.log("request: \(url.absoluteString)")
+
+        var request = URLRequest(url: url)
+        request.setValue("JESSI :3", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw modserror("The PumpkinMC marketplace returned HTTP \(http.statusCode).", code: http.statusCode)
+        }
+        let decoded = try JSONDecoder().decode(PumpkinMarketPage.self, from: data)
+        offset += decoded.items.count
+        if decoded.has_more == false { canload = false }
+
+        let items = decoded.items
+            .filter { ($0.type ?? "free") == "free" && $0.is_preorder != true }
+            .map {
+                ModSearchItem(
+                    id: "\(ModProvider.pumpkin.rawValue):\($0.id)",
+                    provider: .pumpkin,
+                    providerID: "\($0.id)",
+                    contentType: .plugin,
+                    title: $0.name,
+                    description: $0.summary,
+                    downloads: $0.downloads ?? 0,
+                    iconURL: $0.preview_path,
+                    author: $0.dev_name,
+                    follows: 0
+                )
+            }
+        return SearchPage(items: items, rawCount: decoded.items.count)
     }
 
     private func searchCurseForge() async throws -> SearchPage {
@@ -1188,6 +1287,8 @@ private struct Mod: View {
                     installedRecord = try await modrinthinstall()
                 case .curseForge:
                     installedRecord = try await curseforgeinstall()
+                case .pumpkin:
+                    installedRecord = try await pumpkininstall()
                 }
 
                 _ = await MainActor.run {
@@ -1251,6 +1352,32 @@ private struct Mod: View {
         }
         return try writeModFile(data: moddata, filename: file.filename,
                                sourceURL: file.url, sha1: file.hashes?.sha1)
+    }
+
+    private func pumpkininstall() async throws -> InstalledModRecord {
+        guard let url = URL(string: "\(ModsVM.pumpkinMarketURL)/plugins/\(mod.providerID)/download") else {
+            throw modserror("invalid PumpkinMC plugin id")
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("JESSI :3", forHTTPHeaderField: "User-Agent")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            throw modserror("PumpkinMC plugin download failed (HTTP \(code))", code: code)
+        }
+
+        guard data.starts(with: [0x00, 0x61, 0x73, 0x6D]) else {
+            throw modserror("the PumpkinMC marketplace didn't return a wasm plugin")
+        }
+
+        let suggested = (http.suggestedFilename.map { ($0 as NSString).lastPathComponent }) ?? ""
+        var filename = suggested.lowercased().hasSuffix(".wasm") ? suggested : ""
+        if filename.isEmpty {
+            let safeName = mod.title.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.joined(separator: "_")
+            filename = "\(safeName.isEmpty ? "plugin-\(mod.providerID)" : safeName).wasm"
+        }
+        return try writeModFile(data: data, filename: filename, sourceURL: url.absoluteString)
     }
 
     private func curseforgeinstall() async throws -> InstalledModRecord {
@@ -1902,7 +2029,7 @@ struct ModsView: View {
             HStack(spacing: 10) {
                 if #available(iOS 15.0, *) {
                     HStack(spacing: 8) {
-                        TextField(model.provider == .modrinth ? "Search Modrinth" : "Search CurseForge", text: $model.query)
+                        TextField("Search \(model.searchSourceName)", text: $model.query)
                             .textFieldStyle(.plain)
                             .onChange(of: model.query) { _ in
                                 Task { await model.reset() }
@@ -1942,6 +2069,14 @@ struct ModsView: View {
             }
             .onChange(of: model.contentType) { _ in
                 Task { await model.reset() }
+            }
+
+            if model.usesPumpkinMarket {
+                Text("Pumpkin plugins come from the PumpkinMC marketplace. Modrinth and CurseForge are used for datapacks and resource packs.")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
             }
 
             Group {

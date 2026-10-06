@@ -140,7 +140,7 @@ private final class JITHelperSession {
         guard let pairingData, !pairingData.isEmpty else { throw HelperError("No pairing file was provided", code: -17) }
 
         stage("tunnel")
-        log("Connecting to \(targetIP):\(tunnelPort) through LocalDevVPN…")
+        log("Connecting to \(targetIP):\(tunnelPort) through the loopback VPN…")
         var tunnel = try DeviceTunnel(pairingData: pairingData, targetIP: targetIP, port: tunnelPort, hostname: "JESSI")
         log("Tunnel connected (\(tunnel.serviceCount()) services)")
 

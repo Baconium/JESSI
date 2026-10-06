@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
 done
 [[ ${#SCHEMES[@]} -gt 0 ]] || SCHEMES=(rootful rootless roothide)
 
-for tool in ldid dpkg-deb; do
+for tool in ldid dpkg-deb python3; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "$tool is missing, try: brew install $tool" >&2
     exit 1
@@ -71,7 +71,7 @@ mkdir -p "$OUT_DIR"
 
 for scheme in "${SCHEMES[@]}"; do
   case "$scheme" in
-    rootful)  arch="iphoneos-arm";     prefix="";        compression="gzip" ;;
+    rootful)  arch="iphoneos-arm";     prefix="";        compression="xz" ;;
     rootless) arch="iphoneos-arm64";   prefix="/var/jb"; compression="xz" ;;
     roothide) arch="iphoneos-arm64e";  prefix="";        compression="xz" ;;
   esac
@@ -83,6 +83,26 @@ for scheme in "${SCHEMES[@]}"; do
 
   /usr/libexec/PlistBuddy -c "Delete :JESSIJailbreakType" "$app/Info.plist" >/dev/null 2>&1 || true
   /usr/libexec/PlistBuddy -c "Add :JESSIJailbreakType string $scheme" "$app/Info.plist"
+
+  if [[ "$scheme" == "rootful" ]]; then
+    python3 - "$app/$APP_NAME" <<'PY'
+import struct, sys
+path = sys.argv[1]
+data = bytearray(open(path, "rb").read())
+assert struct.unpack_from("<I", data, 0)[0] == 0xFEEDFACF, "expected a thin arm64 binary"
+off, hits = 32, 0
+for _ in range(struct.unpack_from("<I", data, 16)[0]):
+    cmd, size = struct.unpack_from("<II", data, off)
+    if cmd == 0x80000018:  # LC_LOAD_WEAK_DYLIB
+        name = bytes(data[off + struct.unpack_from("<I", data, off + 8)[0]:off + size]).split(b"\0")[0]
+        if name == b"@rpath/libswift_Concurrency.dylib":
+            struct.pack_into("<I", data, off, 0x0C)  # LC_LOAD_DYLIB
+            hits += 1
+    off += size
+assert hits == 1, "libswift_Concurrency weak load command not found"
+open(path, "wb").write(data)
+PY
+  fi
 
   rm -rf "$app/_CodeSignature"
   ldid -S"$ENTITLEMENTS" "$app/$APP_NAME"

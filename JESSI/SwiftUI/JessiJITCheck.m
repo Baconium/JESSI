@@ -226,7 +226,6 @@ const char *jessi_jailbreak_type(void) {
     NSString *scheme = jessi_jailbreak_scheme();
     if (!scheme) return NULL;
 
-    // where the bundle actually lives wins over what the deb was built for
     NSString *path = NSBundle.mainBundle.bundlePath.stringByResolvingSymlinksInPath;
     if ([path containsString:@"/.jbroot-"]) return "Roothide";
     if ([path hasPrefix:@"/var/jb/"] || [path hasPrefix:@"/private/var/jb/"] || [path containsString:@"/procursus/"]) return "Rootless";

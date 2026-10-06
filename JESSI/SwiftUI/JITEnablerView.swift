@@ -75,11 +75,11 @@ struct JITSettingsSection: View {
             Text(message)
                 .foregroundColor(.red)
         } else if !enabler.hasPairingFile {
-            Text("Import your pairing file and connect [LocalDevVPN](\(JITEnabler.localDevVPNURL.absoluteString)) before enabling JIT!")
+            Text("Import your pairing file and connect a loopback VPN like [LocalDevVPN](\(JITEnabler.localDevVPNURL.absoluteString)) before enabling JIT!")
         } else if enabler.usesJITScript {
-            Text("Connect [LocalDevVPN](\(JITEnabler.localDevVPNURL.absoluteString)) first. This device uses TXM, so a JIT script will be automatically attached.")
+            Text("Connect a loopback VPN like [LocalDevVPN](\(JITEnabler.localDevVPNURL.absoluteString)) first. This device uses TXM, so a JIT script will be automatically attached.")
         } else {
-            Text("Connect [LocalDevVPN](\(JITEnabler.localDevVPNURL.absoluteString)) first.")
+            Text("Connect a loopback VPN like [LocalDevVPN](\(JITEnabler.localDevVPNURL.absoluteString)) first.")
         }
     }
 }

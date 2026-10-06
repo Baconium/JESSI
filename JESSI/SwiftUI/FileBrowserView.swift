@@ -171,7 +171,7 @@ struct FileBrowserView: View {
         .navigationBarItems(trailing: Button(action: { showingFileImporter = true }) {
             Image(systemName: "plus")
         })
-        .fileImporter(
+        .hostedFileImporter(
             isPresented: $showingFileImporter,
             allowedContentTypes: [.data],
             allowsMultipleSelection: true
@@ -183,15 +183,15 @@ struct FileBrowserView: View {
                 importPickedFiles(urls)
             }
         }
-        .sheet(item: $modsSheetItem) { item in
+        .hostedSheet(item: $modsSheetItem) { item in
             NavigationView {
                 ModsView(servername: item.input)
             }
         }
-        .sheet(item: $shareItem) { item in
+        .hostedSheet(item: $shareItem) { item in
             ShareSheet(activityItems: [item.url])
         }
-        .sheet(isPresented: $showingRenameSheet) {
+        .hostedSheet(isPresented: $showingRenameSheet) {
             NavigationView {
                 Form {
                     Section(header: Text(renameTarget?.isDirectory == true ? "Rename Folder" : "Rename File")) {
@@ -213,7 +213,7 @@ struct FileBrowserView: View {
                 )
             }
         }
-        .alert(item: $alert) { a in
+        .hostedAlert(item: $alert) { a in
             switch a {
             case .confirmDelete(let item):
                 let isDirText = item.isDirectory ? "folder" : "file"
