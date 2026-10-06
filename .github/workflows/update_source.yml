@@ -25,9 +25,6 @@ jobs:
           set -euo pipefail
           repo="https://github.com/${{ github.repository }}"
 
-          # usage: make_source <ipa url> <output file> [jq filter for source-level overrides]
-          # version and build number come from the ipa itself, since AltStore rejects an ipa that doesn't match the source.
-          # CI builds use the run number as the build number, so every nightly counts as an update.
           make_source() {
             local ipa_url="$1" out="$2" overrides="${3:-.}"
             curl -fsSL -o app.ipa "$ipa_url"
@@ -44,7 +41,6 @@ jobs:
             cat "$out"
           }
 
-          # newest full release that has an ipa; not releases/latest, which breaks whenever another release (like source) becomes latest
           stable_tag=$(gh api "repos/${{ github.repository }}/releases" \
             --jq '[.[] | select((.draft or .prerelease) | not) | select(any(.assets[]; .name == "JESSI.ipa"))][0].tag_name')
           if [[ -z "$stable_tag" || "$stable_tag" == "null" ]]; then
@@ -52,7 +48,6 @@ jobs:
             exit 1
           fi
           make_source "$repo/releases/download/$stable_tag/JESSI.ipa" source.json
-          # its own identifier so it can be added alongside the stable source
           make_source "$repo/releases/download/super-beta/JESSI.ipa" nightlysource.json \
             '.name = "JESSI Nightly" | .identifier = "com.baconmania.jessi.source.nightly" | .subtitle = "Nightly builds of JESSI, straight from main"'
 
@@ -63,5 +58,4 @@ jobs:
           artifacts: "source.json,nightlysource.json"
           artifactContentType: JSON
           tag: "source"
-          # keep the real app release as latest, so releases/latest/download/JESSI.ipa keeps working
           makeLatest: "false"
