@@ -57,6 +57,13 @@
 		B1C0F700A1B2C3D4E5F60420 /* JessiWorkerHost.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60406 /* JessiWorkerHost.m */; };
 		B1C0F700A1B2C3D4E5F60421 /* JESSIWorker.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60404 /* JESSIWorker.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B1C0F700A1B2C3D4E5F60422 /* JessiWorkerEntry.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60407 /* JessiWorkerEntry.m */; };
+		B1C0F700A1B2C3D4E5F60611 /* JessiWorkerPayload.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60601 /* JessiWorkerPayload.m */; };
+		B1C0F700A1B2C3D4E5F60612 /* JessiWorkerCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */; };
+		B1C0F700A1B2C3D4E5F60613 /* JessiWorkerCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B1C0F700A1B2C3D4E5F60511 /* JITSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60501 /* JITSession.swift */; };
+		B1C0F700A1B2C3D4E5F60512 /* JessiJIT.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */; };
+		B1C0F700A1B2C3D4E5F60513 /* JessiJIT.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B1C0F700A1B2C3D4E5F60514 /* JessiJIT.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */; platformFilter = ios; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +81,34 @@
 			remoteGlobalIDString = B1C0F700A1B2C3D4E5F60430;
 			remoteInfo = JESSIWorker;
 		};
+		B1C0F700A1B2C3D4E5F60550 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A6C524872F2873DF0030EE41 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B1C0F700A1B2C3D4E5F60530;
+			remoteInfo = JessiJIT;
+		};
+		B1C0F700A1B2C3D4E5F60552 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A6C524872F2873DF0030EE41 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B1C0F700A1B2C3D4E5F60530;
+			remoteInfo = JessiJIT;
+		};
+		B1C0F700A1B2C3D4E5F60650 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A6C524872F2873DF0030EE41 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B1C0F700A1B2C3D4E5F60630;
+			remoteInfo = JessiWorkerCore;
+		};
+		B1C0F700A1B2C3D4E5F60652 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A6C524872F2873DF0030EE41 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B1C0F700A1B2C3D4E5F60630;
+			remoteInfo = JessiWorkerCore;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -87,6 +122,18 @@
 				B1C0F700A1B2C3D4E5F60421 /* JESSIWorker.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1C0F700A1B2C3D4E5F60560 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				B1C0F700A1B2C3D4E5F60513 /* JessiJIT.framework in Embed Frameworks */,
+				B1C0F700A1B2C3D4E5F60613 /* JessiWorkerCore.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -148,6 +195,10 @@
 		B1C0F700A1B2C3D4E5F60405 /* JessiWorkerHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiWorkerHost.h; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60406 /* JessiWorkerHost.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiWorkerHost.m; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60407 /* JessiWorkerEntry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiWorkerEntry.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60501 /* JITSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JITSession.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = JessiJIT.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1C0F700A1B2C3D4E5F60601 /* JessiWorkerPayload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiWorkerPayload.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = JessiWorkerCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,6 +208,7 @@
 			files = (
 				B1C0F700A1B2C3D4E5F60110 /* ZIPFoundation in Frameworks */,
 				B1C0F700A1B2C3D4E5F60111 /* SWCompression in Frameworks */,
+				B1C0F700A1B2C3D4E5F60514 /* JessiJIT.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -164,10 +216,26 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B1C0F700A1B2C3D4E5F60512 /* JessiJIT.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		B1C0F700A1B2C3D4E5F60432 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1C0F700A1B2C3D4E5F60612 /* JessiWorkerCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1C0F700A1B2C3D4E5F60532 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1C0F700A1B2C3D4E5F60632 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -191,6 +259,8 @@
 				A6C5248F2F2873DF0030EE41 /* JESSI.app */,
 				B1C0F700A1B2C3D4E5F60290 /* JITHelper.appex */,
 				B1C0F700A1B2C3D4E5F60404 /* JESSIWorker.appex */,
+				B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */,
+				B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -201,6 +271,7 @@
 				B1C0F700A1B2C3D4E5F60060 /* App */,
 				B1C0F700A1B2C3D4E5F60061 /* JessiCore */,
 				B1C0F700A1B2C3D4E5F602C0 /* JITHelper */,
+				B1C0F700A1B2C3D4E5F60503 /* JessiJIT */,
 				B1C0F700A1B2C3D4E5F60460 /* Worker */,
 				B1C0F700A1B2C3D4E5F60064 /* Resources */,
 				B1C0F700A1B2C3D4E5F60062 /* SwiftUI */,
@@ -290,12 +361,8 @@
 		B1C0F700A1B2C3D4E5F602C0 /* JITHelper */ = {
 			isa = PBXGroup;
 			children = (
-				B1C0F700A1B2C3D4E5F60286 /* DeveloperDiskImage.swift */,
-				B1C0F700A1B2C3D4E5F60284 /* IdeviceSupport.swift */,
 				B1C0F700A1B2C3D4E5F60283 /* JITHelperRequestHandler.swift */,
-				B1C0F700A1B2C3D4E5F60285 /* JITScriptRunner.swift */,
 				B1C0F700A1B2C3D4E5F60288 /* Info.plist */,
-				B1C0F700A1B2C3D4E5F602C1 /* Resources */,
 			);
 			path = JITHelper;
 			sourceTree = "<group>";
@@ -313,10 +380,23 @@
 			children = (
 				B1C0F700A1B2C3D4E5F60407 /* JessiWorkerEntry.m */,
 				B1C0F700A1B2C3D4E5F60401 /* JessiWorkerRequestHandler.m */,
+				B1C0F700A1B2C3D4E5F60601 /* JessiWorkerPayload.m */,
 				B1C0F700A1B2C3D4E5F60402 /* Info.plist */,
 				B1C0F700A1B2C3D4E5F60403 /* JessiWorker.entitlements */,
 			);
 			path = Worker;
+			sourceTree = "<group>";
+		};
+		B1C0F700A1B2C3D4E5F60503 /* JessiJIT */ = {
+			isa = PBXGroup;
+			children = (
+				B1C0F700A1B2C3D4E5F60286 /* DeveloperDiskImage.swift */,
+				B1C0F700A1B2C3D4E5F60284 /* IdeviceSupport.swift */,
+				B1C0F700A1B2C3D4E5F60285 /* JITScriptRunner.swift */,
+				B1C0F700A1B2C3D4E5F60501 /* JITSession.swift */,
+				B1C0F700A1B2C3D4E5F602C1 /* Resources */,
+			);
+			path = JessiJIT;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -330,12 +410,15 @@
 				A6C5248C2F2873DF0030EE41 /* Frameworks */,
 				A6C5248D2F2873DF0030EE41 /* Resources */,
 				B1C0F700A1B2C3D4E5F602A1 /* Embed Foundation Extensions */,
+				B1C0F700A1B2C3D4E5F60560 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				B1C0F700A1B2C3D4E5F602A3 /* PBXTargetDependency */,
 				B1C0F700A1B2C3D4E5F60451 /* PBXTargetDependency */,
+				B1C0F700A1B2C3D4E5F60553 /* PBXTargetDependency */,
+				B1C0F700A1B2C3D4E5F60653 /* PBXTargetDependency */,
 			);
 			name = JESSI;
 			packageProductDependencies = (
@@ -357,6 +440,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				B1C0F700A1B2C3D4E5F60551 /* PBXTargetDependency */,
 			);
 			name = JITHelper;
 			productName = JITHelper;
@@ -374,11 +458,45 @@
 			buildRules = (
 			);
 			dependencies = (
+				B1C0F700A1B2C3D4E5F60651 /* PBXTargetDependency */,
 			);
 			name = JESSIWorker;
 			productName = JESSIWorker;
 			productReference = B1C0F700A1B2C3D4E5F60404 /* JESSIWorker.appex */;
 			productType = "com.apple.product-type.app-extension";
+		};
+		B1C0F700A1B2C3D4E5F60530 /* JessiJIT */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1C0F700A1B2C3D4E5F60540 /* Build configuration list for PBXNativeTarget "JessiJIT" */;
+			buildPhases = (
+				B1C0F700A1B2C3D4E5F60531 /* Sources */,
+				B1C0F700A1B2C3D4E5F60532 /* Frameworks */,
+				B1C0F700A1B2C3D4E5F60533 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = JessiJIT;
+			productName = JessiJIT;
+			productReference = B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+		B1C0F700A1B2C3D4E5F60630 /* JessiWorkerCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1C0F700A1B2C3D4E5F60640 /* Build configuration list for PBXNativeTarget "JessiWorkerCore" */;
+			buildPhases = (
+				B1C0F700A1B2C3D4E5F60631 /* Sources */,
+				B1C0F700A1B2C3D4E5F60632 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = JessiWorkerCore;
+			productName = JessiWorkerCore;
+			productReference = B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */;
+			productType = "com.apple.product-type.framework";
 		};
 /* End PBXNativeTarget section */
 
@@ -397,6 +515,12 @@
 						CreatedOnToolsVersion = 26.5;
 					};
 					B1C0F700A1B2C3D4E5F60430 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					B1C0F700A1B2C3D4E5F60530 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					B1C0F700A1B2C3D4E5F60630 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -422,6 +546,8 @@
 				A6C5248E2F2873DF0030EE41 /* JESSI */,
 				B1C0F700A1B2C3D4E5F602B0 /* JITHelper */,
 				B1C0F700A1B2C3D4E5F60430 /* JESSIWorker */,
+				B1C0F700A1B2C3D4E5F60530 /* JessiJIT */,
+				B1C0F700A1B2C3D4E5F60630 /* JessiWorkerCore */,
 			);
 		};
 /* End PBXProject section */
@@ -440,7 +566,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B1C0F700A1B2C3D4E5F60207 /* universal.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -448,6 +573,14 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1C0F700A1B2C3D4E5F60533 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1C0F700A1B2C3D4E5F60207 /* universal.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -494,10 +627,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B1C0F700A1B2C3D4E5F60206 /* DeveloperDiskImage.swift in Sources */,
-				B1C0F700A1B2C3D4E5F60204 /* IdeviceSupport.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60203 /* JITHelperRequestHandler.swift in Sources */,
-				B1C0F700A1B2C3D4E5F60205 /* JITScriptRunner.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -506,6 +636,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				B1C0F700A1B2C3D4E5F60422 /* JessiWorkerEntry.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1C0F700A1B2C3D4E5F60631 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 				B1C0F700A1B2C3D4E5F60411 /* JessiWorkerRequestHandler.m in Sources */,
 				B1C0F700A1B2C3D4E5F60412 /* JessiJavaRunner.m in Sources */,
 				B1C0F700A1B2C3D4E5F60413 /* JessiPaths.m in Sources */,
@@ -515,6 +652,18 @@
 				B1C0F700A1B2C3D4E5F60417 /* mach_excServer.c in Sources */,
 				B1C0F700A1B2C3D4E5F60418 /* mach_excUser.c in Sources */,
 				B1C0F700A1B2C3D4E5F60419 /* JessiJITCheck.m in Sources */,
+				B1C0F700A1B2C3D4E5F60611 /* JessiWorkerPayload.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1C0F700A1B2C3D4E5F60531 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1C0F700A1B2C3D4E5F60206 /* DeveloperDiskImage.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60204 /* IdeviceSupport.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60205 /* JITScriptRunner.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60511 /* JITSession.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -532,6 +681,28 @@
 			platformFilter = ios;
 			target = B1C0F700A1B2C3D4E5F60430 /* JESSIWorker */;
 			targetProxy = B1C0F700A1B2C3D4E5F60450 /* PBXContainerItemProxy */;
+		};
+		B1C0F700A1B2C3D4E5F60551 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B1C0F700A1B2C3D4E5F60530 /* JessiJIT */;
+			targetProxy = B1C0F700A1B2C3D4E5F60550 /* PBXContainerItemProxy */;
+		};
+		B1C0F700A1B2C3D4E5F60553 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = B1C0F700A1B2C3D4E5F60530 /* JessiJIT */;
+			targetProxy = B1C0F700A1B2C3D4E5F60552 /* PBXContainerItemProxy */;
+		};
+		B1C0F700A1B2C3D4E5F60651 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B1C0F700A1B2C3D4E5F60630 /* JessiWorkerCore */;
+			targetProxy = B1C0F700A1B2C3D4E5F60650 /* PBXContainerItemProxy */;
+		};
+		B1C0F700A1B2C3D4E5F60653 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = B1C0F700A1B2C3D4E5F60630 /* JessiWorkerCore */;
+			targetProxy = B1C0F700A1B2C3D4E5F60652 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -764,21 +935,12 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/Vendor/idevice",
-				);
 				MARKETING_VERSION = 1.1;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-lidevice_ffi",
-				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.JITHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
-				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/Vendor/idevice";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -799,21 +961,12 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				LIBRARY_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(SRCROOT)/Vendor/idevice",
-				);
 				MARKETING_VERSION = 1.1;
-				OTHER_LDFLAGS = (
-					"$(inherited)",
-					"-lidevice_ffi",
-				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.JITHelper;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
-				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/Vendor/idevice";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -879,6 +1032,142 @@
 			};
 			name = Release;
 		};
+		B1C0F700A1B2C3D4E5F60541 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = 6XKA3GY3KZ;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Vendor/idevice",
+				);
+				MARKETING_VERSION = 1.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-Wl,-hidden-lidevice_ffi",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.JessiJIT;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/Vendor/idevice";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B1C0F700A1B2C3D4E5F60542 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = 6XKA3GY3KZ;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Vendor/idevice",
+				);
+				MARKETING_VERSION = 1.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-Wl,-hidden-lidevice_ffi",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.JessiJIT;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_INCLUDE_PATHS = "$(inherited) $(SRCROOT)/Vendor/idevice";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		B1C0F700A1B2C3D4E5F60641 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = NO;
+				DEVELOPMENT_TEAM = 6XKA3GY3KZ;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.JessiWorkerCore;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B1C0F700A1B2C3D4E5F60642 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEFINES_MODULE = NO;
+				DEVELOPMENT_TEAM = 6XKA3GY3KZ;
+				DYLIB_COMPATIBILITY_VERSION = 1;
+				DYLIB_CURRENT_VERSION = 1;
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.JessiWorkerCore;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -914,6 +1203,24 @@
 			buildConfigurations = (
 				B1C0F700A1B2C3D4E5F60441 /* Debug */,
 				B1C0F700A1B2C3D4E5F60442 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B1C0F700A1B2C3D4E5F60540 /* Build configuration list for PBXNativeTarget "JessiJIT" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B1C0F700A1B2C3D4E5F60541 /* Debug */,
+				B1C0F700A1B2C3D4E5F60542 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B1C0F700A1B2C3D4E5F60640 /* Build configuration list for PBXNativeTarget "JessiWorkerCore" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B1C0F700A1B2C3D4E5F60641 /* Debug */,
+				B1C0F700A1B2C3D4E5F60642 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

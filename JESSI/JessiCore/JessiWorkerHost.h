@@ -16,6 +16,9 @@ typedef void (^JessiWorkerJITStarter)(pid_t pid, void (^log)(NSString *line), vo
 
 @property (class, nonatomic, readonly) BOOL shouldUseWorkers;
 @property (class, nonatomic, readonly) BOOL workerExtensionAvailable;
+/// YES inside LiveContainer, where workers run in LiveContainer's LiveProcess extension and JESSI
+/// can't launch its own JIT helper, so JIT for them is enabled from JESSI's process instead.
+@property (class, nonatomic, readonly) BOOL runsJITInProcess;
 @property (class, nonatomic, copy, nullable) JessiWorkerJITStarter jitStarter;
 
 + (JessiWorker *)launchJob:(NSDictionary *)job

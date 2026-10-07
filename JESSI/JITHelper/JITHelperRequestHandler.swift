@@ -2,6 +2,7 @@
 // update: added this functionality
 
 import Foundation
+import JessiJIT
 import os
 
 private let osLog = OSLog(subsystem: "com.baconmania.jessi.JITHelper", category: "jit")
@@ -99,141 +100,35 @@ final class JITHelperRequestHandler: NSObject, NSExtensionRequestHandling {
 
 private final class JITHelperSession {
     private let channel: HostChannel
-    private let hostPID: Int32
-    private let pairingData: Data?
-    private let targetIP: String
-    private let tunnelPort: UInt16
-    private let useScript: Bool
-    private let script: String?
+    private let session: JITSession
 
     init(userInfo: [AnyHashable: Any]) {
-        channel = HostChannel(port: (userInfo["eventPort"] as? NSNumber)?.intValue ?? 0)
-        hostPID = (userInfo["pid"] as? NSNumber)?.int32Value ?? 0
-        pairingData = userInfo["pairingFile"] as? Data
-        targetIP = (userInfo["targetIP"] as? String) ?? "10.7.0.1"
-        tunnelPort = (userInfo["tunnelPort"] as? NSNumber).map { UInt16(truncatingIfNeeded: $0.intValue) } ?? DeviceTunnel.defaultPort
-        useScript = (userInfo["txm"] as? NSNumber)?.boolValue ?? false
-        script = (userInfo["script"] as? String)
-            ?? Bundle.main.url(forResource: "universal", withExtension: "js").flatMap { try? String(contentsOf: $0, encoding: .utf8) }
+        let channel = HostChannel(port: (userInfo["eventPort"] as? NSNumber)?.intValue ?? 0)
+        self.channel = channel
+        session = JITSession(
+            pid: (userInfo["pid"] as? NSNumber)?.int32Value ?? 0,
+            pairingData: userInfo["pairingFile"] as? Data,
+            targetIP: (userInfo["targetIP"] as? String) ?? "10.7.0.1",
+            tunnelPort: (userInfo["tunnelPort"] as? NSNumber).map { UInt16(truncatingIfNeeded: $0.intValue) } ?? JITSession.defaultTunnelPort,
+            useScript: (userInfo["txm"] as? NSNumber)?.boolValue ?? false,
+            script: userInfo["script"] as? String,
+            log: { message in
+                os_log("%{public}@", log: osLog, type: .default, message)
+                channel.send(["event": "log", "message": message])
+            },
+            stage: { stage in
+                channel.send(["event": "stage", "stage": stage])
+            })
     }
 
     func run() {
         do {
-            try enableJIT()
+            try session.run()
         } catch {
-            let helperError = error as? HelperError
-            log("Error: \(error.localizedDescription)")
-            channel.send(["event": "error", "message": error.localizedDescription, "code": helperError?.code ?? -1])
+            let code = (error as? HelperError)?.code ?? -1
+            os_log("%{public}@", log: osLog, type: .default, "Error: \(error.localizedDescription)")
+            channel.send(["event": "log", "message": "Error: \(error.localizedDescription)"])
+            channel.send(["event": "error", "message": error.localizedDescription, "code": code])
         }
-    }
-
-    private func log(_ message: String) {
-        os_log("%{public}@", log: osLog, type: .default, message)
-        channel.send(["event": "log", "message": message])
-    }
-
-    private func stage(_ stage: String) {
-        channel.send(["event": "stage", "stage": stage])
-    }
-
-    private func enableJIT() throws {
-        guard hostPID > 0 else { throw HelperError("JESSI did not send its process ID") }
-        guard let pairingData, !pairingData.isEmpty else { throw HelperError("No pairing file was provided", code: -17) }
-
-        stage("tunnel")
-        log("Connecting to \(targetIP):\(tunnelPort) through the loopback VPN…")
-        var tunnel = try DeviceTunnel(pairingData: pairingData, targetIP: targetIP, port: tunnelPort, hostname: "JESSI")
-        log("Tunnel connected (\(tunnel.serviceCount()) services)")
-
-        if try !tunnel.hasDebugServer() {
-            stage("ddi")
-            log("debugserver isn't available yet; mounting the Developer Disk Image (\(DeveloperDiskImage.usesCryptex ? "cryptex" : "personalized"))")
-            try DeveloperDiskImage.downloadMissing { self.log($0) }
-            log("Mounting Developer Disk Image…")
-            tunnel = try mountDeveloperDiskImage(pairingData: pairingData)
-            log("Developer Disk Image mounted")
-        }
-
-        stage("attach")
-        let session = try DebugSession(tunnel: tunnel)
-        let noAck = (try? session.enterNoAckMode()) ?? nil
-        log("QStartNoAckMode: \(noAck ?? "<nil>")")
-
-        if useScript {
-            try runScriptSession(session)
-        } else {
-            try attachAndDetach(session)
-        }
-    }
-
-    private func mountDeveloperDiskImage(pairingData: Data) throws -> DeviceTunnel {
-        let finished = DispatchSemaphore(value: 0)
-        var mountError: Error?
-        let targetIP = targetIP
-        let tunnelPort = tunnelPort
-        let mountThread = Thread {
-            do {
-                let tunnel = try DeviceTunnel(pairingData: pairingData, targetIP: targetIP, port: tunnelPort, hostname: "JESSIMount")
-                if DeveloperDiskImage.usesCryptex {
-                    try tunnel.installCryptexDDI(from: DeveloperDiskImage.directory)
-                } else {
-                    try tunnel.mountPersonalizedDDI(from: DeveloperDiskImage.directory)
-                }
-            } catch {
-                mountError = error
-            }
-            finished.signal()
-        }
-        mountThread.name = "JESSI.ddi-mount"
-        mountThread.start()
-
-        let deadline = Date().addingTimeInterval(180)
-        while Date() < deadline {
-            let mountReturned = finished.wait(timeout: .now() + 4) == .success
-            if mountReturned, let mountError {
-                log("Mount reported: \(mountError.localizedDescription)")
-            }
-            if let fresh = try? DeviceTunnel(pairingData: pairingData, targetIP: targetIP, port: tunnelPort, hostname: "JESSI"),
-               (try? fresh.hasDebugServer()) == true {
-                log("Reconnected (\(fresh.serviceCount()) services)\(mountReturned ? "" : "; the mount call hasn't returned, continuing anyway")")
-                return fresh
-            }
-
-            if mountReturned {
-                if let mountError { throw mountError }
-                throw HelperError("The Developer Disk Image was mounted, but debugserver still isn't available.")
-            }
-        }
-        throw HelperError("Timed out mounting the Developer Disk Image.")
-    }
-
-    private func attachAndDetach(_ session: DebugSession) throws {
-        let attach = try session.send("vAttach;\(String(UInt32(hostPID), radix: 16))") ?? ""
-        guard attach.hasPrefix("T") || attach.hasPrefix("S") else {
-            throw HelperError("debugserver refused to attach: \(attach.isEmpty ? "no reply" : attach)")
-        }
-        log("Attached to JESSI (pid \(hostPID))")
-        let detach = try session.send("D") ?? ""
-        log("Detached: \(detach)")
-        stage("enabled")
-    }
-
-    private func runScriptSession(_ session: DebugSession) throws {
-        guard let script, !script.isEmpty else { throw HelperError("JIT script is missing") }
-
-        let heartbeat = HeartbeatKeepAlive(pairingData: pairingData ?? Data(), targetIP: targetIP, port: tunnelPort) { self.log($0) }
-        defer { heartbeat.stop() }
-
-        let runner = JITScriptRunner(session: session, pid: hostPID, log: { self.log($0) }) {
-            self.stage("attached")
-        }
-        do {
-            try runner.run(script: script)
-        } catch {
-            stage("detached")
-            throw error
-        }
-        log("JIT script finished")
-        stage("detached")
     }
 }

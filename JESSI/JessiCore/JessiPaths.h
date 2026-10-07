@@ -6,6 +6,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)useHomeDirectory:(NSString *)homeDirectory;
 + (NSString *)homeDirectory;
 + (NSBundle *)appBundle;
++ (void)useAppBundlePath:(NSString *)bundlePath;
 + (NSString *)documentsDirectory;
 + (NSString *)applicationSupportDirectory;
 + (NSString *)serversRoot;

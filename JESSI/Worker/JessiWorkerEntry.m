@@ -111,38 +111,6 @@ int UIApplicationMain(int argc, char *argv[], NSString *principalClassName, NSSt
     while (1) CFRunLoopRun();
 }
 
-int NSExtensionMain(int argc, char *argv[]);
-int jessi_server_main(int argc, char *argv[]);
-int jessi_tool_main(int argc, char *argv[]);
-
-static const char *nonempty_env(const char *name) {
-    const char *value = getenv(name);
-    return (value && *value) ? value : NULL;
-}
-
-__attribute__((visibility("default")))
-int main(int argc, char *argv[]) {
-    if (!nonempty_env("JESSI_LAUNCHED_BY_JLI")) return NSExtensionMain(argc, argv);
-
-    const char *mode = nonempty_env("JESSI_MODE");
-    if (mode && strcmp(mode, "tool") == 0) {
-        const char *jar = nonempty_env("JESSI_TOOL_JAR");
-        const char *version = nonempty_env("JESSI_TOOL_JAVA_VERSION");
-        const char *dir = nonempty_env("JESSI_TOOL_WORKDIR");
-        const char *argsPath = nonempty_env("JESSI_TOOL_ARGS_PATH");
-        if (!jar || !version || !dir) return 0;
-        char *toolArgv[] = { "--tool", (char *)jar, (char *)version, (char *)dir, (char *)(argsPath ?: ""), NULL };
-        return jessi_tool_main(argsPath ? 5 : 4, toolArgv);
-    }
-
-    const char *jar = nonempty_env("JESSI_SERVER_JAR");
-    const char *version = nonempty_env("JESSI_SERVER_JAVA_VERSION");
-    const char *dir = nonempty_env("JESSI_SERVER_WORKDIR");
-    if (!jar || !version || !dir) return 0;
-    char *serverArgv[] = { "--server", (char *)jar, (char *)version, (char *)dir, NULL };
-    return jessi_server_main(4, serverArgv);
-}
-
 __attribute__((visibility("default")))
 int NSExtensionMain(int argc, char *argv[]) {
     Method validate = class_getInstanceMethod(NSClassFromString(@"NSXPCDecoder"), NSSelectorFromString(@"_validateAllowedClass:forKey:allowingInvocations:"));

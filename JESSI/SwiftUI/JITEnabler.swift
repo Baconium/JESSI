@@ -2,6 +2,9 @@ import Foundation
 import Combine
 import os
 import UniformTypeIdentifiers
+#if canImport(JessiJIT)
+import JessiJIT
+#endif
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -400,13 +403,15 @@ final class WorkerJITSession {
                 } else {
                     log("No loopback VPN found. Trying \(targetIP) anyway; connect one (such as LocalDevVPN) if this fails.")
                 }
-                do {
-                    listener = try HelperEventListener { [weak self] event in
-                        DispatchQueue.main.async { self?.handle(event) }
+                if !JessiWorkerHost.runsJITInProcess {
+                    do {
+                        listener = try HelperEventListener { [weak self] event in
+                            DispatchQueue.main.async { self?.handle(event) }
+                        }
+                    } catch {
+                        report(error.localizedDescription)
+                        return
                     }
-                } catch {
-                    report(error.localizedDescription)
-                    return
                 }
                 let finder = RemotePairingDiscovery()
                 portFinder = finder
@@ -426,6 +431,10 @@ final class WorkerJITSession {
     }
 
     private func launchHelper(pairingData: Data, targetIP: String, tunnelPort: UInt16) {
+        if JessiWorkerHost.runsJITInProcess {
+            runInProcess(pairingData: pairingData, targetIP: targetIP, tunnelPort: tunnelPort)
+            return
+        }
         guard let helperID = JITEnabler.helperBundleIdentifier, let listener else {
             report("The JIT helper extension is missing from this copy of JESSI. Make sure your signing tool keeps app extensions.")
             return
@@ -462,6 +471,37 @@ final class WorkerJITSession {
             DispatchQueue.main.async { jessi_keep_extension_running_in_background(helper) }
         }
         jessi_keep_extension_running_in_background(helper)
+    }
+
+    private func runInProcess(pairingData: Data, targetIP: String, tunnelPort: UInt16) {
+        #if canImport(JessiJIT)
+        let pid = pid
+        let send: ([String: Any]) -> Void = { [weak self] event in
+            DispatchQueue.main.async { self?.handle(event) }
+        }
+        let session = JITSession(pid: pid,
+                                 pairingData: pairingData,
+                                 targetIP: targetIP,
+                                 tunnelPort: tunnelPort,
+                                 useScript: JITEnabler.deviceNeedsJITScript,
+                                 log: { send(["event": "log", "message": $0]) },
+                                 stage: { send(["event": "stage", "stage": $0]) })
+        log("Enabling JIT for pid \(pid) from JESSI…")
+        let thread = Thread { [weak self] in
+            var failure: String?
+            do {
+                try session.run()
+            } catch {
+                send(["event": "error", "message": error.localizedDescription, "code": (error as? HelperError)?.code ?? -1])
+                failure = error.localizedDescription
+            }
+            DispatchQueue.main.async { self?.helperEnded(failure) }
+        }
+        thread.name = "JESSI.jit.\(pid)"
+        thread.start()
+        #else
+        report("JIT can't be enabled for the server process in this build.")
+        #endif
     }
 
     private func handle(_ event: [String: Any]) {

@@ -5,6 +5,7 @@
 
 #import <TargetConditionals.h>
 #import <UIKit/UIKit.h>
+#import <mach-o/dyld.h>
 #import <netinet/in.h>
 #import <signal.h>
 #import <sys/select.h>
@@ -12,6 +13,8 @@
 #import <unistd.h>
 
 static NSString *const JessiWorkerPrincipalClass = @"JESSIWorkerRequestHandler";
+static NSString *const JessiWorkerFrameworkName = @"JessiWorkerCore.framework";
+static NSString *const JessiWorkerPayloadEntry = @"jessi_worker_payload_main";
 static NSString *const JessiWorkerDisabledKey = @"jessi.worker.disabled";
 
 @protocol JessiExtension <NSObject>
@@ -39,6 +42,8 @@ void jessi_keep_extension_running_in_background(id extension) {
 
 @interface JessiWorkerHost ()
 + (nullable NSString *)workerExtensionIdentifier;
++ (nullable NSString *)liveProcessIdentifier;
++ (nullable NSString *)payloadPathForLiveProcess:(NSString *_Nullable *_Nullable)problem;
 + (NSArray<NSData *> *)containerBookmarks;
 + (NSDictionary *)settingsSnapshot;
 @end
@@ -147,7 +152,17 @@ void jessi_keep_extension_running_in_background(id extension) {
     self.listenFD = fd;
     uint16_t port = ntohs(addr.sin_port);
 
-    NSString *identifier = [JessiWorkerHost workerExtensionIdentifier];
+    BOOL viaLiveProcess = [JessiWorkerHost liveProcessIdentifier] != nil;
+    NSString *identifier = viaLiveProcess ? [JessiWorkerHost liveProcessIdentifier] : [JessiWorkerHost workerExtensionIdentifier];
+    NSString *payloadPath = nil;
+    if (viaLiveProcess) {
+        NSString *problem = nil;
+        payloadPath = [JessiWorkerHost payloadPathForLiveProcess:&problem];
+        if (!payloadPath) {
+            [self finishWithCode:255 problem:problem];
+            return;
+        }
+    }
     Class extensionClass = NSClassFromString(@"NSExtension");
     NSError *error = nil;
     id<JessiExtension> extension = nil;
@@ -155,8 +170,10 @@ void jessi_keep_extension_running_in_background(id extension) {
         extension = [(Class<JessiExtensionFactory>)extensionClass extensionWithIdentifier:identifier error:&error];
     }
     if (!extension) {
-        [self finishWithCode:255 problem:[NSString stringWithFormat:@"The server worker extension couldn't be loaded%@. Make sure your signing tool keeps app extensions.",
-                                          error ? [NSString stringWithFormat:@" (%@)", error.localizedDescription] : @""]];
+        NSString *detail = error ? [NSString stringWithFormat:@" (%@)", error.localizedDescription] : @"";
+        [self finishWithCode:255 problem:viaLiveProcess
+            ? [NSString stringWithFormat:@"LiveContainer's LiveProcess extension couldn't be loaded%@. Reinstall LiveContainer and keep its extensions.", detail]
+            : [NSString stringWithFormat:@"The server worker extension couldn't be loaded%@. Make sure your signing tool keeps app extensions.", detail]];
         return;
     }
     self.extension = extension;
@@ -177,15 +194,21 @@ void jessi_keep_extension_running_in_background(id extension) {
         processEnded(@"The server process exited before it connected to JESSI.");
     }];
 
-    NSExtensionItem *item = [NSExtensionItem new];
-    item.userInfo = @{
+    NSMutableDictionary *userInfo = [@{
         @"port": @(port),
         @"token": self.token,
         @"job": job,
         @"home": [JessiPaths homeDirectory],
         @"bookmarks": [JessiWorkerHost containerBookmarks],
         @"settings": [JessiWorkerHost settingsSnapshot],
-    };
+    } mutableCopy];
+    if (viaLiveProcess) {
+        userInfo[@"customPayloadDylib"] = payloadPath;
+        userInfo[@"customPayloadEntry"] = JessiWorkerPayloadEntry;
+        userInfo[@"appBundle"] = [JessiPaths appBundle].bundlePath;
+    }
+    NSExtensionItem *item = [NSExtensionItem new];
+    item.userInfo = userInfo;
 
     [NSThread detachNewThreadWithBlock:^{
         [weakSelf acceptAndServe];
@@ -347,20 +370,101 @@ void jessi_keep_extension_running_in_background(id extension) {
     return [self workerExtensionIdentifier] != nil;
 }
 
+#pragma mark LiveContainer
+
+static BOOL g_inLiveContainer(void) {
+    static BOOL inLiveContainer;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ inLiveContainer = jessi_is_livecontainer_installed(); });
+    return inLiveContainer;
+}
+
+static NSString *liveContainerBundlePath(void) {
+    const char *executable = _dyld_get_image_name(0);
+    if (!executable) return nil;
+    NSString *bundle = @(executable).stringByDeletingLastPathComponent;
+    return [bundle.pathExtension isEqualToString:@"app"] ? bundle : nil;
+}
+
++ (NSString *)liveProcessIdentifier {
+    static NSString *identifier;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        if (!g_inLiveContainer()) return;
+        NSString *appex = [liveContainerBundlePath() stringByAppendingPathComponent:@"PlugIns/LiveProcess.appex"];
+        NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:[appex stringByAppendingPathComponent:@"Info.plist"]];
+        NSString *bundleID = info[@"CFBundleIdentifier"];
+        NSString *executable = info[@"CFBundleExecutable"];
+        if (!bundleID.length || !executable.length) {
+            NSLog(@"[JESSI] LiveContainer's LiveProcess extension wasn't found at %@", appex);
+            return;
+        }
+        NSData *binary = [NSData dataWithContentsOfFile:[appex stringByAppendingPathComponent:executable] options:NSDataReadingMappedIfSafe error:nil];
+        NSData *marker = [@"customPayloadDylib" dataUsingEncoding:NSUTF8StringEncoding];
+        if (!binary || [binary rangeOfData:marker options:0 range:NSMakeRange(0, binary.length)].location == NSNotFound) {
+            NSLog(@"[JESSI] This LiveContainer's LiveProcess can't run custom payloads (needs LiveContainer 3.8 or newer)");
+            return;
+        }
+        identifier = bundleID;
+    });
+    return identifier;
+}
+
++ (BOOL)runsJITInProcess {
+    return [self liveProcessIdentifier] != nil;
+}
+
++ (NSString *)payloadPathForLiveProcess:(NSString **)problem {
+    NSString *source = [[JessiPaths appBundle].privateFrameworksPath stringByAppendingPathComponent:JessiWorkerFrameworkName];
+    NSString *binary = [source stringByAppendingPathComponent:@"JessiWorkerCore"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSDictionary *attributes = [fm attributesOfItemAtPath:binary error:nil];
+    if (!attributes) {
+        if (problem) *problem = @"JessiWorkerCore.framework is missing from this copy of JESSI.";
+        return nil;
+    }
+
+    Class sharedUtils = NSClassFromString(@"LCSharedUtils");
+    NSURL *group = [sharedUtils respondsToSelector:@selector(appGroupPath)] ? [sharedUtils performSelector:@selector(appGroupPath)] : nil;
+    if (![group isKindOfClass:[NSURL class]]) {
+        if (problem) *problem = @"Couldn't find LiveContainer's app group, which the server process needs to load JESSI's code from. Make sure LiveContainer was installed with SideStore or AltStore's app group.";
+        return nil;
+    }
+    if ([source hasPrefix:[group.path stringByAppendingString:@"/"]]) return binary;
+
+    NSString *stamp = [NSString stringWithFormat:@"%llu-%.0f", [attributes fileSize], [[attributes fileModificationDate] timeIntervalSince1970]];
+    NSString *root = [group.path stringByAppendingPathComponent:@"JESSI/WorkerPayload"];
+    NSString *destination = [[root stringByAppendingPathComponent:stamp] stringByAppendingPathComponent:JessiWorkerFrameworkName];
+    NSString *destinationBinary = [destination stringByAppendingPathComponent:@"JessiWorkerCore"];
+    if ([fm fileExistsAtPath:destinationBinary]) return destinationBinary;
+
+    for (NSString *old in [fm contentsOfDirectoryAtPath:root error:nil]) {
+        [fm removeItemAtPath:[root stringByAppendingPathComponent:old] error:nil];
+    }
+    NSError *error = nil;
+    if (![fm createDirectoryAtPath:destination.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:&error] ||
+        ![fm copyItemAtPath:source toPath:destination error:&error]) {
+        if (problem) *problem = [NSString stringWithFormat:@"Couldn't copy JESSI's server code to LiveContainer's app group: %@", error.localizedDescription];
+        return nil;
+    }
+    return destinationBinary;
+}
+
 + (BOOL)shouldUseWorkers {
 #if TARGET_OS_MACCATALYST || TARGET_OS_OSX
     return NO;
 #else
     if (jessi_is_running_on_macos()) return NO;
     if ([[NSUserDefaults standardUserDefaults] boolForKey:JessiWorkerDisabledKey]) return NO;
-    if (!g_jitStarter || !self.workerExtensionAvailable) return NO;
+    if (!g_jitStarter) return NO;
     if (![[NSProcessInfo processInfo] isOperatingSystemAtLeastVersion:(NSOperatingSystemVersion){17, 4, 0}]) return NO;
     if (jessi_has_trollstore_privileges()) return NO;
 
-    static BOOL inLiveContainer;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ inLiveContainer = jessi_is_livecontainer_installed(); });
-    if (inLiveContainer) return NO;
+    if (g_inLiveContainer()) {
+        if (!self.liveProcessIdentifier) return NO;
+    } else if (!self.workerExtensionAvailable) {
+        return NO;
+    }
 
     return [[NSFileManager defaultManager] fileExistsAtPath:[JessiPaths pairingFilePath]];
 #endif
@@ -369,7 +473,9 @@ void jessi_keep_extension_running_in_background(id extension) {
 + (NSArray<NSData *> *)containerBookmarks {
     NSString *home = [JessiPaths homeDirectory];
     NSMutableArray<NSData *> *bookmarks = [NSMutableArray array];
-    for (NSString *path in @[[home stringByAppendingPathComponent:@"Documents"], [home stringByAppendingPathComponent:@"Library"]]) {
+    NSMutableArray<NSString *> *paths = [@[[home stringByAppendingPathComponent:@"Documents"], [home stringByAppendingPathComponent:@"Library"]] mutableCopy];
+    if (self.liveProcessIdentifier) [paths addObject:[JessiPaths appBundle].bundlePath];
+    for (NSString *path in paths) {
         NSData *bookmark = [[NSURL fileURLWithPath:path isDirectory:YES] bookmarkDataWithOptions:(NSURLBookmarkCreationOptions)(1 << 11)
                                                                      includingResourceValuesForKeys:nil
                                                                                       relativeToURL:nil

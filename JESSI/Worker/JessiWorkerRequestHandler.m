@@ -419,7 +419,7 @@ static int worker_run_playit(NSDictionary *job) {
     }
 }
 
-static void worker_run(NSDictionary *userInfo) {
+void jessi_worker_run(NSDictionary *userInfo) {
     g_pendingCommands = [NSMutableDictionary dictionary];
     g_commandsChanged = [NSCondition new];
 
@@ -443,6 +443,8 @@ static void worker_run(NSDictionary *userInfo) {
         [JessiPaths useHomeDirectory:home];
         setenv("HOME", home.fileSystemRepresentation, 1);
     }
+    NSString *appBundle = userInfo[@"appBundle"];
+    if (appBundle.length) [JessiPaths useAppBundlePath:appBundle];
     NSDictionary *settings = userInfo[@"settings"];
     if ([settings isKindOfClass:[NSDictionary class]]) {
         [[NSUserDefaults standardUserDefaults] setVolatileDomain:settings forName:NSArgumentDomain];
@@ -470,7 +472,7 @@ static void worker_run(NSDictionary *userInfo) {
 - (void)beginRequestWithExtensionContext:(NSExtensionContext *)context {
     NSDictionary *userInfo = [(NSExtensionItem *)context.inputItems.firstObject userInfo] ?: @{};
     NSThread *thread = [[NSThread alloc] initWithBlock:^{
-        worker_run(userInfo);
+        jessi_worker_run(userInfo);
     }];
     thread.name = @"JESSI.worker";
     thread.stackSize = 16 << 20;

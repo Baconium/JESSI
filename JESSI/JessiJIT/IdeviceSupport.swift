@@ -1,16 +1,16 @@
 import Foundation
-import idevice
+@_implementationOnly import idevice
 
-struct HelperError: LocalizedError {
-    let message: String
-    let code: Int
+public struct HelperError: LocalizedError {
+    public let message: String
+    public let code: Int
 
-    init(_ message: String, code: Int = -1) {
+    public init(_ message: String, code: Int = -1) {
         self.message = message
         self.code = code
     }
 
-    var errorDescription: String? { message }
+    public var errorDescription: String? { message }
 }
 
 enum Idevice {

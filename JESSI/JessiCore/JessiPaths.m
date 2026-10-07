@@ -5,6 +5,7 @@ bool jessi_is_running_on_macos(void);
 @implementation JessiPaths
 
 static NSString *g_homeOverride = nil;
+static NSBundle *g_appBundleOverride = nil;
 
 + (void)useHomeDirectory:(NSString *)homeDirectory {
     g_homeOverride = [homeDirectory copy];
@@ -14,7 +15,12 @@ static NSString *g_homeOverride = nil;
     return g_homeOverride ?: NSHomeDirectory();
 }
 
++ (void)useAppBundlePath:(NSString *)bundlePath {
+    g_appBundleOverride = [NSBundle bundleWithPath:bundlePath];
+}
+
 + (NSBundle *)appBundle {
+    if (g_appBundleOverride) return g_appBundleOverride;
     NSBundle *main = [NSBundle mainBundle];
     if (![main.bundlePath.pathExtension isEqualToString:@"appex"]) return main;
     NSString *appPath = main.bundlePath.stringByDeletingLastPathComponent.stringByDeletingLastPathComponent;
