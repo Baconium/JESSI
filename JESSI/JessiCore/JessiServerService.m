@@ -2,6 +2,7 @@
 
 #import "JessiPaths.h"
 #import "JessiSettings.h"
+#import "JessiWorkerHost.h"
 
 #import <TargetConditionals.h>
 #if TARGET_OS_OSX && !TARGET_OS_MACCATALYST
@@ -67,11 +68,9 @@ static void jessi_when_app_active(void (^block)(void)) {
     }];
 }
 
-static int jessi_pumpkin_permission_prompt(const char *plugin, const char *version, const char *permissions) {
-    NSString *name = plugin ? [NSString stringWithUTF8String:plugin] : @"";
-    NSString *pluginVersion = version ? [NSString stringWithUTF8String:version] : @"";
+static void jessi_present_pumpkin_permission_prompt(NSString *name, NSString *pluginVersion, NSString *permissions, void (^completion)(int answer)) {
     NSMutableString *list = [NSMutableString string];
-    for (NSString *line in [(permissions ? [NSString stringWithUTF8String:permissions] : @"") componentsSeparatedByString:@"\n"]) {
+    for (NSString *line in [permissions componentsSeparatedByString:@"\n"]) {
         if (line.length == 0) continue;
         NSArray<NSString *> *parts = [line componentsSeparatedByString:@"\t"];
         [list appendFormat:@"\n• %@", parts[0]];
@@ -79,26 +78,31 @@ static int jessi_pumpkin_permission_prompt(const char *plugin, const char *versi
     }
     NSString *message = [NSString stringWithFormat:@"\"%@\" %@ is asking for these permissions:\n%@\n\nOnly allow plugins you trust. Your answer is remembered for this plugin file.", name, pluginVersion, list];
 
-    dispatch_semaphore_t answered = dispatch_semaphore_create(0);
-    __block int answer = JessiPumpkinPromptSkip;
     dispatch_async(dispatch_get_main_queue(), ^{
         jessi_when_app_active(^{
             UIViewController *presenter = jessi_top_view_controller();
             if (!presenter) {
-                dispatch_semaphore_signal(answered);
+                completion(JessiPumpkinPromptSkip);
                 return;
             }
             UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Allow Plugin Permissions?" message:message preferredStyle:UIAlertControllerStyleAlert];
             [alert addAction:[UIAlertAction actionWithTitle:@"Deny" style:UIAlertActionStyleCancel handler:^(UIAlertAction *action) {
-                answer = JessiPumpkinPromptDeny;
-                dispatch_semaphore_signal(answered);
+                completion(JessiPumpkinPromptDeny);
             }]];
             [alert addAction:[UIAlertAction actionWithTitle:@"Allow" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-                answer = JessiPumpkinPromptAllow;
-                dispatch_semaphore_signal(answered);
+                completion(JessiPumpkinPromptAllow);
             }]];
             [presenter presentViewController:alert animated:YES completion:nil];
         });
+    });
+}
+
+static int jessi_pumpkin_permission_prompt(const char *plugin, const char *version, const char *permissions) {
+    dispatch_semaphore_t answered = dispatch_semaphore_create(0);
+    __block int answer = JessiPumpkinPromptSkip;
+    jessi_present_pumpkin_permission_prompt(plugin ? @(plugin) : @"", version ? @(version) : @"", permissions ? @(permissions) : @"", ^(int choice) {
+        answer = choice;
+        dispatch_semaphore_signal(answered);
     });
     if (dispatch_semaphore_wait(answered, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(JessiPumpkinPromptTimeout * NSEC_PER_SEC))) != 0) {
         return JessiPumpkinPromptSkip;
@@ -266,6 +270,10 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
 @property (nonatomic, copy) NSString *activeRconPassword;
 @property (nonatomic) int activeRconPort;
 @property (nonatomic) UIBackgroundTaskIdentifier bgTask;
+@property (nonatomic, strong) JessiWorker *activeWorker;
+@property (nonatomic) BOOL activeRunInProcess;
+@property (nonatomic) BOOL stopPending;
+@property (nonatomic, copy) void (^readNewLogOutput)(BOOL force);
 @end
 
 @implementation JessiServerService
@@ -305,6 +313,60 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
 }
 
 - (NSString *)serversRoot { return [JessiPaths serversRoot]; }
+
+- (BOOL)stopWillCloseApp {
+    return self.isRunning && self.activeRunInProcess;
+}
+
+- (void)runInWorker:(NSDictionary *)job {
+    self.activeRunInProcess = NO;
+    self.stopPending = NO;
+    __weak typeof(self) weakSelf = self;
+    __block __weak JessiWorker *weakWorker = nil;
+    JessiWorker *worker = [JessiWorkerHost launchJob:job needsJIT:YES onLog:^(NSString *line) {
+        [weakSelf emitConsole:line];
+    } onEvent:^(NSDictionary *event) {
+        [weakSelf handleWorkerEvent:event worker:weakWorker];
+    } onExit:^(int code, NSString *problem) {
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        if (strongSelf.activeWorker == weakWorker) strongSelf.activeWorker = nil;
+        if (problem) [strongSelf emitConsole:[NSString stringWithFormat:@"\n%@\n", problem]];
+        if ([job[@"type"] isEqual:@"pumpkin"]) [strongSelf explainPumpkinExitCode:code];
+        if (code == 240 && problem && [strongSelf.delegate respondsToSelector:@selector(serverServiceDidFailToEnableJIT:)]) {
+            [strongSelf.delegate serverServiceDidFailToEnableJIT:problem];
+        }
+        [strongSelf finishServerRunWithCode:code];
+    }];
+    weakWorker = worker;
+    self.activeWorker = worker;
+}
+
+- (void)handleWorkerEvent:(NSDictionary *)event worker:(JessiWorker *)worker {
+    NSString *name = event[@"event"];
+    if ([name isEqualToString:@"error"]) {
+        [self emitConsole:[NSString stringWithFormat:@"\n%@\n", event[@"message"]]];
+    } else if ([name isEqualToString:@"pumpkin-prompt"]) {
+        NSNumber *promptID = event[@"id"];
+        jessi_present_pumpkin_permission_prompt(event[@"plugin"] ?: @"", event[@"version"] ?: @"", event[@"permissions"] ?: @"", ^(int answer) {
+            [worker send:@{@"cmd": @"prompt-reply", @"id": promptID ?: @0, @"answer": @(answer)}];
+        });
+    }
+}
+
+- (void)explainPumpkinExitCode:(int)code {
+    if (code == JessiPumpkinErrAlreadyStarted) {
+        [self emitConsole:@"\nPumpkin can only run once per app launch. Fully close JESSI and reopen it to start this server again.\n"];
+    } else if (code == JessiPumpkinErrBadDirectory) {
+        [self emitConsole:@"\nPumpkin could not open the server folder.\n"];
+    } else if (code == JessiPumpkinErrRuntime) {
+        [self emitConsole:@"\nPumpkin crashed. Check jessi-stdio.log in the server folder for details.\n"];
+    }
+}
+
+- (BOOL)isPumpkinServerDir:(NSString *)dir {
+    return dir.length > 0 && jessi_server_dir_is_pumpkin(dir);
+}
 
 - (BOOL)isPumpkinServerNamed:(NSString *)serverName {
     if (serverName.length == 0) return NO;
@@ -456,9 +518,9 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
     dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, (uint64_t)(250 * NSEC_PER_MSEC), (uint64_t)(50 * NSEC_PER_MSEC));
 
     __unsafe_unretained typeof(self) weakSelf = self;
-    dispatch_source_set_event_handler(timer, ^{
+    self.readNewLogOutput = ^(BOOL force) {
         typeof(self) strongSelf = weakSelf;
-        if (!strongSelf || !strongSelf.isRunning) return;
+        if (!strongSelf || (!force && !strongSelf.isRunning)) return;
 
         NSFileManager *fm = [NSFileManager defaultManager];
 
@@ -503,7 +565,9 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
         } @catch (__unused NSException *e) {
         }
         [fh closeFile];
-    });
+    };
+    void (^readNewLogOutput)(BOOL) = self.readNewLogOutput;
+    dispatch_source_set_event_handler(timer, ^{ readNewLogOutput(NO); });
 
     dispatch_resume(timer);
     self.logTimer = timer;
@@ -705,6 +769,15 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
 
     [self beginBackgroundTaskIfNeeded];
 
+    if ([JessiWorkerHost shouldUseWorkers]) {
+        [self runInWorker:@{@"type": @"server", @"jar": jar, @"javaVersion": javaVersion, @"dir": dir}];
+        return;
+    }
+
+    BOOL spawnsProcess = jessi_is_running_on_macos() ||
+                         (jessi_has_trollstore_privileges() && !settings.disableSeparateJVMProcessOnTrollStore);
+    self.activeRunInProcess = !spawnsProcess;
+
     dispatch_async(self.runQueue, ^{
         char *argv0 = strdup("--server");
         char *argv1 = strdup([jar fileSystemRepresentation]);
@@ -781,6 +854,8 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
 - (void)finishServerRunWithCode:(int)code {
     self.running = NO;
     if (self.logTimer) {
+        void (^readNewLogOutput)(BOOL) = self.readNewLogOutput;
+        if (readNewLogOutput) dispatch_sync(self.logQueue, ^{ readNewLogOutput(YES); });
         dispatch_source_cancel(self.logTimer);
         self.logTimer = nil;
     }
@@ -819,6 +894,12 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
     [self startTailingLatestLogInDir:dir];
     [self beginBackgroundTaskIfNeeded];
 
+    if ([JessiWorkerHost shouldUseWorkers]) {
+        [self runInWorker:@{@"type": @"pumpkin", @"library": libraryPath, @"dir": dir}];
+        return;
+    }
+
+    self.activeRunInProcess = !jessi_is_running_on_macos();
     dispatch_async(self.runQueue, ^{
         int code = [self runPumpkinLibraryAtPath:libraryPath inDir:dir];
         [self finishServerRunWithCode:code];
@@ -850,25 +931,43 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
     int code = run(dir.fileSystemRepresentation);
     @synchronized ([JessiServerService class]) { g_pumpkinStop = NULL; }
 
-    if (code == JessiPumpkinErrAlreadyStarted) {
-        [self emitConsole:@"\nPumpkin can only run once per app launch. Fully close JESSI and reopen it to start this server again.\n"];
-    } else if (code == JessiPumpkinErrBadDirectory) {
-        [self emitConsole:@"\nPumpkin could not open the server folder.\n"];
-    } else if (code == JessiPumpkinErrRuntime) {
-        [self emitConsole:@"\nPumpkin crashed. Check jessi-stdio.log in the server folder for details.\n"];
-    }
+    [self explainPumpkinExitCode:code];
     return code;
 }
 
 - (void)stopServer {
     if (!self.isRunning) return;
+    JessiWorker *worker = self.activeWorker;
+    if (worker && [self isPumpkinServerDir:self.activeServerDir]) {
+        [worker send:@{@"cmd": @"stop"}];
+        return;
+    }
     JessiPumpkinStopFn pumpkinStop;
     @synchronized ([JessiServerService class]) { pumpkinStop = g_pumpkinStop; }
     if (pumpkinStop) {
         pumpkinStop();
         return;
     }
-    [self sendRcon:@"stop"];
+    if ([self sendRcon:@"stop"] || !worker || self.stopPending) return;
+    self.stopPending = YES;
+    [self emitConsole:@"\nThe server is still starting; it will stop as soon as it's ready.\n"];
+    [self retryStopForWorker:worker];
+}
+
+- (void)retryStopForWorker:(JessiWorker *)worker {
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC), dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf || !strongSelf.isRunning || strongSelf.activeWorker != worker) {
+            strongSelf.stopPending = NO;
+            return;
+        }
+        if ([strongSelf sendRcon:@"stop"]) {
+            strongSelf.stopPending = NO;
+        } else {
+            [strongSelf retryStopForWorker:worker];
+        }
+    });
 }
 
 - (void)clearConsole {

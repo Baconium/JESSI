@@ -42,6 +42,7 @@ final class JITEnabler: ObservableObject {
     private var eventListener: HelperEventListener?
     private var statusTimer: Timer?
     private var portFinder: RemotePairingDiscovery?
+    fileprivate var workerSessions: [pid_t: WorkerJITSession] = [:]
 
     private init() {}
 
@@ -311,7 +312,7 @@ final class JITEnabler: ObservableObject {
         os_log("%{public}@", log: Self.osLog, type: .default, "[JIT] \(line)")
     }
 
-    private static var helperBundleIdentifier: String? {
+    fileprivate static var helperBundleIdentifier: String? {
         guard let plugIns = Bundle.main.builtInPlugInsURL,
               let contents = try? FileManager.default.contentsOfDirectory(at: plugIns, includingPropertiesForKeys: nil) else {
             return nil
@@ -327,11 +328,11 @@ final class JITEnabler: ObservableObject {
         return nil
     }
 
-    private static var deviceNeedsJITScript: Bool {
+    fileprivate static var deviceNeedsJITScript: Bool {
         jessi_is_txm_device()
     }
 
-    private static func explain(_ message: String, code: Int) -> String {
+    fileprivate static func explain(_ message: String, code: Int) -> String {
         let lowered = message.lowercased()
         if code == -9 || lowered.contains("pair") && (lowered.contains("verify") || lowered.contains("invalid")) {
             return "\(message)\n\nThe pairing file may be invalid or from another device. Generate a new one and import it again."
@@ -339,11 +340,166 @@ final class JITEnabler: ObservableObject {
         if lowered.contains("connection reset") || code == 54 {
             return "\(message)\n\nThe device closed the connection, which usually means it doesn't recognise this pairing file. Generate a new pairing file for this device and import it again. If you just did, make sure your loopback VPN (such as LocalDevVPN) is connected."
         }
-        if lowered.contains("timed out") || lowered.contains("unreachable") || lowered.contains("connection refused")
+        if lowered.contains("timed out") || lowered.contains("timeout") || lowered.contains("unreachable") || lowered.contains("connection refused")
             || lowered.contains("no route") || code == 61 {
             return "\(message)\n\nMake sure a loopback VPN such as LocalDevVPN or StosVPN is connected (the VPN icon should be showing), then try again."
         }
         return message
+    }
+}
+
+extension JITEnabler {
+    func attachHelper(toPID pid: pid_t, log: @escaping (String) -> Void, completion: @escaping (String?) -> Void) {
+        let session = WorkerJITSession(pid: pid, log: log) { [weak self] session, error in
+            completion(error)
+            if error != nil { self?.workerSessions.removeValue(forKey: session.pid) }
+        } ended: { [weak self] session in
+            self?.workerSessions.removeValue(forKey: session.pid)
+        }
+        workerSessions[pid] = session
+        session.start()
+    }
+
+    static func installWorkerJITStarter() {
+        JessiWorkerHost.jitStarter = { pid, log, done in
+            DispatchQueue.main.async {
+                JITEnabler.shared.attachHelper(toPID: pid, log: log, completion: done)
+            }
+        }
+    }
+}
+
+final class WorkerJITSession {
+    let pid: pid_t
+    private let log: (String) -> Void
+    private let onResult: (WorkerJITSession, String?) -> Void
+    private let onEnded: (WorkerJITSession) -> Void
+    private var reported = false
+    private var listener: HelperEventListener?
+    private var helper: NSExtension?
+    private var portFinder: RemotePairingDiscovery?
+
+    init(pid: pid_t, log: @escaping (String) -> Void, result: @escaping (WorkerJITSession, String?) -> Void, ended: @escaping (WorkerJITSession) -> Void) {
+        self.pid = pid
+        self.log = log
+        self.onResult = result
+        self.onEnded = ended
+    }
+
+    func start() {
+        guard let pairingData = PairingFileStore.load() else {
+            report("Import a pairing file in Settings first.")
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let tunnel = LoopbackTunnelDetector.find()
+            DispatchQueue.main.async { [self] in
+                let targetIP = tunnel?.peerAddress ?? JITEnabler.defaultTargetIP
+                if let tunnel {
+                    log("Loopback VPN found on \(tunnel.interface), device address \(tunnel.peerAddress)")
+                } else {
+                    log("No loopback VPN found. Trying \(targetIP) anyway; connect one (such as LocalDevVPN) if this fails.")
+                }
+                do {
+                    listener = try HelperEventListener { [weak self] event in
+                        DispatchQueue.main.async { self?.handle(event) }
+                    }
+                } catch {
+                    report(error.localizedDescription)
+                    return
+                }
+                let finder = RemotePairingDiscovery()
+                portFinder = finder
+                finder.findOwnPort(timeout: 5) { [self] port in
+                    portFinder = nil
+                    let override = UserDefaults.standard.integer(forKey: "jessi.jit.tunnelPort")
+                    let chosen: UInt16
+                    if override > 0 && override <= Int(UInt16.max) {
+                        chosen = UInt16(override)
+                    } else {
+                        chosen = port ?? RemotePairingDiscovery.fallbackPort
+                    }
+                    launchHelper(pairingData: pairingData, targetIP: targetIP, tunnelPort: chosen)
+                }
+            }
+        }
+    }
+
+    private func launchHelper(pairingData: Data, targetIP: String, tunnelPort: UInt16) {
+        guard let helperID = JITEnabler.helperBundleIdentifier, let listener else {
+            report("The JIT helper extension is missing from this copy of JESSI. Make sure your signing tool keeps app extensions.")
+            return
+        }
+        let helper: NSExtension
+        do {
+            helper = try NSExtension(identifier: helperID)
+        } catch {
+            report(error.localizedDescription)
+            return
+        }
+        helper.setRequestInterruptionBlock { [weak self] _ in
+            DispatchQueue.main.async { self?.helperEnded("The JIT helper was interrupted.") }
+        }
+        helper.setRequestCancellationBlock { [weak self] _, error in
+            DispatchQueue.main.async { self?.helperEnded("The JIT helper was cancelled\(error.map { ": \($0.localizedDescription)" } ?? ".")") }
+        }
+        helper.setRequestCompletionBlock { [weak self] _, _ in
+            DispatchQueue.main.async { self?.helperEnded(nil) }
+        }
+        self.helper = helper
+
+        let item = NSExtensionItem()
+        item.userInfo = [
+            "pid": NSNumber(value: pid),
+            "pairingFile": pairingData,
+            "eventPort": NSNumber(value: listener.port),
+            "txm": NSNumber(value: JITEnabler.deviceNeedsJITScript),
+            "targetIP": targetIP,
+            "tunnelPort": NSNumber(value: tunnelPort),
+        ]
+        log("Starting JIT helper for pid \(pid)…")
+        helper.beginRequest(withInputItems: [item]) { _ in
+            DispatchQueue.main.async { jessi_keep_extension_running_in_background(helper) }
+        }
+        jessi_keep_extension_running_in_background(helper)
+    }
+
+    private func handle(_ event: [String: Any]) {
+        switch event["event"] as? String {
+        case "log":
+            if let message = event["message"] as? String { log(message) }
+        case "stage":
+            switch event["stage"] as? String {
+            case "enabled", "attached": report(nil)
+            default: break
+            }
+        case "error":
+            let message = event["message"] as? String ?? "Unknown error"
+            let code = (event["code"] as? NSNumber)?.intValue ?? -1
+            if reported {
+                log("JIT helper: \(message)")
+            } else {
+                report(JITEnabler.explain(message, code: code))
+            }
+        default:
+            break
+        }
+    }
+
+    private func helperEnded(_ reason: String?) {
+        if !reported {
+            report(reason ?? "The JIT helper exited before JIT was enabled.")
+        }
+        listener?.close()
+        listener = nil
+        helper = nil
+        onEnded(self)
+    }
+
+    private func report(_ error: String?) {
+        guard !reported else { return }
+        reported = true
+        onResult(self, error)
     }
 }
 

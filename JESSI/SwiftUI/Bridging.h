@@ -1,6 +1,7 @@
 #import "../JessiCore/JessiPaths.h"
 #import "../JessiCore/JessiSettings.h"
 #import "../JessiCore/JessiServerService.h"
+#import "../JessiCore/JessiWorkerHost.h"
 
 #ifdef __cplusplus
 extern "C" {

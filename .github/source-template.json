@@ -2,7 +2,7 @@
   "name": "JESSI",
   "identifier": "com.baconmania.jessi.source",
   "subtitle": "Java Edition Servers Suck on iOS",
-  "iconURL": "https://raw.githubusercontent.com/Baconium/JESSI/main/jessi.png",
+  "iconURL": "https://raw.githubusercontent.com/Baconium/JESSI/main/gay.png",
   "website": "https://github.com/Baconium/JESSI",
   "apps": [
     {
@@ -11,7 +11,7 @@
       "developerName": "BaconMania",
       "subtitle": "Run Minecraft servers natively on iOS!",
       "localizedDescription": "JESSI allows you to host a Minecraft server for you and your friends natively on your iPhone or iPad. It works both jailed and jailbroken, only requiring JIT!",
-      "iconURL": "https://raw.githubusercontent.com/Baconium/JESSI/main/jessi.png",
+      "iconURL": "https://raw.githubusercontent.com/Baconium/JESSI/main/gay.png",
       "category": "utilities",
       "versions": [
         {

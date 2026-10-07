@@ -38,6 +38,9 @@ struct SheetItem: Identifiable {
 
     @objc public static func makeRootTabViewController() -> UIViewController {
         configureListAppearance()
+        #if !targetEnvironment(macCatalyst)
+        JITEnabler.installWorkerJITStarter()
+        #endif
         let hosting = UIHostingController(rootView: RootTabView())
         return hosting
     }

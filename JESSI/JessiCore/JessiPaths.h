@@ -3,7 +3,11 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @interface JessiPaths : NSObject
++ (void)useHomeDirectory:(NSString *)homeDirectory;
++ (NSString *)homeDirectory;
++ (NSBundle *)appBundle;
 + (NSString *)documentsDirectory;
++ (NSString *)applicationSupportDirectory;
 + (NSString *)serversRoot;
 + (NSString *)runtimesRoot;
 + (NSString *)legacyRuntimesRoot;

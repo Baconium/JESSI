@@ -8,6 +8,7 @@ enum LaunchAlert: Identifiable {
     case stopConfirm
     case jitNotEnabled
     case jitAutoEnableFailed(String)
+    case serverJITFailed(String)
     case runtime(String)
     case mspj(String)
     case jvmInstallOffer(version: String)
@@ -23,6 +24,8 @@ enum LaunchAlert: Identifiable {
             return "jitNotEnabled"
         case .jitAutoEnableFailed(let message):
             return "jitAutoEnableFailed:\(message)"
+        case .serverJITFailed(let message):
+            return "serverJITFailed:\(message)"
         case .runtime(let message):
             return "runtime:\(message)"
         case .mspj(let message):
@@ -218,6 +221,10 @@ final class LaunchModel: NSObject, ObservableObject {
     }
 
     private func startAfterJITCheck() {
+        if JessiWorkerHost.shouldUseWorkers {
+            startServer()
+            return
+        }
         if !isJITEnabledCheck() {
             JITEnabler.shared.checkCanAutoEnable { canAutoEnable in
                 if canAutoEnable {
@@ -260,6 +267,8 @@ final class LaunchModel: NSObject, ObservableObject {
         isEnablingJIT = false
         jitPhaseObserver = nil
     }
+
+    var stopWillCloseApp: Bool { service.stopWillCloseApp }
 
     func stop() {
         UIApplication.shared.isIdleTimerDisabled = false
@@ -376,6 +385,12 @@ extension LaunchModel: JessiServerServiceDelegate {
             let serverPath = (serversRoot as NSString).appendingPathComponent(self.selectedServer)
             let consoleLogPath = (serverPath as NSString).appendingPathComponent("console.log")
             try? consoleText.write(toFile: consoleLogPath, atomically: true, encoding: .utf8)
+        }
+    }
+
+    func serverServiceDidFail(toEnableJIT message: String) {
+        DispatchQueue.main.async {
+            self.activeAlert = .serverJITFailed(message)
         }
     }
 
@@ -791,12 +806,10 @@ struct LaunchView: View {
                         .disabled(model.isRunning || model.isInstallingJVM || model.isPreparingResourcePack || model.isEnablingJIT)
 
                         Button(action: {
-                            let isMacBuild = ProcessInfo.processInfo.isMacCatalystApp
-                            let shouldUseSeparateProcess = jessi_has_trollstore_privileges() && !JessiSettings.shared().disableSeparateJVMProcessOnTrollStore
-                            if isMacBuild || shouldUseSeparateProcess {
-                                model.stop()
-                            } else {
+                            if model.stopWillCloseApp {
                                 model.activeAlert = .stopConfirm
+                            } else {
+                                model.stop()
                             }
                         }) {
                             Text("Stop")
@@ -962,6 +975,12 @@ struct LaunchView: View {
                         model.startServer()
                     }
                 )
+            case .serverJITFailed(let message):
+                return Alert(
+                    title: Text("JIT Not Enabled"),
+                    message: Text("\(message)\n\nMake sure your loopback VPN is connected, then start the server again."),
+                    dismissButton: .default(Text("OK"))
+                )
             case .runtime(let message):
                 return Alert(
                     title: Text("No JVM Installed"),
@@ -1025,7 +1044,7 @@ struct LaunchView: View {
                             Text("Step 3: Launch your Server")
                                 .font(.headline)
                             
-                            if JITEnabler.isJITUsable {
+                            if JITEnabler.isJITUsable || JessiWorkerHost.shouldUseWorkers {
                                 Text("Your server is ready to go! Make sure that the correct server is selected, then tap the Start button.")
                                     .multilineTextAlignment(.center)
                                     .font(.subheadline)

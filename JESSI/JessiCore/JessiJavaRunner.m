@@ -256,7 +256,7 @@ static BOOL jessi_extra_args_need_default_target(NSArray<NSString *> *extra) {
 }
 
 static BOOL jessi_send_jit26_extension_script(void) {
-    NSString *scriptPath = [[NSBundle mainBundle] pathForResource:@"UniversalJIT26Extension" ofType:@"js"];
+    NSString *scriptPath = [[JessiPaths appBundle] pathForResource:@"UniversalJIT26Extension" ofType:@"js"];
     if (!scriptPath) {
         JESSI_TXM_LOG("[JESSI] UniversalJIT26Extension.js not found in bundle\n");
         return NO;
@@ -1344,7 +1344,7 @@ static NSString *bundleJavaHomeForVersion(NSString *javaVersion) {
         return nil;
     }
 
-    NSString *bundleRoot = [[NSBundle mainBundle] bundlePath];
+    NSString *bundleRoot = [[JessiPaths appBundle] bundlePath];
 
     NSString *versioned = [bundleRoot stringByAppendingPathComponent:[NSString stringWithFormat:@"java%@", javaVersion]];
     if ([[NSFileManager defaultManager] fileExistsAtPath:versioned]) return versioned;
@@ -1630,7 +1630,7 @@ int jessi_server_main(int argc, char *argv[]) {
                 NSString *javaHomeArg = [@"-Djava.home=" stringByAppendingString:javaHome];
                 NSString *tmpArg = [@"-Djava.io.tmpdir=" stringByAppendingString:tmpDir];
 
-                NSString *frameworks = [[NSBundle mainBundle] privateFrameworksPath];
+                NSString *frameworks = [[JessiPaths appBundle] privateFrameworksPath];
                 NSString *frameworksPath = frameworks ?: @"";
                 NSString *libPathArg = frameworksPath.length ? [@"-Djava.library.path=" stringByAppendingString:frameworksPath] : nil;
 
@@ -1766,7 +1766,7 @@ int jessi_server_main(int argc, char *argv[]) {
             NSString *javaHomeArg = [@"-Djava.home=" stringByAppendingString:javaHome];
             NSString *tmpArg = [@"-Djava.io.tmpdir=" stringByAppendingString:tmpDir];
 
-            NSString *frameworks = [[NSBundle mainBundle] privateFrameworksPath];
+            NSString *frameworks = [[JessiPaths appBundle] privateFrameworksPath];
             NSString *frameworksPath = frameworks ?: @"";
             NSString *libPathArg = frameworksPath.length ? [@"-Djava.library.path=" stringByAppendingString:frameworksPath] : nil;
 
@@ -2032,7 +2032,7 @@ int jessi_tool_main(int argc, char *argv[]) {
                 NSString *xms = @"-Xms16M";
                 NSString *maxMeta = @"-XX:MaxMetaspaceSize=256M";
 
-                NSString *frameworks = [[NSBundle mainBundle] privateFrameworksPath];
+                NSString *frameworks = [[JessiPaths appBundle] privateFrameworksPath];
                 NSString *frameworksPath = frameworks ?: @"";
                 NSString *libPathArg = frameworksPath.length ? [@"-Djava.library.path=" stringByAppendingString:frameworksPath] : nil;
 
@@ -2124,7 +2124,7 @@ int jessi_tool_main(int argc, char *argv[]) {
             NSString *javaHomeArg = [@"-Djava.home=" stringByAppendingString:javaHome];
             NSString *tmpArg = [@"-Djava.io.tmpdir=" stringByAppendingString:tmpDir];
 
-            NSString *frameworks = [[NSBundle mainBundle] privateFrameworksPath];
+            NSString *frameworks = [[JessiPaths appBundle] privateFrameworksPath];
             NSString *frameworksPath = frameworks ?: @"";
             NSString *libPathArg = frameworksPath.length ? [@"-Djava.library.path=" stringByAppendingString:frameworksPath] : nil;
 

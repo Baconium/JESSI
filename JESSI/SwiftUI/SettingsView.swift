@@ -1977,8 +1977,13 @@ struct SettingsView: View {
                 HStack {
                     Text("JIT Enabled")
                     Spacer()
-                    Text(model.isJITEnabled ? "Yes" : "No")
-                        .foregroundColor(boolstatuscolor(model.isJITEnabled))
+                    if JessiWorkerHost.shouldUseWorkers {
+                        Text("Automatic")
+                            .foregroundColor(.green)
+                    } else {
+                        Text(model.isJITEnabled ? "Yes" : "No")
+                            .foregroundColor(boolstatuscolor(model.isJITEnabled))
+                    }
                 }
                 .onTapGesture(count: 5) {
                     showsystemstatuscolors.toggle()

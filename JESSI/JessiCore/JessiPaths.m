@@ -4,8 +4,31 @@ bool jessi_is_running_on_macos(void);
 
 @implementation JessiPaths
 
+static NSString *g_homeOverride = nil;
+
++ (void)useHomeDirectory:(NSString *)homeDirectory {
+    g_homeOverride = [homeDirectory copy];
+}
+
++ (NSString *)homeDirectory {
+    return g_homeOverride ?: NSHomeDirectory();
+}
+
++ (NSBundle *)appBundle {
+    NSBundle *main = [NSBundle mainBundle];
+    if (![main.bundlePath.pathExtension isEqualToString:@"appex"]) return main;
+    NSString *appPath = main.bundlePath.stringByDeletingLastPathComponent.stringByDeletingLastPathComponent;
+    return [NSBundle bundleWithPath:appPath] ?: main;
+}
+
 + (NSString *)documentsDirectory {
+    if (g_homeOverride) return [g_homeOverride stringByAppendingPathComponent:@"Documents"];
     return NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+}
+
++ (NSString *)applicationSupportDirectory {
+    if (g_homeOverride) return [g_homeOverride stringByAppendingPathComponent:@"Library/Application Support"];
+    return NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
 }
 
 + (NSString *)serversRoot {
@@ -13,8 +36,7 @@ bool jessi_is_running_on_macos(void);
 }
 
 + (NSString *)legacyRuntimesRoot {
-    NSString *appSupport = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
-    return [appSupport stringByAppendingPathComponent:@"Runtimes"];
+    return [[self applicationSupportDirectory] stringByAppendingPathComponent:@"Runtimes"];
 }
 
 + (NSString *)runtimesRoot {
@@ -27,8 +49,7 @@ bool jessi_is_running_on_macos(void);
 }
 
 + (NSString *)legacyPairingFilePath {
-    NSString *appSupport = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
-    return [[appSupport stringByAppendingPathComponent:@"Pairing"] stringByAppendingPathComponent:@"pairingFile.plist"];
+    return [[[self applicationSupportDirectory] stringByAppendingPathComponent:@"Pairing"] stringByAppendingPathComponent:@"pairingFile.plist"];
 }
 
 + (BOOL)isInstalledRuntimePath:(NSString *)path {

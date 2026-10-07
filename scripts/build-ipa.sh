@@ -162,8 +162,17 @@ if [[ "$JESSI_LDID_SIGN" == "1" ]]; then
   for appex in "$DEST_APP"/PlugIns/*.appex; do
     [[ -d "$appex" ]] || continue
     appex_bin="$appex/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$appex/Info.plist")"
-    echo "Signing $(basename "$appex") with ldid"
-    ldid -S "$appex_bin"
+    appex_entitlements=""
+    case "$(basename "$appex")" in
+      JESSIWorker.appex) appex_entitlements="$PROJECT_DIR/JESSI/Worker/JessiWorker.entitlements" ;;
+    esac
+    if [[ -n "$appex_entitlements" ]]; then
+      echo "Signing $(basename "$appex") with ldid entitlements: $appex_entitlements"
+      ldid -S"$appex_entitlements" "$appex_bin"
+    else
+      echo "Signing $(basename "$appex") with ldid"
+      ldid -S "$appex_bin"
+    fi
   done
 fi
 

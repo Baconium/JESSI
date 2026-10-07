@@ -7,11 +7,14 @@ FOUNDATION_EXPORT NSString *const JessiPumpkinLibraryFileName;
 @protocol JessiServerServiceDelegate <NSObject>
 - (void)serverServiceDidUpdateConsole:(NSString *)consoleText;
 - (void)serverServiceDidChangeRunning:(BOOL)isRunning;
+@optional
+- (void)serverServiceDidFailToEnableJIT:(NSString *)message;
 @end
 
 @interface JessiServerService : NSObject
 @property (nonatomic, assign, nullable) id<JessiServerServiceDelegate> delegate;
 @property (nonatomic, readonly, getter=isRunning) BOOL running;
+@property (nonatomic, readonly) BOOL stopWillCloseApp;
 
 - (NSArray<NSString *> *)availableServerFolders;
 - (NSString *)serversRoot;

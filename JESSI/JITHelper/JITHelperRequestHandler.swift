@@ -1,4 +1,5 @@
 // ya know, now that I think of it, I could prolly make the JVM also run in an app extension...
+// update: added this functionality
 
 import Foundation
 import os

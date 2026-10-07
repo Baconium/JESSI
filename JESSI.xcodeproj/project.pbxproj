@@ -45,6 +45,18 @@
 		B1C0F700A1B2C3D4E5F60208 /* JITHelper.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60290 /* JITHelper.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B1C0F700A1B2C3D4E5F60301 /* fishhook.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60381 /* fishhook.c */; };
 		B1C0F700A1B2C3D4E5F60302 /* JessiPrebootRedirect.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60383 /* JessiPrebootRedirect.m */; };
+		B1C0F700A1B2C3D4E5F60411 /* JessiWorkerRequestHandler.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60401 /* JessiWorkerRequestHandler.m */; };
+		B1C0F700A1B2C3D4E5F60412 /* JessiJavaRunner.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60012 /* JessiJavaRunner.m */; };
+		B1C0F700A1B2C3D4E5F60413 /* JessiPaths.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60014 /* JessiPaths.m */; };
+		B1C0F700A1B2C3D4E5F60414 /* JessiSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */; };
+		B1C0F700A1B2C3D4E5F60415 /* JessiPrebootRedirect.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60383 /* JessiPrebootRedirect.m */; };
+		B1C0F700A1B2C3D4E5F60416 /* fishhook.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60381 /* fishhook.c */; };
+		B1C0F700A1B2C3D4E5F60417 /* mach_excServer.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001C /* mach_excServer.c */; };
+		B1C0F700A1B2C3D4E5F60418 /* mach_excUser.c in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F6001E /* mach_excUser.c */; };
+		B1C0F700A1B2C3D4E5F60419 /* JessiJITCheck.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */; };
+		B1C0F700A1B2C3D4E5F60420 /* JessiWorkerHost.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60406 /* JessiWorkerHost.m */; };
+		B1C0F700A1B2C3D4E5F60421 /* JESSIWorker.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60404 /* JESSIWorker.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B1C0F700A1B2C3D4E5F60422 /* JessiWorkerEntry.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60407 /* JessiWorkerEntry.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,6 +66,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = B1C0F700A1B2C3D4E5F602B0;
 			remoteInfo = JITHelper;
+		};
+		B1C0F700A1B2C3D4E5F60450 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A6C524872F2873DF0030EE41 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B1C0F700A1B2C3D4E5F60430;
+			remoteInfo = JESSIWorker;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -65,6 +84,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				B1C0F700A1B2C3D4E5F60208 /* JITHelper.appex in Embed Foundation Extensions */,
+				B1C0F700A1B2C3D4E5F60421 /* JESSIWorker.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -121,6 +141,13 @@
 		B1C0F700A1B2C3D4E5F60382 /* fishhook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = fishhook.h; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60383 /* JessiPrebootRedirect.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiPrebootRedirect.m; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60384 /* JessiPrebootRedirect.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiPrebootRedirect.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60401 /* JessiWorkerRequestHandler.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiWorkerRequestHandler.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60402 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60403 /* JessiWorker.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = JessiWorker.entitlements; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60404 /* JESSIWorker.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = JESSIWorker.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1C0F700A1B2C3D4E5F60405 /* JessiWorkerHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = JessiWorkerHost.h; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60406 /* JessiWorkerHost.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiWorkerHost.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60407 /* JessiWorkerEntry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiWorkerEntry.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -134,6 +161,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		B1C0F700A1B2C3D4E5F602A2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1C0F700A1B2C3D4E5F60432 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -156,6 +190,7 @@
 			children = (
 				A6C5248F2F2873DF0030EE41 /* JESSI.app */,
 				B1C0F700A1B2C3D4E5F60290 /* JITHelper.appex */,
+				B1C0F700A1B2C3D4E5F60404 /* JESSIWorker.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -166,6 +201,7 @@
 				B1C0F700A1B2C3D4E5F60060 /* App */,
 				B1C0F700A1B2C3D4E5F60061 /* JessiCore */,
 				B1C0F700A1B2C3D4E5F602C0 /* JITHelper */,
+				B1C0F700A1B2C3D4E5F60460 /* Worker */,
 				B1C0F700A1B2C3D4E5F60064 /* Resources */,
 				B1C0F700A1B2C3D4E5F60062 /* SwiftUI */,
 			);
@@ -197,6 +233,8 @@
 				B1C0F700A1B2C3D4E5F60016 /* JessiServerService.m */,
 				B1C0F700A1B2C3D4E5F60017 /* JessiServerSoftware.h */,
 				B1C0F700A1B2C3D4E5F60018 /* JessiServerSoftware.m */,
+				B1C0F700A1B2C3D4E5F60405 /* JessiWorkerHost.h */,
+				B1C0F700A1B2C3D4E5F60406 /* JessiWorkerHost.m */,
 				B1C0F700A1B2C3D4E5F60019 /* JessiSettings.h */,
 				B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */,
 				B1C0F700A1B2C3D4E5F6001B /* main.m */,
@@ -270,6 +308,17 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		B1C0F700A1B2C3D4E5F60460 /* Worker */ = {
+			isa = PBXGroup;
+			children = (
+				B1C0F700A1B2C3D4E5F60407 /* JessiWorkerEntry.m */,
+				B1C0F700A1B2C3D4E5F60401 /* JessiWorkerRequestHandler.m */,
+				B1C0F700A1B2C3D4E5F60402 /* Info.plist */,
+				B1C0F700A1B2C3D4E5F60403 /* JessiWorker.entitlements */,
+			);
+			path = Worker;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -286,6 +335,7 @@
 			);
 			dependencies = (
 				B1C0F700A1B2C3D4E5F602A3 /* PBXTargetDependency */,
+				B1C0F700A1B2C3D4E5F60451 /* PBXTargetDependency */,
 			);
 			name = JESSI;
 			packageProductDependencies = (
@@ -313,6 +363,23 @@
 			productReference = B1C0F700A1B2C3D4E5F60290 /* JITHelper.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		B1C0F700A1B2C3D4E5F60430 /* JESSIWorker */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B1C0F700A1B2C3D4E5F60440 /* Build configuration list for PBXNativeTarget "JESSIWorker" */;
+			buildPhases = (
+				B1C0F700A1B2C3D4E5F60431 /* Sources */,
+				B1C0F700A1B2C3D4E5F60432 /* Frameworks */,
+				B1C0F700A1B2C3D4E5F60433 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = JESSIWorker;
+			productName = JESSIWorker;
+			productReference = B1C0F700A1B2C3D4E5F60404 /* JESSIWorker.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -327,6 +394,9 @@
 						CreatedOnToolsVersion = 26.2;
 					};
 					B1C0F700A1B2C3D4E5F602B0 = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					B1C0F700A1B2C3D4E5F60430 = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
@@ -351,6 +421,7 @@
 			targets = (
 				A6C5248E2F2873DF0030EE41 /* JESSI */,
 				B1C0F700A1B2C3D4E5F602B0 /* JITHelper */,
+				B1C0F700A1B2C3D4E5F60430 /* JESSIWorker */,
 			);
 		};
 /* End PBXProject section */
@@ -373,6 +444,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B1C0F700A1B2C3D4E5F60433 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -390,6 +468,7 @@
 				B1C0F700A1B2C3D4E5F6003C /* JessiPaths.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003D /* JessiServerService.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003E /* JessiServerSoftware.m in Sources */,
+				B1C0F700A1B2C3D4E5F60420 /* JessiWorkerHost.m in Sources */,
 				B1C0F700A1B2C3D4E5F6003F /* JessiSettings.m in Sources */,
 				B1C0F700A1B2C3D4E5F60035 /* JessiJITCheck.m in Sources */,
 				B1C0F700A1B2C3D4E5F60049 /* DeviceNames.swift in Sources */,
@@ -422,6 +501,23 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B1C0F700A1B2C3D4E5F60431 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1C0F700A1B2C3D4E5F60422 /* JessiWorkerEntry.m in Sources */,
+				B1C0F700A1B2C3D4E5F60411 /* JessiWorkerRequestHandler.m in Sources */,
+				B1C0F700A1B2C3D4E5F60412 /* JessiJavaRunner.m in Sources */,
+				B1C0F700A1B2C3D4E5F60413 /* JessiPaths.m in Sources */,
+				B1C0F700A1B2C3D4E5F60414 /* JessiSettings.m in Sources */,
+				B1C0F700A1B2C3D4E5F60415 /* JessiPrebootRedirect.m in Sources */,
+				B1C0F700A1B2C3D4E5F60416 /* fishhook.c in Sources */,
+				B1C0F700A1B2C3D4E5F60417 /* mach_excServer.c in Sources */,
+				B1C0F700A1B2C3D4E5F60418 /* mach_excUser.c in Sources */,
+				B1C0F700A1B2C3D4E5F60419 /* JessiJITCheck.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -430,6 +526,12 @@
 			platformFilter = ios;
 			target = B1C0F700A1B2C3D4E5F602B0 /* JITHelper */;
 			targetProxy = B1C0F700A1B2C3D4E5F602A0 /* PBXContainerItemProxy */;
+		};
+		B1C0F700A1B2C3D4E5F60451 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			platformFilter = ios;
+			target = B1C0F700A1B2C3D4E5F60430 /* JESSIWorker */;
+			targetProxy = B1C0F700A1B2C3D4E5F60450 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -717,6 +819,66 @@
 			};
 			name = Release;
 		};
+		B1C0F700A1B2C3D4E5F60441 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = JESSI/Worker/JessiWorker.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6XKA3GY3KZ;
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = JESSI/Worker/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-Wl,-export_dynamic",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.Worker;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B1C0F700A1B2C3D4E5F60442 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = JESSI/Worker/JessiWorker.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 6XKA3GY3KZ;
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = JESSI/Worker/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-Wl,-export_dynamic",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.baconmania.jessi.Worker;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = iphoneos;
+				SUPPORTS_MACCATALYST = NO;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -743,6 +905,15 @@
 			buildConfigurations = (
 				B1C0F700A1B2C3D4E5F602D1 /* Debug */,
 				B1C0F700A1B2C3D4E5F602D2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B1C0F700A1B2C3D4E5F60440 /* Build configuration list for PBXNativeTarget "JESSIWorker" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B1C0F700A1B2C3D4E5F60441 /* Debug */,
+				B1C0F700A1B2C3D4E5F60442 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

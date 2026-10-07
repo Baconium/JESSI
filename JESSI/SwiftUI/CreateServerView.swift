@@ -322,8 +322,7 @@ struct CreateServerView: View {
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
-            // iOS 14.0-14.4 only honors one presentation modifier along a view's ancestor chain (the outermost
-            // one wins), so every sheet/alert lives on its own sibling view instead of wrapping the others
+
             Color.clear.frame(width: 0, height: 0)
                 .sheet(isPresented: $showingJarImporter) {
                     DocumentPicker(contentTypes: [.data], onPick: { url in
@@ -1209,11 +1208,12 @@ struct CreateServerView: View {
     }
 
     private func createServer() {
-        if (software == .forge || software == .neoforge) && !JITEnabler.isJITUsable {
+        let usesWorker = JessiWorkerHost.shouldUseWorkers
+        if (software == .forge || software == .neoforge) && !usesWorker && !JITEnabler.isJITUsable {
             showForgeJITRequired = true
             return
         }
-        if (software == .forge || software == .neoforge) && !jessi_has_trollstore_privileges() {
+        if (software == .forge || software == .neoforge) && !usesWorker && !jessi_has_trollstore_privileges() {
             pendingCreateServer = true
             showForgeWarning = true
             return
@@ -1951,6 +1951,10 @@ struct CreateServerView: View {
                 bgTask = .invalid
             }
             
+            if code == 240 && JessiWorkerHost.shouldUseWorkers {
+                completeOnMain(.failure(InstallerError.message("JIT couldn't be enabled for the installer. Make sure your loopback VPN (such as LocalDevVPN) is connected, then try again.")))
+                return
+            }
             if code != 0 {
                 completeOnMain(.failure(InstallerError.message("Installer failed with exit code \(code). Try a different Java version in Settings.")))
                 return
@@ -1973,10 +1977,15 @@ struct CreateServerView: View {
                 return
             }
 
-            var universalJar: String? = nil
-            for case let url as URL in e {
-                if url.lastPathComponent.hasSuffix("-universal.jar") {
-                    universalJar = url.lastPathComponent
+            let rootFiles = (try? fm.contentsOfDirectory(atPath: serverDir.path)) ?? []
+            var universalJar: String? = rootFiles.first { name in
+                name.hasPrefix("forge-") && name.hasSuffix(".jar") && !name.contains("installer")
+            }
+            if universalJar == nil {
+                let rootPath = serverDir.standardizedFileURL.path
+                for case let url as URL in e where url.lastPathComponent.hasSuffix("-universal.jar") {
+                    let path = url.standardizedFileURL.path
+                    universalJar = path.hasPrefix(rootPath + "/") ? String(path.dropFirst(rootPath.count + 1)) : url.lastPathComponent
                     break
                 }
             }
@@ -2036,11 +2045,14 @@ struct CreateServerView: View {
         }
 
         let isTrollStore = jessi_has_trollstore_privileges()
+        let usesWorker = JessiWorkerHost.shouldUseWorkers
 
         if let a4 = a4 {
             var argv: [UnsafeMutablePointer<CChar>?] = [a0, a1, a2, a3, a4, nil]
             return argv.withUnsafeMutableBufferPointer { buf in
-                if isTrollStore {
+                if usesWorker {
+                    return Int32(jessi_worker_run_tool(5, buf.baseAddress))
+                } else if isTrollStore {
                     return Int32(jessi_spawn_tool(5, buf.baseAddress))
                 } else {
                     return Int32(jessi_tool_main(5, buf.baseAddress))
@@ -2050,7 +2062,9 @@ struct CreateServerView: View {
 
         var argv: [UnsafeMutablePointer<CChar>?] = [a0, a1, a2, a3, nil]
         return argv.withUnsafeMutableBufferPointer { buf in
-            if isTrollStore {
+            if usesWorker {
+                return Int32(jessi_worker_run_tool(4, buf.baseAddress))
+            } else if isTrollStore {
                 return Int32(jessi_spawn_tool(4, buf.baseAddress))
             } else {
                 return Int32(jessi_tool_main(4, buf.baseAddress))

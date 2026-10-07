@@ -340,6 +340,15 @@ final class PlayitModel: ObservableObject {
     private var connectingsince: Date? = nil
     private var didwarnconnecting: Bool = false
 
+    /// On installs that run servers in worker processes, the agent gets its own worker too,
+    /// so JESSI's process never needs JIT. `workerstatus` is the latest status it reported.
+    /// Shared because the settings screen recreates this model; the agent process outlives any one screen.
+    private static var agentworker: JessiWorker? = nil
+    private static var agentstatus: (code: Int32, address: String?, error: String?)? = nil
+    private static weak var activemodel: PlayitModel?
+    private var worker: JessiWorker? { Self.agentworker }
+    private var usesworker: Bool { worker != nil || JessiWorkerHost.shouldUseWorkers }
+
     private var defaults: UserDefaults { .standard }
 
     var libraryPath: String {
@@ -389,7 +398,7 @@ final class PlayitModel: ObservableObject {
             return false
         }
 
-        if libhandle == nil {
+        if libhandle == nil && !usesworker {
             guard let handle = openlibrary() else {
                 islibrarypresent = false
                 if setErrorOnFailure {
@@ -419,7 +428,12 @@ final class PlayitModel: ObservableObject {
             claimurl = "https://playit.gg"
         }
 
-        if libhandle == nil && !isstarting {
+        Self.activemodel = self
+        if worker != nil {
+            startstatuspolling()
+        }
+
+        if libhandle == nil && worker == nil && !isstarting {
             setstatus("Disconnected")
             setlastaddr(nil)
         }
@@ -467,6 +481,10 @@ final class PlayitModel: ObservableObject {
 
     func startifpossible() {
         if isstarting || isstopping { return }
+        if worker != nil {
+            startstatuspolling()
+            return
+        }
         guard verifylibraryreachable() else { return }
         guard let secret = defaults.string(forKey: secretkeykey), !secret.isEmpty else {
             seterror("Playit not linked")
@@ -475,6 +493,11 @@ final class PlayitModel: ObservableObject {
 
         isstarting = true
         seterror(nil)
+
+        if usesworker {
+            startworker(secretkey: secret)
+            return
+        }
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
@@ -493,6 +516,12 @@ final class PlayitModel: ObservableObject {
 
     func stopifpossible() {
         if isstarting || isstopping { return }
+        if let worker {
+            isstopping = true
+            seterror(nil)
+            worker.send(["cmd": "stop"])
+            return
+        }
         guard let handle = libhandle else {
             setstatus("Stopped")
             setlastaddr(nil)
@@ -526,6 +555,56 @@ final class PlayitModel: ObservableObject {
                 self.seterror(nil)
                 self.refreshfromlibrary()
             }
+        }
+    }
+
+    private func startworker(secretkey: String) {
+        Self.agentstatus = nil
+        Self.activemodel = self
+        let job: [String: Any] = ["type": "playit", "library": libraryPath, "secret": secretkey]
+        tunnelinglogger.log("Playit: starting agent in its own process")
+        Self.agentworker = JessiWorkerHost.launchJob(job, needsJIT: true, onLog: { line in
+            tunnelinglogger.log("Playit: \(line.trimmingCharacters(in: .whitespacesAndNewlines))")
+        }, onEvent: { event in
+            PlayitModel.handleworkerevent(event)
+        }, onExit: { code, problem in
+            PlayitModel.agentworker = nil
+            PlayitModel.agentstatus = nil
+            tunnelinglogger.log("Playit: agent process exited (\(code))")
+            guard let self = PlayitModel.activemodel else { return }
+            self.isstarting = false
+            self.isstopping = false
+            self.stopstatuspolling()
+            self.laststatuscode = .stopped
+            self.setstatus("Stopped")
+            self.setlastaddr(nil)
+            if let problem {
+                self.seterror(problem)
+            }
+        })
+    }
+
+    private static func handleworkerevent(_ event: [AnyHashable: Any]) {
+        let model = activemodel
+        switch event["event"] as? String {
+        case "playit-log":
+            let level = (event["level"] as? NSNumber)?.int32Value ?? 1
+            logplayitline(level: level, text: event["message"] as? String ?? "")
+        case "playit-started":
+            model?.isstarting = false
+            model?.startstatuspolling()
+        case "playit-status":
+            let code = (event["code"] as? NSNumber)?.int32Value ?? 0
+            agentstatus = (code, event["address"] as? String, event["error"] as? String)
+            model?.refreshfromlibrary()
+        case "playit-stopped":
+            let result = (event["result"] as? NSNumber)?.int32Value ?? 0
+            if result != 0 { model?.seterror("Playit stop failed (\(result))") }
+        case "error":
+            model?.isstarting = false
+            model?.seterror(event["message"] as? String ?? "Playit failed to start")
+        default:
+            break
         }
     }
 
@@ -571,6 +650,12 @@ final class PlayitModel: ObservableObject {
     }
 
     private func refreshfromlibrary() {
+        if worker != nil {
+            if let status = Self.agentstatus {
+                applystatus(code: status.code, address: status.address, error: status.error)
+            }
+            return
+        }
         guard let handle = libhandle else { return }
         guard let playitstatus = loadsymbol(handle, name: "playit_get_status_out", type: PlayitGetStatusFn.self) else {
             return
@@ -580,7 +665,13 @@ final class PlayitModel: ObservableObject {
         withUnsafeMutablePointer(to: &s) { ptr in
             playitstatus(UnsafeMutableRawPointer(ptr))
         }
-        let code = PlayitStatusCode(rawValue: s.code) ?? .disconnected
+        applystatus(code: s.code,
+                    address: s.last_address.map { String(cString: $0) },
+                    error: s.last_error.map { String(cString: $0) })
+    }
+
+    private func applystatus(code rawcode: Int32, address: String?, error: String?) {
+        let code = PlayitStatusCode(rawValue: rawcode) ?? .disconnected
         if laststatuscode != code {
             laststatuscode = code
             if code == .connecting {
@@ -593,20 +684,18 @@ final class PlayitModel: ObservableObject {
         }
 
         let addressValue: String? = {
-            guard let addr = s.last_address else { return nil }
-            let value = String(cString: addr)
-            return value.isEmpty ? nil : value
+            guard let address, !address.isEmpty else { return nil }
+            return address
         }()
         setlastaddr(addressValue)
 
-        if code == .disconnected, addressValue == nil, s.last_error == nil, libhandle != nil {
+        if code == .disconnected, addressValue == nil, error == nil, libhandle != nil || worker != nil {
             setstatus("Online (No Active Tunnels)")
         } else {
             setstatus(code.displayname)
         }
 
-        if let err = s.last_error {
-            let value = String(cString: err)
+        if let value = error {
             let lower = value.lowercased()
             if lower.contains("over port limit") {
                 setstatus("Account Over Port Limit")
@@ -1333,7 +1422,10 @@ private typealias PlayitSetLogCallbackFn = @convention(c) (@convention(c) (Int32
 
 @_cdecl("jessi_playit_log_callback")
 private func jessi_playit_log_callback(level: Int32, message: UnsafePointer<CChar>?, userData: UnsafeMutableRawPointer?) {
-    let text = message.flatMap { String(validatingUTF8: $0) } ?? ""
+    logplayitline(level: level, text: message.flatMap { String(validatingUTF8: $0) } ?? "")
+}
+
+private func logplayitline(level: Int32, text: String) {
     let prefix: String
     switch level {
     case 3: prefix = "[ERROR]"
