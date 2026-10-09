@@ -1,0 +1,29 @@
+<html>
+<title>eaglercraft server</title>
+<link rel="stylesheet" href="https://baconium.dev/styles.css">
+<body>
+<main>
+<center>
+<h1>Eaglercraft Homepage</code> </h1>
+<p>Eaglercraft will connect to <code id="address"></code> automatically.</p>
+
+<h2>Minecraft {{VERSION}}</h2>
+{{CLIENTS}}
+<label>Join the server right away <input type="checkbox" id="join" checked></label>
+</center>
+</main>
+<script>
+"use strict";
+document.getElementById("address").textContent = location.host;
+var join = document.getElementById("join");
+function update() {
+	document.querySelectorAll("a.client").forEach(function (a) {
+		var base = a.getAttribute("href").split("?")[0];
+		a.setAttribute("href", join.checked ? base : base + "?join=0");
+	});
+}
+join.addEventListener("change", update);
+update();
+</script>
+</body>
+</html>

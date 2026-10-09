@@ -90,6 +90,9 @@ final class LaunchModel: NSObject, ObservableObject {
     @Published var isInstallingJVM: Bool = false
     @Published var jvmInstallStatus: String = ""
     @Published var jvmInstallProgress: Double = 0
+    @Published var isRestoringWebPage: Bool = false
+    @Published var webPageStatus: String = ""
+    @Published var webPageProgress: Double = 0
 
     private let service: JessiServerService
     private var cancellables = Set<AnyCancellable>()
@@ -121,6 +124,14 @@ final class LaunchModel: NSObject, ObservableObject {
         updatePropertiesManager()
     }
     
+    var eaglercraftLinks: [Eaglercraft.Link]? {
+        guard !selectedServer.isEmpty else { return nil }
+        let path = (service.serversRoot() as NSString).appendingPathComponent(selectedServer)
+        guard Eaglercraft.isEaglercraftServer(at: path) else { return nil }
+        return Eaglercraft.browserLinks(for: path)
+    }
+
+
     private func updatePropertiesManager() {
         if !selectedServer.isEmpty {
             let root = service.serversRoot()
@@ -150,6 +161,40 @@ final class LaunchModel: NSObject, ObservableObject {
     }
 
     private func launchAfterPreparingResourcePack(_ launch: @escaping () -> Void) {
+        restoreEaglercraftWebPageIfNeeded { [weak self] in
+            self?.launchAfterPreparingPack(launch)
+        }
+    }
+
+    private func restoreEaglercraftWebPageIfNeeded(_ then: @escaping () -> Void) {
+        let path = (service.serversRoot() as NSString).appendingPathComponent(selectedServer)
+        guard let version = Eaglercraft.webVersion(forServerAt: path) else { return then() }
+        let webDirectory = Eaglercraft.webDirectory(for: version)
+        let hasIndex = FileManager.default.fileExists(atPath: webDirectory.appendingPathComponent("index.html").path)
+        if hasIndex && Eaglercraft.missingClients(for: version).isEmpty { return then() }
+
+        isRestoringWebPage = true
+        webPageStatus = "Restoring the Eaglercraft web page..."
+        webPageProgress = 0
+        Eaglercraft.restoreWebFiles(for: version, status: { [weak self] text, progress in
+            DispatchQueue.main.async {
+                self?.webPageStatus = text
+                self?.webPageProgress = progress
+            }
+        }, completion: { [weak self] error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.isRestoringWebPage = false
+                self.webPageStatus = ""
+                if let error {
+                    self.activeAlert = .runtime("Couldn't restore the Eaglercraft web page, so the server will start without it: \(error.localizedDescription)")
+                }
+                then()
+            }
+        })
+    }
+
+    private func launchAfterPreparingPack(_ launch: @escaping () -> Void) {
         guard let properties = propertiesManager else {
             launch()
             return
@@ -302,8 +347,13 @@ final class LaunchModel: NSObject, ObservableObject {
 
         guard FileManager.default.fileExists(atPath: configFile),
               let data = try? Data(contentsOf: URL(fileURLWithPath: configFile)),
-              let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let mcVersion = config["minecraftVersion"] as? String, !mcVersion.isEmpty else {
+              let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        if let javaVersion = config["javaVersion"] as? String, !javaVersion.isEmpty {
+            return javaVersion
+        }
+        guard let mcVersion = config["minecraftVersion"] as? String, !mcVersion.isEmpty else {
             return nil
         }
         return recommendedJavaVersion(forMCVersion: mcVersion)
@@ -789,21 +839,21 @@ struct LaunchView: View {
                             }
                         }) {
                             HStack(spacing: 8) {
-                                if model.isPreparingResourcePack || model.isEnablingJIT {
+                                if model.isPreparingResourcePack || model.isEnablingJIT || model.isRestoringWebPage {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                 }
-                                Text(model.isEnablingJIT ? "Enabling JIT..." : model.isPreparingResourcePack ? "Preparing pack..." : "Start")
+                                Text(model.isEnablingJIT ? "Enabling JIT..." : model.isRestoringWebPage ? "Preparing web page..." : model.isPreparingResourcePack ? "Preparing pack..." : "Start")
                                     .font(.system(size: 17, weight: .semibold))
                             }
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                         }
                         .foregroundColor(.white)
-                        .background(model.isRunning || model.isPreparingResourcePack || model.isEnablingJIT
+                        .background(model.isRunning || model.isPreparingResourcePack || model.isEnablingJIT || model.isRestoringWebPage
                                     ? Color.gray.opacity(0.4) : Color.green)
                         .cornerRadius(12)
-                        .disabled(model.isRunning || model.isInstallingJVM || model.isPreparingResourcePack || model.isEnablingJIT)
+                        .disabled(model.isRunning || model.isInstallingJVM || model.isPreparingResourcePack || model.isEnablingJIT || model.isRestoringWebPage)
 
                         Button(action: {
                             if model.stopWillCloseApp {
@@ -836,11 +886,28 @@ struct LaunchView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
                     }
+
+                    if model.isRestoringWebPage {
+                        VStack(spacing: 8) {
+                            Text(model.webPageStatus)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            ProgressView(value: model.webPageProgress)
+                                .progressViewStyle(LinearProgressViewStyle())
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                    }
                 }
                 .background(Color(UIColor.secondarySystemBackground))
                 .cornerRadius(16)
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
+
+                if let links = model.eaglercraftLinks {
+                    EaglercraftLinksCard(links: links, isRunning: model.isRunning)
+                        .padding(.horizontal, 16)
+                }
 
                 HStack {
                     Text("Console")

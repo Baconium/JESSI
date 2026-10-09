@@ -8,6 +8,7 @@
 #import <mach-o/dyld.h>
 #import <netinet/in.h>
 #import <signal.h>
+#import <sys/sysctl.h>
 #import <sys/select.h>
 #import <sys/socket.h>
 #import <unistd.h>
@@ -16,6 +17,9 @@ static NSString *const JessiWorkerPrincipalClass = @"JESSIWorkerRequestHandler";
 static NSString *const JessiWorkerFrameworkName = @"JessiWorkerCore.framework";
 static NSString *const JessiWorkerPayloadEntry = @"jessi_worker_payload_main";
 static NSString *const JessiWorkerDisabledKey = @"jessi.worker.disabled";
+static NSString *const JessiLiveWorkersKey = @"jessi.worker.live";
+
+int proc_pidpath(int pid, void *buffer, uint32_t buffersize);
 
 @protocol JessiExtension <NSObject>
 - (void)beginExtensionRequestWithInputItems:(NSArray *)inputItems completion:(void (^)(NSUUID *requestIdentifier))completion;
@@ -41,6 +45,8 @@ void jessi_keep_extension_running_in_background(id extension) {
 }
 
 @interface JessiWorkerHost ()
++ (void)rememberWorkerPID:(pid_t)pid;
++ (void)forgetWorkerPID:(pid_t)pid;
 + (nullable NSString *)workerExtensionIdentifier;
 + (nullable NSString *)liveProcessIdentifier;
 + (nullable NSString *)payloadPathForLiveProcess:(NSString *_Nullable *_Nullable)problem;
@@ -78,6 +84,11 @@ void jessi_keep_extension_running_in_background(id extension) {
         _channelFD = -1;
     }
     return self;
+}
+
+- (void)setPid:(pid_t)pid {
+    _pid = pid;
+    if (pid > 0) [JessiWorkerHost rememberWorkerPID:pid];
 }
 
 - (void)send:(NSDictionary *)command {
@@ -127,6 +138,7 @@ void jessi_keep_extension_running_in_background(id extension) {
     });
     if (alreadyFinished) return;
 
+    if (self.pid > 0) [JessiWorkerHost forgetWorkerPID:self.pid];
     if (self.listenFD >= 0) { close(self.listenFD); self.listenFD = -1; }
     void (^onExit)(int, NSString *) = self.onExit;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -364,6 +376,64 @@ void jessi_keep_extension_running_in_background(id extension) {
         }
     });
     return identifier;
+}
+
+#pragma mark Orphaned workers
+
++ (void)rememberWorkerPID:(pid_t)pid {
+    @synchronized (self) {
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        NSMutableArray *live = [[defaults arrayForKey:JessiLiveWorkersKey] ?: @[] mutableCopy];
+        NSDictionary *entry = @{@"pid": @(pid), @"host": @(getpid())};
+        if (![live containsObject:entry]) [live addObject:entry];
+        [defaults setObject:live forKey:JessiLiveWorkersKey];
+    }
+}
+
++ (void)forgetWorkerPID:(pid_t)pid {
+    @synchronized (self) {
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+        NSArray *live = [defaults arrayForKey:JessiLiveWorkersKey] ?: @[];
+        NSPredicate *others = [NSPredicate predicateWithBlock:^BOOL(NSDictionary *entry, NSDictionary *bindings) {
+            return [entry[@"pid"] intValue] != pid;
+        }];
+        [defaults setObject:[live filteredArrayUsingPredicate:others] forKey:JessiLiveWorkersKey];
+    }
+}
+
+static BOOL jessi_pid_is_worker_process(pid_t pid) {
+    char path[4096] = {0};
+    NSString *name = nil;
+    if (proc_pidpath(pid, path, sizeof(path)) > 0) {
+        name = @(path).lastPathComponent;
+    } else {
+        struct kinfo_proc info;
+        size_t size = sizeof(info);
+        int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, pid };
+        if (sysctl(mib, 4, &info, &size, NULL, 0) != 0 || size == 0) return NO;
+        name = @(info.kp_proc.p_comm);
+    }
+    return [name isEqualToString:@"JESSIWorker"] || [name isEqualToString:@"LiveProcess"];
+}
+
++ (void)reapOrphanedWorkers {
+    NSArray *live;
+    @synchronized (self) {
+        live = [[NSUserDefaults standardUserDefaults] arrayForKey:JessiLiveWorkersKey] ?: @[];
+    }
+    for (NSDictionary *entry in live) {
+        pid_t pid = [entry[@"pid"] intValue];
+        if ([entry[@"host"] intValue] == getpid() || pid <= 1) continue;
+        if (kill(pid, 0) != 0) {
+            NSLog(@"[JESSI] Server process %d from a previous launch: %s", pid, errno == ESRCH ? "already gone" : strerror(errno));
+        } else if (!jessi_pid_is_worker_process(pid)) {
+            NSLog(@"[JESSI] Server process %d from a previous launch: pid now belongs to something else", pid);
+        } else {
+            int result = kill(pid, SIGKILL);
+            NSLog(@"[JESSI] Killing server process %d left over from a previous launch: %s", pid, result == 0 ? "done" : strerror(errno));
+        }
+        [self forgetWorkerPID:pid];
+    }
 }
 
 + (BOOL)workerExtensionAvailable {

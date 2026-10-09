@@ -195,6 +195,94 @@ static NSString *jessi_command_for_pid(pid_t pid) {
     return [jessi_capture_cmd(cmd.UTF8String) stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
+static BOOL jessi_server_dir_is_pumpkin(NSString *dir);
+
+static const int JessiDefaultGamePort = 25565;
+static const int JessiDefaultRconPort = 25575;
+static int g_activeGamePort = 0;
+
+static int jessi_port_value(NSString *text, int fallback) {
+    NSString *trimmed = [text stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"\" \t"]];
+    NSRange colon = [trimmed rangeOfString:@":" options:NSBackwardsSearch];
+    if (colon.location != NSNotFound) trimmed = [trimmed substringFromIndex:colon.location + 1];
+    int port = trimmed.intValue;
+    return (port > 0 && port <= 65535) ? port : fallback;
+}
+
+static NSDictionary<NSString *, NSString *> *jessi_read_properties(NSString *path) {
+    NSMutableDictionary<NSString *, NSString *> *kv = [NSMutableDictionary dictionary];
+    NSString *content = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
+    for (NSString *line in [content componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]]) {
+        if (line.length == 0 || [line hasPrefix:@"#"]) continue;
+        NSRange r = [line rangeOfString:@"="];
+        if (r.location == NSNotFound) continue;
+        NSString *k = [line substringToIndex:r.location];
+        if (k.length) kv[k] = [line substringFromIndex:r.location + 1] ?: @"";
+    }
+    return kv;
+}
+
+static NSString *jessi_toml_get_value(NSString *toml, NSString *section, NSString *key) {
+    NSCharacterSet *ws = [NSCharacterSet whitespaceCharacterSet];
+    NSString *header = [NSString stringWithFormat:@"[%@]", section];
+    BOOL inSection = NO;
+    for (NSString *raw in [toml componentsSeparatedByString:@"\n"]) {
+        NSString *line = [raw stringByTrimmingCharactersInSet:ws];
+        if ([line hasPrefix:@"["]) {
+            inSection = [line isEqualToString:header];
+            continue;
+        }
+        if (!inSection) continue;
+        NSRange eq = [line rangeOfString:@"="];
+        if (eq.location == NSNotFound) continue;
+        if ([[[line substringToIndex:eq.location] stringByTrimmingCharactersInSet:ws] isEqualToString:key]) {
+            return [[line substringFromIndex:eq.location + 1] stringByTrimmingCharactersInSet:ws];
+        }
+    }
+    return nil;
+}
+
+static NSArray<NSNumber *> *jessi_server_ports_in_dir(NSString *dir) {
+    if (jessi_server_dir_is_pumpkin(dir)) {
+        NSString *toml = [NSString stringWithContentsOfFile:[dir stringByAppendingPathComponent:@"pumpkin.toml"] encoding:NSUTF8StringEncoding error:nil] ?: @"";
+        return @[@(jessi_port_value(jessi_toml_get_value(toml, @"networking.java", @"address"), JessiDefaultGamePort)),
+                 @(jessi_port_value(jessi_toml_get_value(toml, @"networking.rcon", @"address"), JessiDefaultRconPort))];
+    }
+    NSDictionary *kv = jessi_read_properties([dir stringByAppendingPathComponent:@"server.properties"]);
+    return @[@(jessi_port_value(kv[@"server-port"], JessiDefaultGamePort)),
+             @(jessi_port_value(kv[@"rcon.port"], JessiDefaultRconPort))];
+}
+
+static BOOL jessi_tcp_port_in_use(int port) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return NO;
+    int yes = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)port);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    BOOL inUse = bind(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0 && errno == EADDRINUSE;
+    close(fd);
+    return inUse;
+}
+
+static int jessi_free_local_port(int preferred) {
+    if (!jessi_tcp_port_in_use(preferred)) return preferred;
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) return preferred;
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    socklen_t length = sizeof(addr);
+    int port = preferred;
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0 && getsockname(fd, (struct sockaddr *)&addr, &length) == 0) {
+        port = ntohs(addr.sin_port);
+    }
+    close(fd);
+    return port;
+}
+
 static BOOL jessi_server_dir_is_pumpkin(NSString *dir) {
     NSData *data = [NSData dataWithContentsOfFile:[dir stringByAppendingPathComponent:@"jessiserverconfig.json"]];
     if (!data) return NO;
@@ -273,6 +361,7 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
 @property (nonatomic, strong) JessiWorker *activeWorker;
 @property (nonatomic) BOOL activeRunInProcess;
 @property (nonatomic) BOOL stopPending;
+@property (nonatomic) BOOL waitingForPorts;
 @property (nonatomic, copy) void (^readNewLogOutput)(BOOL force);
 @end
 
@@ -284,7 +373,7 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
         _console = [NSMutableString string];
         _runQueue = dispatch_queue_create("com.baconmania.jessi.run", DISPATCH_QUEUE_SERIAL);
         _logQueue = dispatch_queue_create("com.baconmania.jessi.log", DISPATCH_QUEUE_SERIAL);
-        _activeRconPort = 25575;
+        _activeRconPort = JessiDefaultRconPort;
         _bgTask = UIBackgroundTaskInvalid;
         [JessiPaths ensureBaseDirectories];
         [[NSUserDefaults standardUserDefaults] setBool:g_serverRunning forKey:JessiServerRunningKey];
@@ -316,6 +405,56 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
 
 - (BOOL)stopWillCloseApp {
     return self.isRunning && self.activeRunInProcess;
+}
+
++ (NSInteger)activeGamePort {
+    return g_activeGamePort;
+}
+
+- (void)runInWorkerWhenPortsAreFree:(NSDictionary *)job {
+    [JessiWorkerHost reapOrphanedWorkers];
+    NSArray<NSNumber *> *ports = @[jessi_server_ports_in_dir(job[@"dir"]).firstObject];
+    NSArray<NSNumber *> *(^busyPorts)(void) = ^{
+        return [ports filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSNumber *port, NSDictionary *bindings) {
+            return jessi_tcp_port_in_use(port.intValue);
+        }]];
+    };
+    if (busyPorts().count == 0) {
+        [self runInWorker:job];
+        return;
+    }
+
+    NSArray<NSNumber *> *busyNow = busyPorts();
+    NSString *list = [[busyNow valueForKey:@"stringValue"] componentsJoinedByString:@" and "];
+    NSString *waiting = [NSString stringWithFormat:@"%@ %@ still in use, probably by a server process left over from when JESSI was closed. Waiting for %@ to be released…\n",
+                         busyNow.count == 1 ? @"Port" : @"Ports", list, busyNow.count == 1 ? @"it" : @"them"];
+    dispatch_async(dispatch_get_main_queue(), ^{ [self emitConsole:waiting]; });
+    self.waitingForPorts = YES;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSArray<NSNumber *> *busy = busyPorts();
+        for (int i = 0; i < 90 && busy.count > 0; i++) {
+            if (!weakSelf.waitingForPorts) break;
+            sleep(1);
+            busy = busyPorts();
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+            BOOL cancelled = !strongSelf.waitingForPorts;
+            strongSelf.waitingForPorts = NO;
+            if (cancelled) {
+                [strongSelf finishServerRunWithCode:0];
+            } else if (busy.count > 0) {
+                [strongSelf emitConsole:[NSString stringWithFormat:@"%@ %@ still in use. Close whatever is using %@ (or restart the device) and try again.\n",
+                                         busy.count == 1 ? @"Port" : @"Ports", [[busy valueForKey:@"stringValue"] componentsJoinedByString:@" and "],
+                                         busy.count == 1 ? @"it" : @"them"]];
+                [strongSelf finishServerRunWithCode:1];
+            } else {
+                [strongSelf runInWorker:job];
+            }
+        });
+    });
 }
 
 - (void)runInWorker:(NSDictionary *)job {
@@ -444,24 +583,14 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
     NSString *pw = [self rconPasswordForDir:dir];
     self.activeServerDir = dir;
     self.activeRconPassword = pw;
-    self.activeRconPort = 25575;
 
     NSString *propertiesPath = [dir stringByAppendingPathComponent:@"server.properties"]; 
-    NSMutableDictionary<NSString *, NSString *> *kv = [NSMutableDictionary dictionary];
-    if ([fm fileExistsAtPath:propertiesPath]) {
-        NSString *content = [NSString stringWithContentsOfFile:propertiesPath encoding:NSUTF8StringEncoding error:nil];
-        for (NSString *line in [content componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]]) {
-            if (line.length == 0 || [line hasPrefix:@"#"]) continue;
-            NSRange r = [line rangeOfString:@"="];
-            if (r.location == NSNotFound) continue;
-            NSString *k = [line substringToIndex:r.location];
-            NSString *v = [line substringFromIndex:r.location + 1];
-            if (k.length) kv[k] = v ?: @"";
-        }
-    }
+    NSMutableDictionary<NSString *, NSString *> *kv = [jessi_read_properties(propertiesPath) mutableCopy];
 
     kv[@"server-ip"] = @"";
-    if (!kv[@"server-port"]) kv[@"server-port"] = @"25565";
+    if (!kv[@"server-port"].length) kv[@"server-port"] = [NSString stringWithFormat:@"%d", JessiDefaultGamePort];
+    self.activeRconPort = jessi_free_local_port(jessi_port_value(kv[@"rcon.port"], JessiDefaultRconPort));
+    g_activeGamePort = jessi_port_value(kv[@"server-port"], JessiDefaultGamePort);
 
     kv[@"enable-rcon"] = @"true";
     kv[@"rcon.port"] = [NSString stringWithFormat:@"%d", self.activeRconPort];
@@ -490,10 +619,11 @@ static BOOL jessi_looks_like_jessi_java(NSString *cmd) {
     NSString *pw = [self rconPasswordForDir:dir];
     self.activeServerDir = dir;
     self.activeRconPassword = pw;
-    self.activeRconPort = 25575;
 
     NSString *configPath = [dir stringByAppendingPathComponent:@"pumpkin.toml"];
     NSString *toml = [NSString stringWithContentsOfFile:configPath encoding:NSUTF8StringEncoding error:nil] ?: @"";
+    self.activeRconPort = jessi_free_local_port(jessi_port_value(jessi_toml_get_value(toml, @"networking.rcon", @"address"), JessiDefaultRconPort));
+    g_activeGamePort = jessi_port_value(jessi_toml_get_value(toml, @"networking.java", @"address"), JessiDefaultGamePort);
     toml = jessi_toml_set_values(toml, @"networking.rcon", @{
         @"enabled": @"true",
         @"address": [NSString stringWithFormat:@"\"127.0.0.1:%d\"", self.activeRconPort],
@@ -758,7 +888,10 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
                 if (data) {
                     NSDictionary *config = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
                     NSString *mcVersion = config[@"minecraftVersion"];
-                    if (mcVersion.length) {
+                    NSString *configJava = config[@"javaVersion"];
+                    if ([configJava isKindOfClass:[NSString class]] && configJava.length) {
+                        javaVersion = configJava;
+                    } else if (mcVersion.length) {
                         javaVersion = jessi_recommended_java_version(mcVersion);
                     }
                 }
@@ -770,7 +903,7 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
     [self beginBackgroundTaskIfNeeded];
 
     if ([JessiWorkerHost shouldUseWorkers]) {
-        [self runInWorker:@{@"type": @"server", @"jar": jar, @"javaVersion": javaVersion, @"dir": dir}];
+        [self runInWorkerWhenPortsAreFree:@{@"type": @"server", @"jar": jar, @"javaVersion": javaVersion, @"dir": dir, @"rconPort": @(self.activeRconPort)}];
         return;
     }
 
@@ -853,6 +986,7 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
 
 - (void)finishServerRunWithCode:(int)code {
     self.running = NO;
+    g_activeGamePort = 0;
     if (self.logTimer) {
         void (^readNewLogOutput)(BOOL) = self.readNewLogOutput;
         if (readNewLogOutput) dispatch_sync(self.logQueue, ^{ readNewLogOutput(YES); });
@@ -895,7 +1029,7 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
     [self beginBackgroundTaskIfNeeded];
 
     if ([JessiWorkerHost shouldUseWorkers]) {
-        [self runInWorker:@{@"type": @"pumpkin", @"library": libraryPath, @"dir": dir}];
+        [self runInWorkerWhenPortsAreFree:@{@"type": @"pumpkin", @"library": libraryPath, @"dir": dir}];
         return;
     }
 
@@ -937,6 +1071,10 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
 
 - (void)stopServer {
     if (!self.isRunning) return;
+    if (self.waitingForPorts) {
+        self.waitingForPorts = NO;
+        return;
+    }
     JessiWorker *worker = self.activeWorker;
     if (worker && [self isPumpkinServerDir:self.activeServerDir]) {
         [worker send:@{@"cmd": @"stop"}];
@@ -1005,8 +1143,13 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
         }
     }
 
-    [targetPIDs unionSet:[jessi_pids_listening_on_port(25565) mutableCopy]];
-    [targetPIDs unionSet:[jessi_pids_listening_on_port(25575) mutableCopy]];
+    NSMutableSet<NSNumber *> *ports = [NSMutableSet setWithObjects:@(JessiDefaultGamePort), @(JessiDefaultRconPort), nil];
+    for (NSString *name in entries) {
+        [ports addObjectsFromArray:jessi_server_ports_in_dir([root stringByAppendingPathComponent:name])];
+    }
+    for (NSNumber *port in ports) {
+        [targetPIDs unionSet:[jessi_pids_listening_on_port(port.intValue) mutableCopy]];
+    }
 
     int checked = 0;
     int killed = 0;
@@ -1029,7 +1172,7 @@ static BOOL jessi_read_all(int fd, void *buf, size_t len) {
     }
 
     if (killed > 0) {
-        return [NSString stringWithFormat:@"Stopped %d stale JVM process(es). Port 25565 should now be clear.", killed];
+        return [NSString stringWithFormat:@"Stopped %d stale JVM process(es). The server ports should now be clear.", killed];
     }
     if (checked > 0) {
         return @"No stale JESSI JVM process needed termination.";

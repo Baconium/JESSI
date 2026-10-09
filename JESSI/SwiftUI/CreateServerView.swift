@@ -10,6 +10,7 @@ enum ServerSoftwareSwift: String, CaseIterable, Identifiable {
     case fabric = "Fabric"
     case quilt = "Quilt"
     case pumpkin = "Pumpkin"
+    case eaglercraft = "Eaglercraft"
     case customJar = "Custom Jar"
     var id: String { rawValue }
 }
@@ -228,6 +229,12 @@ struct CreateServerView: View {
                                 .foregroundColor(.secondary)
                                 .normalizedSeparator()
                         }
+                        if software == .eaglercraft {
+                            Text("Players can join from a web browser: start the server, then open the link shown on the Launch tab. Java Edition players can join too. The first Eaglercraft server for each version also downloads the browser game for it (about 25 MB for 1.8.8, 45 MB for 1.12.2).")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .normalizedSeparator()
+                        }
                     }
 
                 }
@@ -252,7 +259,7 @@ struct CreateServerView: View {
                 Section(header: Text("Quick Settings (Optional)")) {
                     QuickSettingValueRow(title: "Max Players", defaultValue: "20", text: $maxPlayers, keyboardType: .numberPad)
                         .normalizedSeparator()
-                    QuickSettingValueRow(title: "View Distance", defaultValue: "10", text: $viewDistance, keyboardType: .numberPad)
+                    QuickSettingValueRow(title: "View Distance", defaultValue: software == .eaglercraft ? "6" : "10", text: $viewDistance, keyboardType: .numberPad)
                         .normalizedSeparator()
                     QuickSettingValueRow(title: "Simulation Distance", defaultValue: "10", text: $simulationDistance, keyboardType: .numberPad)
                         .normalizedSeparator()
@@ -944,6 +951,10 @@ struct CreateServerView: View {
         }
 
         switch software {
+        case .eaglercraft:
+            finishOnMain(Eaglercraft.clientVersions, nil)
+            return
+
         case .pumpkin:
             let request = URLRequest(url: PumpkinRuntime.manifestURL, cachePolicy: .reloadIgnoringLocalCacheData)
             URLSession.shared.dataTask(with: request) { data, response, error in
@@ -1242,7 +1253,7 @@ struct CreateServerView: View {
         if software == .customJar && customJarURL == nil { return }
 
         if software != .customJar && software != .pumpkin && !mcVersion.isEmpty && !skipJVMCheck {
-            let needed = Self.effectiveJavaVersion(forMCVersion: mcVersion)
+            let needed = software == .eaglercraft ? Eaglercraft.javaVersion : Self.effectiveJavaVersion(forMCVersion: mcVersion)
             let available = JessiSettings.availableJavaVersions()
             if !available.contains(needed) {
                 missingJVMVersion = needed
@@ -1279,6 +1290,10 @@ struct CreateServerView: View {
             props["white-list"] = whitelist ? "true" : "false"
             if !trim(motd).isEmpty { props["motd"] = trim(motd) }
             if !trim(seed).isEmpty { props["level-seed"] = trim(seed) }
+            if software == .eaglercraft {
+                props["online-mode"] = "false"
+                if props["view-distance"] == nil { props["view-distance"] = "6" }
+            }
         }
         if !props.isEmpty {
             var out = "# Managed by JESSI\n"
@@ -1287,10 +1302,15 @@ struct CreateServerView: View {
             try? out.write(toFile: p, atomically: true, encoding: .utf8)
         }
 
-        let config: [String: String] = [
+        var config: [String: String] = [
             "software": software.rawValue,
             "minecraftVersion": mcVersion
         ]
+        if software == .eaglercraft {
+            config["minecraftVersion"] = Eaglercraft.serverVersion
+            config["eaglercraftVersion"] = mcVersion
+            config["javaVersion"] = Eaglercraft.javaVersion
+        }
         
         let configurl = URL(fileURLWithPath: (dir as NSString).appendingPathComponent("jessiserverconfig.json"))
         do {
@@ -1315,6 +1335,22 @@ struct CreateServerView: View {
 
         let serverDirURL = URL(fileURLWithPath: dir, isDirectory: true)
         let selectedVersion = mcVersion
+
+        if software == .eaglercraft {
+            installEaglercraft(serverDir: serverDirURL, serverName: (dir as NSString).lastPathComponent, version: selectedVersion) { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success:
+                        self.finishCreate(success: true)
+                    case .failure(let err):
+                        self.isCreating = false
+                        self.createError = err.localizedDescription
+                        self.showCreateError = true
+                    }
+                }
+            }
+            return
+        }
 
         if software == .customJar {
             finishCreate(success: true)
@@ -1387,8 +1423,89 @@ struct CreateServerView: View {
             }
             setStatus("Downloading Pumpkin \(mcVersion)...")
             downloadPumpkinLibrary(from: url, to: serverDir, completion: completion)
-        case .customJar:
+        case .eaglercraft, .customJar:
             completion(.success(()))
+        }
+    }
+
+    private func installEaglercraft(serverDir: URL, serverName: String, version: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        do {
+            try Eaglercraft.writeServerConfig(serverDir: serverDir, serverName: serverName, version: version)
+        } catch {
+            completion(.failure(error))
+            return
+        }
+
+        var steps: [(@escaping (Result<Void, Error>) -> Void) -> Void] = []
+        steps.append { done in
+            self.setStatus("Downloading Paper \(Eaglercraft.serverVersion)...")
+            self.downloadPaperServerJar(mcVersion: Eaglercraft.serverVersion, to: serverDir, completion: done)
+        }
+        for plugin in Eaglercraft.directPlugins {
+            steps.append { done in
+                self.setStatus("Downloading \(plugin.label)...")
+                self.downloadFile(plugin.url, to: serverDir.appendingPathComponent(plugin.path), completion: done)
+            }
+        }
+        for plugin in Eaglercraft.hangarPlugins {
+            steps.append { done in
+                self.setStatus("Downloading \(plugin.label)...")
+                self.downloadHangarPlugin(plugin, to: serverDir, completion: done)
+            }
+        }
+        let missing = Eaglercraft.missingClients(for: version)
+        for (index, client) in missing.enumerated() {
+            steps.append { done in
+                self.setStatus("Downloading \(client.label) (\(index + 1)/\(missing.count))...")
+                let zip = FileManager.default.temporaryDirectory.appendingPathComponent("eaglercraft-\(UUID().uuidString).zip")
+                self.downloadFile(client.url, to: zip) { result in
+                    defer { try? FileManager.default.removeItem(at: zip) }
+                    switch result {
+                    case .failure(let err):
+                        done(.failure(err))
+                    case .success:
+                        self.setStatus("Unpacking \(client.label)...")
+                        done(Result { try Eaglercraft.installClient(client, version: version, fromZip: zip) })
+                    }
+                }
+            }
+        }
+        steps.append { done in
+            done(Result { try Eaglercraft.writeLandingPage(for: version) })
+        }
+        runSteps(steps, completion: completion)
+    }
+
+    private func downloadHangarPlugin(_ plugin: Eaglercraft.HangarPlugin, to serverDir: URL, completion: @escaping (Result<Void, Error>) -> Void) {
+        URLSession.shared.dataTask(with: Eaglercraft.hangarLatestURL(plugin.project)) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200..<300).contains(status),
+                  let version = data.flatMap({ String(data: $0, encoding: .utf8) })?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !version.isEmpty,
+                  let url = Eaglercraft.hangarDownloadURL(plugin.project, version: version) else {
+                completion(.failure(InstallerError.message("Couldn't find the latest \(plugin.label) release (HTTP \(status)).")))
+                return
+            }
+            self.downloadFile(url, to: serverDir.appendingPathComponent(plugin.path), completion: completion)
+        }.resume()
+    }
+
+    private func runSteps(_ steps: [(@escaping (Result<Void, Error>) -> Void) -> Void], completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let first = steps.first else {
+            completion(.success(()))
+            return
+        }
+        first { result in
+            switch result {
+            case .failure(let err):
+                completion(.failure(err))
+            case .success:
+                self.runSteps(Array(steps.dropFirst()), completion: completion)
+            }
         }
     }
 

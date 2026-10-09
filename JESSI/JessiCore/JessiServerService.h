@@ -12,6 +12,7 @@ FOUNDATION_EXPORT NSString *const JessiPumpkinLibraryFileName;
 @end
 
 @interface JessiServerService : NSObject
+@property (class, nonatomic, readonly) NSInteger activeGamePort;
 @property (nonatomic, assign, nullable) id<JessiServerServiceDelegate> delegate;
 @property (nonatomic, readonly, getter=isRunning) BOOL running;
 @property (nonatomic, readonly) BOOL stopWillCloseApp;

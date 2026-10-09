@@ -42,6 +42,9 @@ final class keepalivemgr: NSObject, CLLocationManagerDelegate {
 
     private override init() {
         super.init()
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(audiointerrupted(_:)), name: AVAudioSession.interruptionNotification, object: nil)
+        center.addObserver(self, selector: #selector(audioservicesreset), name: AVAudioSession.mediaServicesWereResetNotification, object: nil)
         locationmgr.delegate = self
         locationmgr.distanceFilter = CLLocationDistanceMax
         locationmgr.pausesLocationUpdatesAutomatically = false
@@ -95,19 +98,24 @@ final class keepalivemgr: NSObject, CLLocationManagerDelegate {
         case .location:
             let status = currentauthstat()
             switch status {
-            case .notDetermined, .authorizedWhenInUse:
-                locationmgr.requestAlwaysAuthorization()
             case .authorizedAlways:
                 locationmgr.startUpdatingLocation()
                 isrunning = true
+            case .notDetermined, .authorizedWhenInUse:
+                locationmgr.requestAlwaysAuthorization()
+                isrunning = keepaliveaudio()
             default:
-                stop()
+                isrunning = keepaliveaudio()
             }
         case .audio:
             isrunning = keepaliveaudio()
         case .trollstore:
             stop()
         }
+    }
+
+    var usesaudiofallback: Bool {
+        method == .location && currentauthstat() != .authorizedAlways
     }
 
     private func stop() {
@@ -126,24 +134,28 @@ final class keepalivemgr: NSObject, CLLocationManagerDelegate {
 
     private func handleauthchange(_ status: CLAuthorizationStatus) {
         NotificationCenter.default.post(name: Self.authchangednotif, object: nil)
-
-        guard method == .location else {
-            if UserDefaults.standard.bool(forKey: Self.enabledkey) {
-                start()
-            }
-            return
+        if status != .notDetermined, UserDefaults.standard.bool(forKey: Self.enabledkey) {
+            start()
         }
+    }
 
-        switch status {
-        case .authorizedAlways:
-            startifenabled()
-        case .denied, .restricted, .authorizedWhenInUse:
-            stop()
-        case .notDetermined:
-            break
-        @unknown default:
-            break
+    @objc private func audiointerrupted(_ note: Notification) {
+        guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
+        DispatchQueue.main.async { self.resumeaudioifneeded() }
+    }
+
+    @objc private func audioservicesreset() {
+        DispatchQueue.main.async {
+            self.audioplayer = nil
+            self.resumeaudioifneeded()
         }
+    }
+
+    private func resumeaudioifneeded() {
+        guard UserDefaults.standard.bool(forKey: Self.enabledkey),
+              method == .audio || usesaudiofallback else { return }
+        isrunning = keepaliveaudio()
     }
 
     func getteam() -> String? {
@@ -1112,7 +1124,7 @@ struct SettingsView: View {
     @AppStorage("jessi.server.running") private var serverRunning: Bool = false
     @AppStorage("jessi.tunnel.install.inProgress") private var tunnelinginstallinprogress: Bool = false
     @AppStorage("jessi.tunnel.install.queue") private var tunnelingInstallQueueCSV: String = ""
-    @AppStorage("jessi.upnp.ports") private var upnpPortsCSV: String = "25565"
+    @AppStorage("jessi.upnp.ports") private var upnpPortsCSV: String = ""
     @State private var keepaliveauthstat: CLAuthorizationStatus = keepalivemgr.shared.authstat
     @State private var showkeepalivepermprompt = false
 
@@ -1414,6 +1426,9 @@ struct SettingsView: View {
                 if !out.contains(value) { out.append(value) }
             }
         }
+        if out.isEmpty, JessiServerService.activeGamePort > 0 {
+            out.append(JessiServerService.activeGamePort)
+        }
         return out
     }
 
@@ -1485,7 +1500,7 @@ struct SettingsView: View {
                     FocusableDoneToolbarTextField(
                         text: $upnpPortsCSV,
                         isFirstResponder: $upnpPortsIsFirstResponder,
-                        placeholder: "25565,25575",
+                        placeholder: "Server port",
                         keyboardType: .numbersAndPunctuation,
                         textAlignment: .right,
                         font: .systemFont(ofSize: 16)
@@ -1897,7 +1912,11 @@ struct SettingsView: View {
                 Text("KeepAlive")
             } footer: {
                 if keepalivemethod == .location {
-                    Text("Requires 'Always' [Location permission.](app-settings:) Your location data will not be collected.")
+                    if keepalive && keepaliveauthstat != .authorizedAlways {
+                        Text("Location access isn't set to 'Always', so JESSI is playing silent audio to stay alive instead. To use location, allow 'Always' in [Settings.](app-settings:)")
+                    } else {
+                        Text("Requires 'Always' [Location permission.](app-settings:) Your location data will not be collected.")
+                    }
                 }
                 if keepalivemethod == .audio {
                     Text("Plays silent audio while the app is closed to keep it alive.")

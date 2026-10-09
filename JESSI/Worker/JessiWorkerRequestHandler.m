@@ -3,6 +3,7 @@
 #import <fcntl.h>
 #import <netinet/in.h>
 #import <pthread.h>
+#import <sys/resource.h>
 #import <sys/socket.h>
 #import <sys/stat.h>
 #import <sys/xattr.h>
@@ -65,6 +66,9 @@ static BOOL worker_connect(uint16_t port) {
     return YES;
 }
 
+static void worker_close_listening_sockets(int keepPort);
+static volatile int g_releasePortsOnHostClose = -1;
+
 static void *worker_read_commands(void *unused) {
     NSMutableData *buffer = [NSMutableData data];
     uint8_t chunk[4096];
@@ -89,6 +93,7 @@ static void *worker_read_commands(void *unused) {
             [g_commandsChanged unlock];
         }
     }
+    if (g_releasePortsOnHostClose >= 0) worker_close_listening_sockets(g_releasePortsOnHostClose);
     NSLog(@"[JESSI worker] host channel closed");
     [g_commandsChanged lock];
     NSMutableArray *queue = g_pendingCommands[@"host-closed"] ?: (g_pendingCommands[@"host-closed"] = [NSMutableArray array]);
@@ -231,52 +236,147 @@ static BOOL worker_wait_for_jit(void) {
 
 #pragma mark - Jobs
 
-static void worker_rcon_command(NSString *dir, NSString *command) {
+struct worker_proc_fdinfo {
+    int32_t proc_fd;
+    uint32_t proc_fdtype;
+};
+int proc_pidinfo(int pid, int flavor, uint64_t arg, void *buffer, int buffersize);
+
+#define WORKER_MAX_LISTENERS 32
+static int g_listenFDs[WORKER_MAX_LISTENERS];
+static int g_listenPorts[WORKER_MAX_LISTENERS];
+static int g_listenCount;
+static pthread_mutex_t g_listenLock = PTHREAD_MUTEX_INITIALIZER;
+
+static BOOL worker_listening_port(int fd, int *port) {
+    int type = 0;
+    socklen_t typeLength = sizeof(type);
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &type, &typeLength) != 0 || (type != SOCK_STREAM && type != SOCK_DGRAM)) return NO;
+    struct sockaddr_storage addr;
+    socklen_t addrLength = sizeof(addr);
+    if (getsockname(fd, (struct sockaddr *)&addr, &addrLength) != 0) return NO;
+    if (addr.ss_family == AF_INET) *port = ntohs(((struct sockaddr_in *)&addr)->sin_port);
+    else if (addr.ss_family == AF_INET6) *port = ntohs(((struct sockaddr_in6 *)&addr)->sin6_port);
+    else return NO;
+    if (*port == 0) return NO;
+    struct sockaddr_storage peer;
+    socklen_t peerLength = sizeof(peer);
+    return getpeername(fd, (struct sockaddr *)&peer, &peerLength) != 0 && errno == ENOTCONN;
+}
+
+static void worker_scan_listening_sockets(void) {
+    int foundFDs[WORKER_MAX_LISTENERS], foundPorts[WORKER_MAX_LISTENERS];
+    int found = 0;
+    int size = proc_pidinfo(getpid(), 1, 0, NULL, 0);
+    struct worker_proc_fdinfo *fds = size > 0 ? malloc((size_t)size) : NULL;
+    int count = fds ? proc_pidinfo(getpid(), 1, 0, fds, size) / (int)sizeof(struct worker_proc_fdinfo) : 0;
+    if (count > 0) {
+        for (int i = 0; i < count && found < WORKER_MAX_LISTENERS; i++) {
+            if (fds[i].proc_fdtype != 2) continue;
+            int port = 0;
+            if (!worker_listening_port(fds[i].proc_fd, &port)) continue;
+            foundFDs[found] = fds[i].proc_fd;
+            foundPorts[found++] = port;
+        }
+    } else {
+        struct rlimit limit = {0};
+        getrlimit(RLIMIT_NOFILE, &limit);
+        int maxFD = limit.rlim_cur > 0 && limit.rlim_cur < 16384 ? (int)limit.rlim_cur : 16384;
+        for (int fd = 0; fd < maxFD && found < WORKER_MAX_LISTENERS; fd++) {
+            int port = 0;
+            if (!worker_listening_port(fd, &port)) continue;
+            foundFDs[found] = fd;
+            foundPorts[found++] = port;
+        }
+    }
+    free(fds);
+    pthread_mutex_lock(&g_listenLock);
+    BOOL changed = found != g_listenCount;
+    memcpy(g_listenFDs, foundFDs, sizeof(int) * (size_t)found);
+    memcpy(g_listenPorts, foundPorts, sizeof(int) * (size_t)found);
+    g_listenCount = found;
+    pthread_mutex_unlock(&g_listenLock);
+    if (changed) {
+        NSMutableArray *ports = [NSMutableArray array];
+        for (int i = 0; i < found; i++) [ports addObject:@(foundPorts[i])];
+        NSLog(@"[JESSI worker] listening on %@", [ports componentsJoinedByString:@", "]);
+    }
+}
+
+static void worker_watch_listening_sockets(void) {
+    static dispatch_source_t timer;
+    timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
+    dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC), 2 * NSEC_PER_SEC, NSEC_PER_SEC / 2);
+    dispatch_source_set_event_handler(timer, ^{ worker_scan_listening_sockets(); });
+    dispatch_resume(timer);
+}
+
+static void worker_close_listening_sockets(int keepPort) {
+    int closed = 0;
+    int placeholder = open("/dev/null", O_RDONLY);
+    pthread_mutex_lock(&g_listenLock);
+    for (int i = 0; i < g_listenCount; i++) {
+        if (g_listenFDs[i] < 0 || (keepPort > 0 && g_listenPorts[i] == keepPort)) continue;
+        if ((placeholder >= 0 ? dup2(placeholder, g_listenFDs[i]) : close(g_listenFDs[i])) >= 0) closed++;
+        g_listenFDs[i] = -1;
+    }
+    pthread_mutex_unlock(&g_listenLock);
+    if (placeholder >= 0) close(placeholder);
+    NSLog(@"[JESSI worker] closed %d listening socket(s)", closed);
+}
+
+static void worker_rcon_command(NSString *dir, int port, NSString *command, void (^afterSending)(void)) {
     NSString *password = [[NSString stringWithContentsOfFile:[dir stringByAppendingPathComponent:@".jessi_rcon_password"] encoding:NSUTF8StringEncoding error:nil]
                           stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if (password.length == 0) {
-        NSLog(@"[JESSI worker] RCON: no password file in %@", dir);
-        return;
-    }
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) return;
+    int fd = password.length ? socket(AF_INET, SOCK_STREAM, 0) : -1;
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(25575);
+    addr.sin_port = htons((uint16_t)port);
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+    if (fd >= 0 && connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
         NSLog(@"[JESSI worker] RCON: connect failed (errno %d)", errno);
         close(fd);
+        fd = -1;
+    }
+    if (fd < 0) {
+        if (afterSending) afterSending();
         return;
     }
 
-    void (^sendPacket)(int32_t, int32_t, NSString *) = ^(int32_t requestID, int32_t type, NSString *payload) {
+    NSMutableData *packets = [NSMutableData data];
+    void (^appendPacket)(int32_t, int32_t, NSString *) = ^(int32_t requestID, int32_t type, NSString *payload) {
         NSData *body = [payload dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
         int32_t length = (int32_t)(10 + body.length);
-        NSMutableData *packet = [NSMutableData data];
-        [packet appendBytes:&length length:4];
-        [packet appendBytes:&requestID length:4];
-        [packet appendBytes:&type length:4];
-        [packet appendData:body];
-        [packet appendBytes:"\0\0" length:2];
-        send(fd, packet.bytes, packet.length, 0);
+        [packets appendBytes:&length length:4];
+        [packets appendBytes:&requestID length:4];
+        [packets appendBytes:&type length:4];
+        [packets appendData:body];
+        [packets appendBytes:"\0\0" length:2];
     };
-    sendPacket(1, 3, password);
+    appendPacket(1, 3, password);
+    appendPacket(2, 2, command);
+    send(fd, packets.bytes, packets.length, 0);
+    if (afterSending) afterSending();
+
+    struct timeval timeout = { .tv_sec = 10, .tv_usec = 0 };
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     uint8_t reply[4096];
-    ssize_t authReply = recv(fd, reply, sizeof(reply), 0);
-    sendPacket(2, 2, command);
-    ssize_t commandReply = recv(fd, reply, sizeof(reply), 0);
-    NSLog(@"[JESSI worker] RCON %@: auth reply %zd bytes, command reply %zd bytes", command, authReply, commandReply);
+    ssize_t received = recv(fd, reply, sizeof(reply), 0);
+    NSLog(@"[JESSI worker] RCON %@: reply %zd bytes", command, received);
     close(fd);
 }
 
 static int worker_run_server(NSDictionary *job) {
     if (!worker_wait_for_jit()) return 240;
     NSString *dir = job[@"dir"];
+    int rconPort = [job[@"rconPort"] intValue] ?: 25575;
+    g_releasePortsOnHostClose = rconPort;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         worker_wait_for_command(@[@"host-closed"], 0);
         NSLog(@"[JESSI worker] JESSI went away; stopping the server");
-        worker_rcon_command(dir, @"stop");
+        worker_rcon_command(dir, rconPort, @"stop", ^{
+            worker_close_listening_sockets(0);
+        });
     });
     char *argv[] = {
         strdup("--server"),
@@ -343,8 +443,12 @@ static int worker_run_pumpkin(NSDictionary *job) {
     PumpkinSetPromptFn setPrompt = (PumpkinSetPromptFn)dlsym(handle, "pumpkin_set_permission_prompt");
     if (setPrompt) setPrompt(worker_pumpkin_prompt);
 
+    g_releasePortsOnHostClose = 0;
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        worker_wait_for_command(@[@"stop", @"host-closed"], 0);
+        NSDictionary *command = worker_wait_for_command(@[@"stop", @"host-closed"], 0);
+        if ([command[@"cmd"] isEqual:@"host-closed"]) {
+            NSLog(@"[JESSI worker] JESSI went away; stopping Pumpkin");
+        }
         stop();
     });
 
@@ -434,6 +538,7 @@ void jessi_worker_run(NSDictionary *userInfo) {
 
     worker_install_exit_hooks();
     worker_watch_host_background();
+    worker_watch_listening_sockets();
     worker_hold_background_activity();
     worker_send(@{@"event": @"hello", @"token": userInfo[@"token"] ?: @"", @"pid": @(getpid())});
 

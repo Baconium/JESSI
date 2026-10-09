@@ -339,10 +339,6 @@ final class PlayitModel: ObservableObject {
     private var laststatuscode: PlayitStatusCode? = nil
     private var connectingsince: Date? = nil
     private var didwarnconnecting: Bool = false
-
-    /// On installs that run servers in worker processes, the agent gets its own worker too,
-    /// so JESSI's process never needs JIT. `workerstatus` is the latest status it reported.
-    /// Shared because the settings screen recreates this model; the agent process outlives any one screen.
     private static var agentworker: JessiWorker? = nil
     private static var agentstatus: (code: Int32, address: String?, error: String?)? = nil
     private static weak var activemodel: PlayitModel?
@@ -360,14 +356,10 @@ final class PlayitModel: ObservableObject {
             .path
     }
 
-    /// The library is only ad-hoc signed, which iOS refuses to load unless JESSI's dyld signature workaround is active.
-    /// That workaround normally comes up when a JVM launches, so start it here too.
     private func openlibrary() -> UnsafeMutableRawPointer? {
         if JITEnabler.isJITUsable {
             return jessi_dlopen_with_dyld_bypass(libraryPath, RTLD_NOW)
         }
-        // a refused plain load still leaves the signature registered, which breaks loading it later once jit is on,
-        // so only try it where it can actually work
         guard jessi_has_trollstore_privileges() || jessi_is_running_on_macos() else { return nil }
         return dlopen(libraryPath, RTLD_NOW)
     }

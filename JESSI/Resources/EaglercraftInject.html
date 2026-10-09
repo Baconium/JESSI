@@ -1,0 +1,24 @@
+<script type="text/javascript">
+"use strict";
+(function () {
+	var params = new URLSearchParams(location.search);
+	var addr = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/";
+	var name = params.get("name") || "JESSI Server";
+	var join = params.get("join") !== "0";
+	function patch(opts, legacy) {
+		if (!opts || typeof opts !== "object") return opts;
+		var entry = legacy ? { serverName: name, serverAddress: addr, hideAddress: false } : { addr: addr, name: name, hideAddr: false };
+		opts.servers = [entry].concat(Array.isArray(opts.servers) ? opts.servers : []);
+		if (join) opts.joinServer = addr;
+		return opts;
+	}
+	[["eaglercraftXOpts", false], ["eaglercraftXOptsHints", false], ["eaglercraftOpts", true]].forEach(function (item) {
+		var value;
+		Object.defineProperty(window, item[0], {
+			configurable: true,
+			get: function () { return value; },
+			set: function (v) { value = patch(v, item[1]); }
+		});
+	});
+})();
+</script>

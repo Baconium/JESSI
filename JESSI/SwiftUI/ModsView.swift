@@ -605,10 +605,11 @@ final class ModsVM: ObservableObject {
         case quilt
         case paper
         case pumpkin
+        case eaglercraft
         case custom
     }
 
-    var isPluginServer: Bool { parsedserversoft() == .paper || isPumpkinServer }
+    var isPluginServer: Bool { [.paper, .eaglercraft].contains(parsedserversoft()) || isPumpkinServer }
     var isPumpkinServer: Bool { parsedserversoft() == .pumpkin }
     var usesPumpkinMarket: Bool { isPumpkinServer && contentType == .plugin }
 
@@ -643,6 +644,8 @@ final class ModsVM: ObservableObject {
             return .paper
         case "pumpkin":
             return .pumpkin
+        case "eaglercraft":
+            return .eaglercraft
         case "custom", "custom jar":
             return .custom
         default:
