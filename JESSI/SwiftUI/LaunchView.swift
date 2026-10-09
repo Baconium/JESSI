@@ -123,14 +123,6 @@ final class LaunchModel: NSObject, ObservableObject {
         }
         updatePropertiesManager()
     }
-    
-    var eaglercraftLinks: [Eaglercraft.Link]? {
-        guard !selectedServer.isEmpty else { return nil }
-        let path = (service.serversRoot() as NSString).appendingPathComponent(selectedServer)
-        guard Eaglercraft.isEaglercraftServer(at: path) else { return nil }
-        return Eaglercraft.browserLinks(for: path)
-    }
-
 
     private func updatePropertiesManager() {
         if !selectedServer.isEmpty {
@@ -903,11 +895,6 @@ struct LaunchView: View {
                 .cornerRadius(16)
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
-
-                if let links = model.eaglercraftLinks {
-                    EaglercraftLinksCard(links: links, isRunning: model.isRunning)
-                        .padding(.horizontal, 16)
-                }
 
                 HStack {
                     Text("Console")
