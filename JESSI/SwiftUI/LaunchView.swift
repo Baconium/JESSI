@@ -78,7 +78,11 @@ private struct ImagePicker: UIViewControllerRepresentable {
 
 final class LaunchModel: NSObject, ObservableObject {
     @Published var servers: [String] = []
-    @Published var selectedServer: String = ""
+    @Published var selectedServer: String = "" {
+        didSet {
+            if selectedServer != oldValue { updatePropertiesManager() }
+        }
+    }
     @Published var isRunning: Bool = false
     @Published var isPreparingResourcePack: Bool = false
     @Published var isEnablingJIT: Bool = false
@@ -232,7 +236,7 @@ final class LaunchModel: NSObject, ObservableObject {
 
         let available = JessiSettings.availableJavaVersions()
         if available.isEmpty {
-            activeAlert = .runtime("Please install a JVM in settings before launching your server. Newer Minecraft releases need Java 25.")
+            activeAlert = .runtime("You must install a JVM before attempting to start a server!")
             return
         }
 
@@ -249,7 +253,7 @@ final class LaunchModel: NSObject, ObservableObject {
         } else {
             let selectedJava = JessiSettings.shared().javaVersion
             if !available.contains(selectedJava) {
-                activeAlert = .runtime("Your selected Java version (Java \(selectedJava)) is not installed. Please install it or pick a different version in settings.")
+                activeAlert = .runtime("Your selected Java version (Java \(selectedJava)) is not installed.")
                 return
             }
         }
@@ -368,7 +372,6 @@ final class LaunchModel: NSObject, ObservableObject {
         if atLeast(mc, "26.0") { return "25" }
         if atLeast(mc, "1.20.5") { return "21" }
         if atLeast(mc, "1.17") { return "17" }
-        if jessi_is_ios26_or_later() { return "17" }
         return "8"
     }
 
