@@ -25,6 +25,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: generate short commit sha
+        uses: step-security/short-sha@v3
+
+      - name: update version displayed in settings
+        run: sed -i '' 's/"-stable"/"-nightly+${{ env.SHA }}"/g' JESSI/SwiftUI/SettingsView.swift
+
       - name: select xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:

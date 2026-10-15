@@ -296,6 +296,8 @@ final class SettingsModel: ObservableObject {
     @Published var heapMB: Int = 128
     @Published var flagNettyNoNative: Bool = true
     @Published var flagJnaNoSys: Bool = false
+    @Published var appVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as! String + "-stable"
+    @Published var isCopyingVersion: Bool = false
     @Published var isJITEnabled: Bool = false
     @Published var totalRAM: String = ""
     @Published var freeRAM: String = ""
@@ -1928,6 +1930,20 @@ struct SettingsView: View {
 
             Section(header: Text("System")) {
                 HStack {
+                    Text("Version")
+                    Spacer()
+                    Text(model.isCopyingVersion ? "Copied!" : model.appVersion)
+                        .foregroundColor(model.isCopyingVersion ? .green : .primary)
+                }
+                .onTapGesture {
+                    model.isCopyingVersion = true
+                    UIPasteboard.general.string = model.appVersion
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        model.isCopyingVersion = false
+                    }
+                }
+                .normalizedSeparator()
+                HStack {
                     Text("JIT Enabled")
                     Spacer()
                     if JessiWorkerHost.shouldUseWorkers {
@@ -2003,7 +2019,7 @@ struct SettingsView: View {
                     Text(model.freeRAM)
                         .foregroundColor(infostatuscolor())
                 }
-                .normalizedSeparator()               
+                .normalizedSeparator()
                 HStack {
                     Text("Local IP")
                     Spacer()
