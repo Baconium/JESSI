@@ -31,11 +31,6 @@ struct CreateServerView: View {
     @State private var versionFetchGeneration: Int = 0
     @State private var pumpkinBuilds: [String: URL] = [:]
 
-    @State private var showSoftwareMenu: Bool = false
-    @State private var showVersionMenu: Bool = false
-    @State private var softwareAnchorFrame: CGRect = .zero
-    @State private var versionAnchorFrame: CGRect = .zero
-
     @State private var showingIconImporter: Bool = false
     @State private var showingJarImporter: Bool = false
 
@@ -75,10 +70,6 @@ struct CreateServerView: View {
     @State private var jvmInstaller: SettingsModel? = nil
 
     @Environment(\.presentationMode) private var presentation
-
-    private var menuAnimation: Animation {
-        .spring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.12)
-    }
 
     private struct DocumentPicker: UIViewControllerRepresentable {
         let contentTypes: [UTType]
@@ -159,23 +150,17 @@ struct CreateServerView: View {
         ZStack(alignment: .bottom) {
             List {
                 Section(header: Text("Required Settings")) {
-                    Button(action: {
-                        withAnimation(menuAnimation) {
-                            showVersionMenu = false
-                            showSoftwareMenu = true
+                    Menu {
+                        Picker("Software", selection: $software) {
+                            ForEach(ServerSoftwareSwift.allCases) { s in
+                                Text(s.rawValue).tag(s)
+                            }
                         }
-                    }) {
-                        HStack {
-                            Text("Software")
-                                .foregroundColor(.primary)
-                            Spacer()
-                            Text(software.rawValue)
-                                .foregroundColor(.green)
-                        }
-                        .contentShape(Rectangle())
+                        .pickerStyle(InlinePickerStyle())
+                    } label: {
+                        MenuRowLabel(title: "Software", value: software.rawValue)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .background(FrameReporter(id: "software"))
+                    .modifier(FixedMenuOrder())
                     .accessibilityLabel(Text("Software"))
                     .accessibilityValue(Text(software.rawValue))
                     .normalizedSeparator()
@@ -209,18 +194,30 @@ struct CreateServerView: View {
                             }
                             .normalizedSeparator()
                         } else {
-                            Button(action: { openVersionMenu() }) {
-                                HStack {
-                                    Text("Minecraft Version")
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    Text(mcVersion.isEmpty ? "Select..." : mcVersion)
-                                        .foregroundColor(.green)
+                            Menu {
+                                if availableVersions.isEmpty {
+                                    Button(action: {}) {
+                                        Text("No versions loaded")
+                                    }
+                                    .disabled(true)
+                                    Button(action: {
+                                        versionFetchError = nil
+                                        fetchVersions(force: true)
+                                    }) {
+                                        Label("Retry", systemImage: "arrow.clockwise")
+                                    }
+                                } else {
+                                    Picker("Minecraft Version", selection: $mcVersion) {
+                                        ForEach(Array(availableVersions.prefix(400)), id: \.self) { v in
+                                            Text(v).tag(v)
+                                        }
+                                    }
+                                    .pickerStyle(InlinePickerStyle())
                                 }
-                                .contentShape(Rectangle())
+                            } label: {
+                                MenuRowLabel(title: "Minecraft Version", value: mcVersion.isEmpty ? "Select..." : mcVersion)
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .background(FrameReporter(id: "version"))
+                            .modifier(FixedMenuOrder())
                             .normalizedSeparator()
                         }
                         if let err = versionFetchError {
@@ -229,12 +226,7 @@ struct CreateServerView: View {
                                 .foregroundColor(.secondary)
                                 .normalizedSeparator()
                         }
-                        if software == .eaglercraft {
-                            Text("Players can join from a web browser: start the server, then open the link shown on the Launch tab. Java Edition players can join too. The first Eaglercraft server for each version also downloads the browser game for it (about 25 MB for 1.8.8, 45 MB for 1.12.2).")
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                                .normalizedSeparator()
-                        }
+                        
                     }
 
                 }
@@ -396,6 +388,26 @@ struct CreateServerView: View {
             Color.clear.frame(width: 0, height: 0)
                 .alert(isPresented: $showJVMInstallPrompt) {
                     let canDefer = software != .forge && software != .neoforge
+                    if ProcessInfo.processInfo.isMacCatalystApp {
+                        let message = "This server needs Java \(missingJVMVersion), which isn't installed on this Mac. Install a Java \(missingJVMVersion) JDK (for example Eclipse Temurin), then try again."
+                        if canDefer {
+                            return Alert(
+                                title: Text("Java \(missingJVMVersion) Required"),
+                                message: Text(message),
+                                primaryButton: .default(Text("Create Anyway")) {
+                                    skipJVMCheck = true
+                                    createServerConfirmed()
+                                    skipJVMCheck = false
+                                },
+                                secondaryButton: .cancel()
+                            )
+                        }
+                        return Alert(
+                            title: Text("Java \(missingJVMVersion) Required"),
+                            message: Text(message),
+                            dismissButton: .default(Text("OK"))
+                        )
+                    }
                     return Alert(
                         title: Text("Java \(missingJVMVersion) Required"),
                         message: Text(canDefer
@@ -422,30 +434,6 @@ struct CreateServerView: View {
         .onChange(of: seed) { newSeed in
             maybeShowSeedEasterEgg(for: newSeed)
         }
-        .onPreferenceChange(FramePreferenceKey.self) { frames in
-            if let f = frames["software"] { self.softwareAnchorFrame = f }
-            if let f = frames["version"] { self.versionAnchorFrame = f }
-        }
-        .overlay(
-            Group {
-                if showSoftwareMenu {
-                    DropdownOverlay(
-                        isPresented: $showSoftwareMenu,
-                        anchorFrame: softwareAnchorFrame,
-                        items: softwareDropdownItems,
-                        maxVisibleRows: 5.5
-                    )
-                }
-                if showVersionMenu {
-                    DropdownOverlay(
-                        isPresented: $showVersionMenu,
-                        anchorFrame: versionAnchorFrame,
-                        items: versionDropdownItems,
-                        maxVisibleRows: 5.5
-                    )
-                }
-            }
-        )
         .onAppear {
             ensureBaseDirectories()
             if software != .customJar {
@@ -550,70 +538,31 @@ struct CreateServerView: View {
         }
     }
 
-    private var softwareDropdownItems: [DropdownItem] {
-        ServerSoftwareSwift.allCases.map { s in
-            DropdownItem(
-                id: s.rawValue,
-                title: s.rawValue,
-                isSelected: s == software,
-                isEnabled: true,
-                systemImage: nil,
-                tint: nil,
-                action: {
-                    software = s
-                }
-            )
+    private struct MenuRowLabel: View {
+        let title: String
+        let value: String
+
+        var body: some View {
+            HStack {
+                Text(title)
+                    .foregroundColor(.primary)
+                Spacer()
+                Text(value)
+                    .foregroundColor(.green)
+                    .lineLimit(1)
+            }
+            .contentShape(Rectangle())
         }
     }
 
-    private var versionDropdownItems: [DropdownItem] {
-        var items: [DropdownItem] = []
-
-        if loadingVersions {
-            items.append(
-                DropdownItem(
-                    id: "loading",
-                    title: "Loading...",
-                    isSelected: false,
-                    isEnabled: false,
-                    systemImage: nil,
-                    tint: .secondary,
-                    action: { }
-                )
-            )
+    private struct FixedMenuOrder: ViewModifier {
+        func body(content: Content) -> some View {
+            if #available(iOS 16.0, *) {
+                content.menuOrder(.fixed)
+            } else {
+                content
+            }
         }
-
-        for v in availableVersions.prefix(400) {
-            items.append(
-                DropdownItem(
-                    id: v,
-                    title: v,
-                    isSelected: v == mcVersion,
-                    isEnabled: true,
-                    systemImage: nil,
-                    tint: nil,
-                    action: {
-                        mcVersion = v
-                    }
-                )
-            )
-        }
-
-        if availableVersions.isEmpty, !loadingVersions {
-            items.append(
-                DropdownItem(
-                    id: "empty",
-                    title: "No versions loaded",
-                    isSelected: false,
-                    isEnabled: false,
-                    systemImage: nil,
-                    tint: .secondary,
-                    action: { }
-                )
-            )
-        }
-
-        return items
     }
 
     private struct QuickSettingValueRow: View {
@@ -723,186 +672,6 @@ struct CreateServerView: View {
     private func serversRoot() -> String {
         let docs = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first ?? ""
         return (docs as NSString).appendingPathComponent("servers")
-    }
-
-    private func openVersionMenu() {
-        versionFetchError = nil
-
-        if showVersionMenu {
-            withAnimation(menuAnimation) {
-                showVersionMenu = false
-            }
-            return
-        }
-
-        if availableVersions.isEmpty {
-            fetchVersions(force: true) {
-                withAnimation(menuAnimation) {
-                    showSoftwareMenu = false
-                    showVersionMenu = true
-                }
-            }
-        } else {
-            withAnimation(menuAnimation) {
-                showSoftwareMenu = false
-                showVersionMenu = true
-            }
-        }
-    }
-
-    private struct DropdownItem: Identifiable {
-        let id: String
-        let title: String
-        let isSelected: Bool
-        let isEnabled: Bool
-        let systemImage: String?
-        let tint: Color?
-        let action: () -> Void
-    }
-
-    private struct FramePreferenceKey: PreferenceKey {
-        static var defaultValue: [String: CGRect] = [:]
-        static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
-            value.merge(nextValue(), uniquingKeysWith: { _, new in new })
-        }
-    }
-
-    private struct FrameReporter: View {
-        let id: String
-        var body: some View {
-            GeometryReader { proxy in
-                Color.clear
-                    .preference(key: FramePreferenceKey.self, value: [id: proxy.frame(in: .global)])
-            }
-        }
-    }
-
-    private struct DropdownOverlay: View {
-        @Binding var isPresented: Bool
-        let anchorFrame: CGRect
-        let items: [DropdownItem]
-        let maxVisibleRows: Double
-
-        @State private var menuVisible: Bool = false
-
-        private let rowHeight: CGFloat = 44
-        private let maxWidth: CGFloat = 280
-        private let minWidth: CGFloat = 220
-        private let edgePadding: CGFloat = 12
-        private let verticalGap: CGFloat = 4
-        private let proximityAdjust: CGFloat = 100
-
-        private func resolvedAnchor(in screen: CGRect) -> CGRect {
-            if anchorFrame == .zero {
-                return CGRect(x: screen.midX, y: screen.midY, width: 0, height: 0)
-            }
-            return anchorFrame
-        }
-
-        private func animateIn() {
-            withAnimation(.spring(response: 0.28, dampingFraction: 0.88, blendDuration: 0.12)) {
-                menuVisible = true
-            }
-        }
-
-        private func dismiss() {
-            withAnimation(.spring(response: 0.22, dampingFraction: 0.92, blendDuration: 0.10)) {
-                menuVisible = false
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-                isPresented = false
-            }
-        }
-
-        var body: some View {
-            let screen = UIScreen.main.bounds
-            let anchor = resolvedAnchor(in: screen)
-            let preferred = max(minWidth, min(maxWidth, anchor.width * 0.62))
-            let width = min(preferred, screen.width - (edgePadding * 2))
-            let visibleRows = min(CGFloat(maxVisibleRows), CGFloat(max(items.count, 1)))
-            let menuHeight = max(rowHeight, visibleRows * rowHeight)
-
-            let x = min(max(anchor.maxX - (width / 2), (width / 2) + edgePadding), screen.width - (width / 2) - edgePadding)
-
-            let belowCenterY = anchor.maxY + (menuHeight / 2) + verticalGap - proximityAdjust
-            let aboveCenterY = anchor.minY - (menuHeight / 2) - verticalGap + proximityAdjust
-            let canFitBelow = (belowCenterY + (menuHeight / 2)) <= (screen.height - edgePadding)
-            let y: CGFloat = canFitBelow
-                ? belowCenterY
-                : max(aboveCenterY, (menuHeight / 2) + edgePadding)
-
-            return ZStack {
-                Color.black.opacity(0.001)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        dismiss()
-                    }
-
-                Rectangle()
-                    .fill(Color.black.opacity(0.001))
-                    .frame(width: anchor.width, height: anchor.height)
-                    .position(x: anchor.midX, y: anchor.midY)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        dismiss()
-                    }
-
-                VStack(spacing: 0) {
-                    ScrollView {
-                        LazyVStack(spacing: 0) {
-                            ForEach(items) { item in
-                                Button(action: {
-                                    item.action()
-                                    dismiss()
-                                }) {
-                                    HStack(spacing: 10) {
-                                        if let img = item.systemImage {
-                                            Image(systemName: img)
-                                                .foregroundColor(item.tint ?? .primary)
-                                        }
-
-                                        Text(item.title)
-                                            .foregroundColor(item.tint ?? .primary)
-                                            .lineLimit(1)
-
-                                        Spacer(minLength: 10)
-
-                                        if item.isSelected {
-                                            Image(systemName: "checkmark")
-                                                .foregroundColor(.green)
-                                        }
-                                    }
-                                    .padding(.horizontal, 14)
-                                    .frame(height: rowHeight)
-                                    .contentShape(Rectangle())
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .disabled(!item.isEnabled)
-
-                                Divider().background(Color(UIColor.separator))
-                            }
-                        }
-                    }
-                    .frame(maxHeight: CGFloat(maxVisibleRows) * rowHeight)
-                }
-                .frame(width: width)
-                .background(
-                    Color(UIColor.secondarySystemBackground)
-                        .overlay(Color(UIColor.systemBackground).opacity(0.06))
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(Color.black.opacity(0.07), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.16), radius: 18, x: 0, y: 10)
-                .scaleEffect(menuVisible ? 1 : 0.01, anchor: .topTrailing)
-                .opacity(menuVisible ? 1 : 0)
-                .position(x: x, y: y)
-                .onAppear { animateIn() }
-            }
-        }
     }
 
     private func normalizeIcon(_ img: UIImage) -> UIImage {
@@ -1456,6 +1225,7 @@ struct CreateServerView: View {
         let missing = Eaglercraft.missingClients(for: version)
         for (index, client) in missing.enumerated() {
             steps.append { done in
+                if Eaglercraft.splitInstalledClient(client, version: version) { return done(.success(())) }
                 self.setStatus("Downloading \(client.label) (\(index + 1)/\(missing.count))...")
                 let zip = FileManager.default.temporaryDirectory.appendingPathComponent("eaglercraft-\(UUID().uuidString).zip")
                 self.downloadFile(client.url, to: zip) { result in

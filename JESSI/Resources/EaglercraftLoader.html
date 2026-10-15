@@ -1,0 +1,77 @@
+<html>
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="https://baconium.dev/styles.css">
+<style>.bar { text-align: left; display: inline-block; height: 12px; border: 3px solid #333; border-radius: 12px; overflow: hidden; margin: 16px 0; width: 450px; max-width: 80%; } .fill { height: 100%; width: 0; background: #4caf50; }</style>
+<body>
+<main>
+<center>
+<h2>Loading {{TITLE}}</h2>
+<div class="bar"><div class="fill" id="fill"></div></div>
+<p id="status">Starting...</p>
+</center>
+</main>
+<script>
+"use strict";
+(function () {
+	var base = "{{PARTS}}/", tag = "{{TAG}}", total = {{SIZE}}, partSize = {{PART_SIZE}};
+	var count = Math.ceil(total / partSize), parts = [], loaded = [], next = 0, done = 0, failed = false;
+	var fill = document.getElementById("fill"), status = document.getElementById("status");
+	for (var i = 0; i < count; i++) loaded.push(0);
+
+	function mb(n) { return (n / 1048576).toFixed(1); }
+	function progress() {
+		var sum = 0;
+		for (var i = 0; i < count; i++) sum += loaded[i];
+		fill.style.width = (sum / total * 100).toFixed(1) + "%";
+		status.textContent = mb(sum) + " / " + mb(total) + " MB";
+	}
+	function fail(message) {
+		failed = true;
+		status.textContent = message;
+	}
+	function load(index, attempt) {
+		var expected = Math.min(partSize, total - index * partSize);
+		var xhr = new XMLHttpRequest();
+		xhr.open("GET", base + index + ".txt?v=" + tag);
+		xhr.responseType = "arraybuffer";
+		xhr.onprogress = function (e) {
+			loaded[index] = Math.min(e.loaded, expected);
+			progress();
+		};
+		xhr.onloadend = function () {
+			if (failed) return;
+			if (xhr.status === 200 && xhr.response && xhr.response.byteLength === expected) {
+				parts[index] = xhr.response;
+				loaded[index] = expected;
+				progress();
+				done++;
+				if (done === count) return finish();
+				return start();
+			}
+			loaded[index] = 0;
+			if (attempt >= 5) return fail("Couldn't load Eaglercraft (HTTP " + xhr.status + "). Reload the page and try again.");
+			setTimeout(function () { load(index, attempt + 1); }, 1000 * attempt);
+		};
+		xhr.send();
+	}
+	function start() {
+		if (next < count) load(next++, 1);
+	}
+	function finish() {
+		status.textContent = "Starting Eaglercraft...";
+		var reader = new FileReader();
+		reader.onload = function () {
+			parts = null;
+			document.open();
+			document.write(reader.result);
+			document.close();
+		};
+		reader.onerror = function () { fail("Eaglercraft failed to start. Try reloading the page!"); };
+		reader.readAsText(new Blob(parts, { type: "text/html" }), "utf-8");
+	}
+
+	for (var n = 0; n < 4; n++) start();
+})();
+</script>
+</body>
+</html>

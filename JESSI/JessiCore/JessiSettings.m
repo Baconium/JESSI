@@ -1,5 +1,8 @@
 #import "JessiSettings.h"
 #import "JessiPaths.h"
+#import <stdio.h>
+
+bool jessi_is_running_on_macos(void);
 
 static NSString *const kJessiJavaVersion = @"jessi.javaVersion";
 static NSString *const kJessiMaxHeapMB = @"jessi.maxHeapMB";
@@ -23,7 +26,58 @@ static NSString *const kJessiDisableSeparateJVMProcessOnTrollStore = @"jessi.jvm
     return s;
 }
 
++ (NSArray<NSString *> *)systemJavaVersions {
+    static NSArray<NSString *> *cached;
+    static CFAbsoluteTime cachedAt;
+    static NSLock *lock;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ lock = [NSLock new]; });
+
+    [lock lock];
+    if (cached && CFAbsoluteTimeGetCurrent() - cachedAt < 10) {
+        NSArray<NSString *> *result = cached;
+        [lock unlock];
+        return result;
+    }
+    [lock unlock];
+
+    NSMutableData *data = [NSMutableData data];
+    FILE *fp = popen("/usr/libexec/java_home -X 2>/dev/null", "r");
+    if (fp) {
+        char buf[4096];
+        size_t n;
+        while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) [data appendBytes:buf length:n];
+        pclose(fp);
+    }
+
+    NSMutableArray<NSString *> *found = [NSMutableArray array];
+    id jvms = data.length ? [NSPropertyListSerialization propertyListWithData:data options:0 format:NULL error:nil] : nil;
+    if ([jvms isKindOfClass:[NSArray class]]) {
+        for (id jvm in (NSArray *)jvms) {
+            NSString *version = [jvm isKindOfClass:[NSDictionary class]] ? ((NSDictionary *)jvm)[@"JVMVersion"] : nil;
+            if (![version isKindOfClass:[NSString class]]) continue;
+            NSArray<NSString *> *parts = [version componentsSeparatedByString:@"."];
+            NSString *major = ([parts.firstObject isEqualToString:@"1"] && parts.count > 1) ? parts[1] : parts.firstObject;
+            if ([@[@"8", @"17", @"21", @"25"] containsObject:major] && ![found containsObject:major]) {
+                [found addObject:major];
+            }
+        }
+    }
+
+    NSArray<NSString *> *sorted = [found sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        return [@(a.integerValue) compare:@(b.integerValue)];
+    }];
+
+    [lock lock];
+    cached = sorted;
+    cachedAt = CFAbsoluteTimeGetCurrent();
+    [lock unlock];
+    return sorted;
+}
+
 + (NSArray<NSString *> *)availableJavaVersions {
+    if (jessi_is_running_on_macos()) return [self systemJavaVersions];
+
     NSMutableArray<NSString *> *available = [NSMutableArray array];
     NSBundle *b = [NSBundle mainBundle];
     NSString *bundleRoot = b.bundlePath;

@@ -523,6 +523,88 @@ static int worker_run_playit(NSDictionary *job) {
     }
 }
 
+typedef int (*CloudflaredRunFn)(int argc, char **argv);
+typedef void (*CloudflaredStopFn)(void);
+
+static void worker_post_command(NSString *name) {
+    [g_commandsChanged lock];
+    NSMutableArray *queue = g_pendingCommands[name] ?: (g_pendingCommands[name] = [NSMutableArray array]);
+    [queue addObject:@{@"cmd": name}];
+    [g_commandsChanged broadcast];
+    [g_commandsChanged unlock];
+}
+
+static void *worker_forward_output(void *context) {
+    int fd = (int)(intptr_t)context;
+    NSMutableData *buffer = [NSMutableData data];
+    char chunk[4096];
+    ssize_t n;
+    while ((n = read(fd, chunk, sizeof(chunk))) > 0) {
+        [buffer appendBytes:chunk length:(NSUInteger)n];
+        while (1) {
+            const char *bytes = buffer.bytes;
+            const char *newline = memchr(bytes, '\n', buffer.length);
+            if (!newline) break;
+            NSUInteger length = (NSUInteger)(newline - bytes);
+            NSString *line = [[NSString alloc] initWithBytes:bytes length:length encoding:NSUTF8StringEncoding];
+            [buffer replaceBytesInRange:NSMakeRange(0, length + 1) withBytes:NULL length:0];
+            if (line.length) worker_send(@{@"event": @"log", @"message": [line stringByAppendingString:@"\n"]});
+        }
+    }
+    close(fd);
+    return NULL;
+}
+
+static void worker_capture_output(void) {
+    int fds[2];
+    if (pipe(fds) != 0) return;
+    dup2(fds[1], STDOUT_FILENO);
+    dup2(fds[1], STDERR_FILENO);
+    close(fds[1]);
+    pthread_t reader;
+    pthread_create(&reader, NULL, worker_forward_output, (void *)(intptr_t)fds[0]);
+    pthread_detach(reader);
+}
+
+static int worker_run_cloudflared(NSDictionary *job) {
+    if (!worker_wait_for_jit()) return 240;
+    NSString *library = job[@"library"];
+    void *handle = jessi_dlopen_with_dyld_bypass(library.fileSystemRepresentation, RTLD_NOW);
+    if (!handle) {
+        const char *err = dlerror();
+        worker_send(@{@"event": @"error", @"message": [NSString stringWithFormat:@"Failed to load the Cloudflare library: %s", err ?: "unknown error"]});
+        return 254;
+    }
+    CloudflaredRunFn run = (CloudflaredRunFn)dlsym(handle, "cloudflared_run");
+    CloudflaredStopFn stop = (CloudflaredStopFn)dlsym(handle, "cloudflared_stop");
+    if (!run || !stop) {
+        worker_send(@{@"event": @"error", @"message": @"The Cloudflare library is missing cloudflared_run/cloudflared_stop"});
+        return 254;
+    }
+
+    worker_capture_output();
+    NSArray *args = [job[@"args"] isKindOfClass:[NSArray class]] ? job[@"args"] : @[];
+    int argc = (int)args.count;
+    char **argv = calloc((size_t)argc + 1, sizeof(char *));
+    for (int i = 0; i < argc; i++) argv[i] = strdup([args[i] description].UTF8String);
+
+    __block int result = 0;
+    NSThread *thread = [[NSThread alloc] initWithBlock:^{
+        result = run(argc, argv);
+        worker_post_command(@"cloudflared-exited");
+    }];
+    thread.name = @"JESSI.cloudflared";
+    thread.stackSize = 8 << 20;
+    [thread start];
+
+    NSDictionary *command = worker_wait_for_command(@[@"stop", @"host-closed", @"cloudflared-exited"], 0);
+    if (![command[@"cmd"] isEqualToString:@"cloudflared-exited"]) {
+        stop();
+        worker_wait_for_command(@[@"cloudflared-exited"], 15);
+    }
+    return result;
+}
+
 void jessi_worker_run(NSDictionary *userInfo) {
     g_pendingCommands = [NSMutableDictionary dictionary];
     g_commandsChanged = [NSCondition new];
@@ -562,6 +644,7 @@ void jessi_worker_run(NSDictionary *userInfo) {
     else if ([type isEqualToString:@"tool"]) code = worker_run_tool(job);
     else if ([type isEqualToString:@"pumpkin"]) code = worker_run_pumpkin(job);
     else if ([type isEqualToString:@"playit"]) code = worker_run_playit(job);
+    else if ([type isEqualToString:@"cloudflared"]) code = worker_run_cloudflared(job);
     else {
         worker_send(@{@"event": @"error", @"message": [NSString stringWithFormat:@"Unknown worker job \"%@\"", type]});
         code = 2;

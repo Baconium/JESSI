@@ -30,9 +30,6 @@
 		B1C0F700A1B2C3D4E5F60046 /* RemoteImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60022 /* RemoteImage.swift */; };
 		B1C0F700A1B2C3D4E5F60047 /* TunnelingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60023 /* TunnelingView.swift */; };
 		B1C0F700A1B2C3D4E5F60048 /* UniversalJIT26Extension.js in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60024 /* UniversalJIT26Extension.js */; };
-		B1C0F700A1B2C3D4E5F60711 /* EaglercraftIndex.html in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60701 /* EaglercraftIndex.html */; };
-		B1C0F700A1B2C3D4E5F60712 /* EaglercraftInject.html in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60702 /* EaglercraftInject.html */; };
-		B1C0F700A1B2C3D4E5F60713 /* EaglercraftSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60703 /* EaglercraftSupport.swift */; };
 		B1C0F700A1B2C3D4E5F60049 /* DeviceNames.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60025 /* DeviceNames.swift */; };
 		B1C0F700A1B2C3D4E5F60051 /* ServerProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60050 /* ServerProperties.swift */; };
 		B1C0F700A1B2C3D4E5F60091 /* ResourcePacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60090 /* ResourcePacks.swift */; };
@@ -60,13 +57,19 @@
 		B1C0F700A1B2C3D4E5F60420 /* JessiWorkerHost.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60406 /* JessiWorkerHost.m */; };
 		B1C0F700A1B2C3D4E5F60421 /* JESSIWorker.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60404 /* JESSIWorker.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B1C0F700A1B2C3D4E5F60422 /* JessiWorkerEntry.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60407 /* JessiWorkerEntry.m */; };
-		B1C0F700A1B2C3D4E5F60611 /* JessiWorkerPayload.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60601 /* JessiWorkerPayload.m */; };
-		B1C0F700A1B2C3D4E5F60612 /* JessiWorkerCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */; };
-		B1C0F700A1B2C3D4E5F60613 /* JessiWorkerCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B1C0F700A1B2C3D4E5F60511 /* JITSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60501 /* JITSession.swift */; };
 		B1C0F700A1B2C3D4E5F60512 /* JessiJIT.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */; };
 		B1C0F700A1B2C3D4E5F60513 /* JessiJIT.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B1C0F700A1B2C3D4E5F60514 /* JessiJIT.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */; platformFilter = ios; };
+		B1C0F700A1B2C3D4E5F60611 /* JessiWorkerPayload.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60601 /* JessiWorkerPayload.m */; };
+		B1C0F700A1B2C3D4E5F60612 /* JessiWorkerCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */; };
+		B1C0F700A1B2C3D4E5F60613 /* JessiWorkerCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		B1C0F700A1B2C3D4E5F60711 /* EaglercraftIndex.html in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60701 /* EaglercraftIndex.html */; };
+		B1C0F700A1B2C3D4E5F60712 /* EaglercraftInject.html in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60702 /* EaglercraftInject.html */; };
+		B1C0F700A1B2C3D4E5F60713 /* EaglercraftSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60703 /* EaglercraftSupport.swift */; };
+		B1C0F700A1B2C3D4E5F60730 /* JessiTunnelProcesses.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60720 /* JessiTunnelProcesses.m */; };
+		B1C0F700A1B2C3D4E5F60731 /* JessiChildProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60721 /* JessiChildProcess.swift */; };
+		B1C0F700A1B2C3D4E5F60719 /* EaglercraftLoader.html in Resources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60709 /* EaglercraftLoader.html */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -175,9 +178,6 @@
 		B1C0F700A1B2C3D4E5F60022 /* RemoteImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteImage.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60023 /* TunnelingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TunnelingView.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60024 /* UniversalJIT26Extension.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = UniversalJIT26Extension.js; sourceTree = "<group>"; };
-		B1C0F700A1B2C3D4E5F60701 /* EaglercraftIndex.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = EaglercraftIndex.html; sourceTree = "<group>"; };
-		B1C0F700A1B2C3D4E5F60702 /* EaglercraftInject.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = EaglercraftInject.html; sourceTree = "<group>"; };
-		B1C0F700A1B2C3D4E5F60703 /* EaglercraftSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EaglercraftSupport.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60025 /* DeviceNames.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceNames.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60050 /* ServerProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerProperties.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60090 /* ResourcePacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResourcePacks.swift; sourceTree = "<group>"; };
@@ -205,6 +205,12 @@
 		B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = JessiJIT.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1C0F700A1B2C3D4E5F60601 /* JessiWorkerPayload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiWorkerPayload.m; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = JessiWorkerCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		B1C0F700A1B2C3D4E5F60701 /* EaglercraftIndex.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = EaglercraftIndex.html; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60702 /* EaglercraftInject.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = EaglercraftInject.html; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60703 /* EaglercraftSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EaglercraftSupport.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60720 /* JessiTunnelProcesses.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiTunnelProcesses.m; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60721 /* JessiChildProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JessiChildProcess.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60709 /* EaglercraftLoader.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = EaglercraftLoader.html; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -314,6 +320,7 @@
 				B1C0F700A1B2C3D4E5F60406 /* JessiWorkerHost.m */,
 				B1C0F700A1B2C3D4E5F60019 /* JessiSettings.h */,
 				B1C0F700A1B2C3D4E5F6001A /* JessiSettings.m */,
+				B1C0F700A1B2C3D4E5F60720 /* JessiTunnelProcesses.m */,
 				B1C0F700A1B2C3D4E5F6001B /* main.m */,
 			);
 			path = JessiCore;
@@ -328,6 +335,7 @@
 				B1C0F700A1B2C3D4E5F60005 /* CreateServerView.swift */,
 				B1C0F700A1B2C3D4E5F60006 /* DoneToolbarTextField.swift */,
 				B1C0F700A1B2C3D4E5F60007 /* FileBrowserView.swift */,
+				B1C0F700A1B2C3D4E5F60721 /* JessiChildProcess.swift */,
 				B1C0F700A1B2C3D4E5F60008 /* JessiJITCheck.h */,
 				B1C0F700A1B2C3D4E5F60009 /* JessiJITCheck.m */,
 				B1C0F700A1B2C3D4E5F6000A /* LaunchView.swift */,
@@ -363,6 +371,7 @@
 				B1C0F700A1B2C3D4E5F60024 /* UniversalJIT26Extension.js */,
 				B1C0F700A1B2C3D4E5F60701 /* EaglercraftIndex.html */,
 				B1C0F700A1B2C3D4E5F60702 /* EaglercraftInject.html */,
+				B1C0F700A1B2C3D4E5F60709 /* EaglercraftLoader.html */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -570,6 +579,7 @@
 				B1C0F700A1B2C3D4E5F60048 /* UniversalJIT26Extension.js in Resources */,
 				B1C0F700A1B2C3D4E5F60711 /* EaglercraftIndex.html in Resources */,
 				B1C0F700A1B2C3D4E5F60712 /* EaglercraftInject.html in Resources */,
+				B1C0F700A1B2C3D4E5F60719 /* EaglercraftLoader.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -618,6 +628,8 @@
 				B1C0F700A1B2C3D4E5F60049 /* DeviceNames.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60032 /* CreateServerView.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60713 /* EaglercraftSupport.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60731 /* JessiChildProcess.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60730 /* JessiTunnelProcesses.m in Sources */,
 				B1C0F700A1B2C3D4E5F60033 /* DoneToolbarTextField.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60034 /* FileBrowserView.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60036 /* LaunchView.swift in Sources */,
@@ -651,6 +663,17 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B1C0F700A1B2C3D4E5F60531 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1C0F700A1B2C3D4E5F60206 /* DeveloperDiskImage.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60204 /* IdeviceSupport.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60205 /* JITScriptRunner.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60511 /* JITSession.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B1C0F700A1B2C3D4E5F60631 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -665,17 +688,6 @@
 				B1C0F700A1B2C3D4E5F60418 /* mach_excUser.c in Sources */,
 				B1C0F700A1B2C3D4E5F60419 /* JessiJITCheck.m in Sources */,
 				B1C0F700A1B2C3D4E5F60611 /* JessiWorkerPayload.m in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		B1C0F700A1B2C3D4E5F60531 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				B1C0F700A1B2C3D4E5F60206 /* DeveloperDiskImage.swift in Sources */,
-				B1C0F700A1B2C3D4E5F60204 /* IdeviceSupport.swift in Sources */,
-				B1C0F700A1B2C3D4E5F60205 /* JITScriptRunner.swift in Sources */,
-				B1C0F700A1B2C3D4E5F60511 /* JITSession.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -849,7 +861,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/JESSI.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6XKA3GY3KZ;
+				DEVELOPMENT_TEAM = M982J64QRD;
 				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_PREVIEWS = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -857,13 +869,14 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = JESSI;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Wl,-e,_main",
@@ -895,7 +908,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/JESSI.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 6XKA3GY3KZ;
+				DEVELOPMENT_TEAM = M982J64QRD;
 				ENABLE_DEBUG_DYLIB = NO;
 				ENABLE_PREVIEWS = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -903,13 +916,14 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = JESSI;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.entertainment";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-Wl,-e,_main",

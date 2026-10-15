@@ -64,8 +64,7 @@ fi
 
 plist_get() { /usr/libexec/PlistBuddy -c "Print :$2" "$1/Info.plist"; }
 SHORT_VERSION="$(plist_get "$SRC_APP" CFBundleShortVersionString)"
-BUILD_VERSION="$(plist_get "$SRC_APP" CFBundleVersion)"
-DEB_VERSION="$SHORT_VERSION-$BUILD_VERSION"
+DEB_VERSION="$SHORT_VERSION"
 
 mkdir -p "$OUT_DIR"
 
@@ -122,7 +121,7 @@ Author: BaconMania
 Section: Applications
 Depends: firmware (>= 14.0)
 Homepage: https://jessimc.dev
-Icon: https://raw.githubusercontent.com/Baconium/JESSI/main/gay.png
+Icon: https://baconium.dev/jessi/gay.png
 EOF
 
   if [[ "$scheme" == "roothide" ]]; then

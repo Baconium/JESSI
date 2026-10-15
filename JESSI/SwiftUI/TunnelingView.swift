@@ -344,6 +344,10 @@ final class PlayitModel: ObservableObject {
     private static weak var activemodel: PlayitModel?
     private var worker: JessiWorker? { Self.agentworker }
     private var usesworker: Bool { worker != nil || JessiWorkerHost.shouldUseWorkers }
+    private static var agentprocess: JessiChildProcess? = nil
+    private static var processlogoffset: UInt64 = 0
+    private var process: JessiChildProcess? { Self.agentprocess }
+    private var usesprocess: Bool { process != nil || (!usesworker && JessiChildProcess.isSupported) }
 
     private var defaults: UserDefaults { .standard }
 
@@ -355,6 +359,13 @@ final class PlayitModel: ObservableObject {
             .appendingPathComponent("libplayit_agent.dylib", isDirectory: false)
             .path
     }
+
+    private static var agentdirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Tunneling/playit", isDirectory: true)
+    }
+    private static var agentstatusURL: URL { agentdirectory.appendingPathComponent("agent-status.json", isDirectory: false) }
+    private static var agentlogURL: URL { agentdirectory.appendingPathComponent("agent.log", isDirectory: false) }
 
     private func openlibrary() -> UnsafeMutableRawPointer? {
         if JITEnabler.isJITUsable {
@@ -390,7 +401,7 @@ final class PlayitModel: ObservableObject {
             return false
         }
 
-        if libhandle == nil && !usesworker {
+        if libhandle == nil && !usesworker && !usesprocess {
             guard let handle = openlibrary() else {
                 islibrarypresent = false
                 if setErrorOnFailure {
@@ -421,11 +432,11 @@ final class PlayitModel: ObservableObject {
         }
 
         Self.activemodel = self
-        if worker != nil {
+        if worker != nil || process != nil {
             startstatuspolling()
         }
 
-        if libhandle == nil && worker == nil && !isstarting {
+        if libhandle == nil && worker == nil && process == nil && !isstarting {
             setstatus("Disconnected")
             setlastaddr(nil)
         }
@@ -473,7 +484,7 @@ final class PlayitModel: ObservableObject {
 
     func startifpossible() {
         if isstarting || isstopping { return }
-        if worker != nil {
+        if worker != nil || process != nil {
             startstatuspolling()
             return
         }
@@ -488,6 +499,11 @@ final class PlayitModel: ObservableObject {
 
         if usesworker {
             startworker(secretkey: secret)
+            return
+        }
+
+        if usesprocess {
+            startprocess(secretkey: secret)
             return
         }
 
@@ -512,6 +528,12 @@ final class PlayitModel: ObservableObject {
             isstopping = true
             seterror(nil)
             worker.send(["cmd": "stop"])
+            return
+        }
+        if let process {
+            isstopping = true
+            seterror(nil)
+            process.terminate()
             return
         }
         guard let handle = libhandle else {
@@ -574,6 +596,56 @@ final class PlayitModel: ObservableObject {
                 self.seterror(problem)
             }
         })
+    }
+
+    private func startprocess(secretkey: String) {
+        Self.activemodel = self
+        Self.processlogoffset = 0
+        try? FileManager.default.removeItem(at: Self.agentstatusURL)
+        tunnelinglogger.log("Playit: starting agent in its own process")
+        do {
+            Self.agentprocess = try JessiChildProcess.spawn(["--playit", libraryPath, Self.agentstatusURL.path], logURL: Self.agentlogURL, input: Data(secretkey.utf8)) { code in
+                let lastline = PlayitModel.agentprocess?.lastLogLine().map { PlayitModel.parseprocesslogline($0).text }
+                PlayitModel.forwardprocesslog()
+                PlayitModel.agentprocess = nil
+                tunnelinglogger.log("Playit: agent process exited (\(code))")
+                guard let self = PlayitModel.activemodel else { return }
+                let stopping = self.isstopping
+                self.isstarting = false
+                self.isstopping = false
+                self.stopstatuspolling()
+                self.laststatuscode = .stopped
+                self.setstatus("Stopped")
+                self.setlastaddr(nil)
+                if code != 0 {
+                    self.seterror(stopping ? "Playit stop failed (\(code))" : (lastline ?? "Playit stopped unexpectedly (\(code))"))
+                }
+            }
+            startstatuspolling()
+        } catch {
+            isstarting = false
+            seterror("Couldn't start Playit: \(error.localizedDescription)")
+        }
+    }
+
+    private static func parseprocesslogline(_ line: String) -> (level: Int32, text: String) {
+        guard let tab = line.firstIndex(of: "\t"), let level = Int32(line[..<tab]) else { return (1, line) }
+        return (level, String(line[line.index(after: tab)...]))
+    }
+
+    private static func forwardprocesslog() {
+        guard let handle = try? FileHandle(forReadingFrom: agentlogURL) else { return }
+        defer { try? handle.close() }
+        if handle.seekToEndOfFile() < processlogoffset { processlogoffset = 0 }
+        handle.seek(toFileOffset: processlogoffset)
+        let data = handle.readDataToEndOfFile()
+        guard let end = data.lastIndex(of: UInt8(ascii: "\n")) else { return }
+        processlogoffset += UInt64(end - data.startIndex + 1)
+        let text = String(decoding: data[data.startIndex...end], as: UTF8.self)
+        for line in text.split(whereSeparator: \.isNewline) {
+            let parsed = parseprocesslogline(String(line))
+            logplayitline(level: parsed.level, text: parsed.text)
+        }
     }
 
     private static func handleworkerevent(_ event: [AnyHashable: Any]) {
@@ -642,6 +714,16 @@ final class PlayitModel: ObservableObject {
     }
 
     private func refreshfromlibrary() {
+        if process != nil {
+            Self.forwardprocesslog()
+            guard let data = try? Data(contentsOf: Self.agentstatusURL),
+                  let status = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+            isstarting = false
+            applystatus(code: (status["code"] as? NSNumber)?.int32Value ?? 0,
+                        address: status["address"] as? String,
+                        error: status["error"] as? String)
+            return
+        }
         if worker != nil {
             if let status = Self.agentstatus {
                 applystatus(code: status.code, address: status.address, error: status.error)
@@ -681,7 +763,7 @@ final class PlayitModel: ObservableObject {
         }()
         setlastaddr(addressValue)
 
-        if code == .disconnected, addressValue == nil, error == nil, libhandle != nil || worker != nil {
+        if code == .disconnected, addressValue == nil, error == nil, libhandle != nil || worker != nil || process != nil {
             setstatus("Online (No Active Tunnels)")
         } else {
             setstatus(code.displayname)

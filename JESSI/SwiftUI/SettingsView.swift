@@ -591,43 +591,24 @@ final class SettingsModel: ObservableObject {
     }
 
     private func runtimeDownloadURLs(for version: String) -> [URL] {
-        let defaultBases = [
-            "https://crystall1ne.dev/cdn/amethyst-ios",
+        guard !isMacCatalyst else { return [] }
+        let bases = [
             "https://baconium.dev/jessi/jvm",
             "https://roooot.dev/jessi/jvm"
         ]
-        let java25Bases = [
-            "https://baconium.dev/jessi/jvm",
-            "https://crystall1ne.dev/cdn/amethyst-ios",
-            "https://roooot.dev/jessi/jvm"
-        ]
-        let bases = (!isMacCatalyst && version == "25") ? java25Bases : defaultBases
 
         let filenames: [String]
-        if isMacCatalyst {
-            switch version {
-            case "8":
-                filenames = ["jre8-arm64-20250511-release.tar.xz"]
-            case "17":
-                filenames = ["jre17-arm64-20250225-release.tar.xz"]
-            case "21":
-                filenames = ["jre21-arm64-20250225-release.tar.xz"]
-            default:
-                return []
-            }
-        } else {
-            switch version {
-            case "8":
-                filenames = ["jre8-ios-aarch64.zip"]
-            case "17":
-                filenames = ["jre17-ios-aarch64.zip"]
-            case "21":
-                filenames = ["jre21-ios-aarch64.zip"]
-            case "25":
-                filenames = ["jre25-ios-aarch64.zip", "jre25-ios-aarch64.tar.xz"]
-            default:
-                return []
-            }
+        switch version {
+        case "8":
+            filenames = ["jre8-ios-aarch64.zip"]
+        case "17":
+            filenames = ["jre17-ios-aarch64.zip"]
+        case "21":
+            filenames = ["jre21-ios-aarch64.zip"]
+        case "25":
+            filenames = ["jre25-ios-aarch64.zip", "jre25-ios-aarch64.tar.xz"]
+        default:
+            return []
         }
 
         var urls: [URL] = []
@@ -657,59 +638,6 @@ final class SettingsModel: ObservableObject {
         let helper2 = runtimeRoot.appendingPathComponent("lib/jspawnhelper", isDirectory: false)
         if fm.fileExists(atPath: helper1.path) { _ = chmod(helper1.path, 0o755) }
         if fm.fileExists(atPath: helper2.path) { _ = chmod(helper2.path, 0o755) }
-    }
-
-    private func readU32LE(_ data: Data, _ offset: Int) -> UInt32? {
-        guard offset >= 0, offset + 4 <= data.count else { return nil }
-        return data.withUnsafeBytes { raw in
-            let p = raw.baseAddress!.advanced(by: offset).assumingMemoryBound(to: UInt32.self)
-            return UInt32(littleEndian: p.pointee)
-        }
-    }
-
-    private func machoPlatform(ofBinaryAt url: URL) -> UInt32? {
-        guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
-        guard let magic = readU32LE(data, 0) else { return nil }
-
-        guard magic == MH_MAGIC_64 else { return nil }
-        guard let ncmdsU32 = readU32LE(data, 16) else { return nil }
-        let ncmds = Int(ncmdsU32)
-        var cmdOffset = 32
-
-        for _ in 0..<ncmds {
-            guard let cmd = readU32LE(data, cmdOffset), let cmdsizeU32 = readU32LE(data, cmdOffset + 4) else { break }
-            let cmdsize = Int(cmdsizeU32)
-            if cmdsize < 8 || cmdOffset + cmdsize > data.count { break }
-
-            if cmd == UInt32(LC_BUILD_VERSION), let platform = readU32LE(data, cmdOffset + 8) {
-                return platform
-            }
-
-            cmdOffset += cmdsize
-        }
-
-        return nil
-    }
-
-    private func validateRuntimeForCurrentPlatform(_ runtimeRoot: URL) throws {
-        guard isMacCatalyst else { return }
-
-        let fm = FileManager.default
-        let libjliA = runtimeRoot.appendingPathComponent("lib/libjli.dylib")
-        let libjliB = runtimeRoot.appendingPathComponent("lib/jli/libjli.dylib")
-        let libjli = fm.fileExists(atPath: libjliA.path) ? libjliA : libjliB
-
-        guard fm.fileExists(atPath: libjli.path) else {
-            throw NSError(domain: "JESSI", code: 106, userInfo: [NSLocalizedDescriptionKey: "Downloaded runtime is missing libjli.dylib"])
-        }
-
-        guard let platform = machoPlatform(ofBinaryAt: libjli) else {
-            throw NSError(domain: "JESSI", code: 107, userInfo: [NSLocalizedDescriptionKey: "Could not verify runtime platform for \(libjli.lastPathComponent)"])
-        }
-
-        if platform != UInt32(PLATFORM_MACCATALYST) {
-            throw NSError(domain: "JESSI", code: 108, userInfo: [NSLocalizedDescriptionKey: "Downloaded JVM is not Mac Catalyst compatible (platform \(platform))."])
-        }
     }
 
     private func extractTar(_ tarPath: URL, to destDir: URL) throws {
@@ -891,7 +819,6 @@ final class SettingsModel: ObservableObject {
 
                     try self.extractTar(tarPath, to: staging)
                     self.postInstallFixPermissions(runtimeRoot: staging)
-                    try self.validateRuntimeForCurrentPlatform(staging)
 
                     if fm.fileExists(atPath: finalDir.path) {
                         let backup = self.runtimesDir.appendingPathComponent("jre\(version).backup-\(UUID().uuidString)", isDirectory: true)
@@ -1125,6 +1052,7 @@ struct SettingsView: View {
     @AppStorage("jessi.tunnel.install.inProgress") private var tunnelinginstallinprogress: Bool = false
     @AppStorage("jessi.tunnel.install.queue") private var tunnelingInstallQueueCSV: String = ""
     @AppStorage("jessi.upnp.ports") private var upnpPortsCSV: String = ""
+    @AppStorage(EaglercraftTunnel.enabledKey) private var eaglercraftCloudflare: Bool = true
     @State private var keepaliveauthstat: CLAuthorizationStatus = keepalivemgr.shared.authstat
     @State private var showkeepalivepermprompt = false
 
@@ -1485,6 +1413,12 @@ struct SettingsView: View {
                 autostartifneeded()
             }
             .normalizedSeparator()
+
+            Toggle("Cloudflare for Eaglercraft", isOn: $eaglercraftCloudflare)
+                .onChange(of: eaglercraftCloudflare) { enabled in
+                    if !enabled { EaglercraftTunnel.shared.stop() }
+                }
+                .normalizedSeparator()
             
             if isnoneselected {
                 HStack {
@@ -1949,7 +1883,7 @@ struct SettingsView: View {
                 }
 
                 if model.hasTrollStorePrivileges {
-                    Toggle("Disable separate JVM process", isOn: Binding(
+                    Toggle("Disable child processes", isOn: Binding(
                         get: { model.disableSeparateJVMProcessOnTrollStore },
                         set: { newValue in
                             model.disableSeparateJVMProcessOnTrollStore = newValue
@@ -1997,8 +1931,8 @@ struct SettingsView: View {
                     Text("JIT Enabled")
                     Spacer()
                     if JessiWorkerHost.shouldUseWorkers {
-                        Text("Automatic")
-                            .foregroundColor(.green)
+                        Text("Yes")
+                            .foregroundColor(boolstatuscolor(model.isJITEnabled))
                     } else {
                         Text(model.isJITEnabled ? "Yes" : "No")
                             .foregroundColor(boolstatuscolor(model.isJITEnabled))
@@ -2017,6 +1951,11 @@ struct SettingsView: View {
                 .onTapGesture(count: 5) {
                     if model.isTrollStore && !model.isJailbreak {
                         if let url = URL(string: "apple-magnifier://install?url=https://baconium.dev/jessi/JESSI.ipa") {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    if !model.isTrollStore && model.isJailbreak {
+                        if let url = URL(string: "sileo://package/com.baconmania.jessi") {
                             UIApplication.shared.open(url)
                         }
                     }

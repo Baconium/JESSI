@@ -128,6 +128,13 @@ final class LaunchModel: NSObject, ObservableObject {
         updatePropertiesManager()
     }
 
+    private func updateEaglercraftTunnel(_ isRunning: Bool) {
+        guard isRunning else { return EaglercraftTunnel.shared.stop() }
+        let path = (service.serversRoot() as NSString).appendingPathComponent(selectedServer)
+        guard Eaglercraft.isEaglercraftServer(at: path) else { return }
+        EaglercraftTunnel.shared.start(gamePort: Eaglercraft.serverPort(at: path))
+    }
+
     private func updatePropertiesManager() {
         if !selectedServer.isEmpty {
             let root = service.serversRoot()
@@ -165,6 +172,7 @@ final class LaunchModel: NSObject, ObservableObject {
     private func restoreEaglercraftWebPageIfNeeded(_ then: @escaping () -> Void) {
         let path = (service.serversRoot() as NSString).appendingPathComponent(selectedServer)
         guard let version = Eaglercraft.webVersion(forServerAt: path) else { return then() }
+        try? Eaglercraft.raiseHTTPRateLimit(serverDir: URL(fileURLWithPath: path, isDirectory: true))
         let webDirectory = Eaglercraft.webDirectory(for: version)
         let hasIndex = FileManager.default.fileExists(atPath: webDirectory.appendingPathComponent("index.html").path)
         if hasIndex && Eaglercraft.missingClients(for: version).isEmpty { return then() }
@@ -236,7 +244,9 @@ final class LaunchModel: NSObject, ObservableObject {
 
         let available = JessiSettings.availableJavaVersions()
         if available.isEmpty {
-            activeAlert = .runtime("You must install a JVM before attempting to start a server!")
+            activeAlert = .runtime(ProcessInfo.processInfo.isMacCatalystApp
+                ? "No Java installation was found on this Mac. Install a JDK (for example Eclipse Temurin), then start the server again."
+                : "You must install a JVM before attempting to start a server!")
             return
         }
 
@@ -443,6 +453,7 @@ extension LaunchModel: JessiServerServiceDelegate {
         DispatchQueue.main.async {
             self.isRunning = isRunning
             RelaySession.shared.setServerRunning(isRunning, serverRoot: self.propertiesManager?.serverRoot)
+            self.updateEaglercraftTunnel(isRunning)
             if !isRunning {
                 UIApplication.shared.isIdleTimerDisabled = false
             }
@@ -783,9 +794,58 @@ struct AdvancedSettingsView: View {
     }
 }
 
+private struct EaglercraftTunnelCard: View {
+    let state: EaglercraftTunnel.State
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Online (Cloudflare)")
+                .font(.headline)
+            switch state {
+            case .downloading(let progress):
+                Text("Downloading Cloudflare...")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                ProgressView(value: progress)
+                    .progressViewStyle(LinearProgressViewStyle())
+            case .starting:
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Connecting to Cloudflare...")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            case .online(let url):
+                HStack {
+                    Text(verbatim: url)
+                        .font(.system(.subheadline, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button("Copy") {
+                        UIPasteboard.general.string = url
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                }
+            case .failed(let message):
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundColor(.orange)
+            case .off:
+                EmptyView()
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(16)
+    }
+}
+
 struct LaunchView: View {
     @EnvironmentObject var tourManager: TourManager
     @StateObject private var model = LaunchModel()
+    @ObservedObject private var eaglercraftTunnel = EaglercraftTunnel.shared
     @State private var exitAfterStopRequested = false
     @State private var showAdvancedSettings = false
 
@@ -898,6 +958,11 @@ struct LaunchView: View {
                 .cornerRadius(16)
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
+
+                if eaglercraftTunnel.state != .off {
+                    EaglercraftTunnelCard(state: eaglercraftTunnel.state)
+                        .padding(.horizontal, 16)
+                }
 
                 HStack {
                     Text("Console")
@@ -1045,6 +1110,13 @@ struct LaunchView: View {
                     dismissButton: .default(Text("OK"))
                 )
             case .jvmInstallOffer(let version):
+                if ProcessInfo.processInfo.isMacCatalystApp {
+                    return Alert(
+                        title: Text("Java \(version) Required"),
+                        message: Text("This server needs Java \(version), which isn't installed on this Mac. Install a Java \(version) JDK (for example Eclipse Temurin), then start the server again."),
+                        dismissButton: .default(Text("OK"))
+                    )
+                }
                 return Alert(
                     title: Text("Java \(version) Required"),
                     message: Text("This server requires Java \(version), which is not currently installed."),

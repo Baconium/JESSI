@@ -10,6 +10,8 @@
 
 int jessi_server_main(int argc, char *argv[]);
 int jessi_tool_main(int argc, char *argv[]);
+int jessi_cloudflared_main(int argc, char *argv[]);
+int jessi_playit_main(int argc, char *argv[]);
 
 static BOOL streq(const char *a, const char *b) {
     return (a && b && strcmp(a, b) == 0);
@@ -67,6 +69,14 @@ __attribute__((visibility("default"))) int main(int argc, char *argv[]) {
 
     if (argc > 1 && argv[1] && streq(argv[1], "--tool")) {
         return jessi_tool_main(argc - 1, argv + 1);
+    }
+
+    if (argc > 1 && argv[1] && streq(argv[1], "--cloudflared")) {
+        return jessi_cloudflared_main(argc - 1, argv + 1);
+    }
+
+    if (argc > 1 && argv[1] && streq(argv[1], "--playit")) {
+        return jessi_playit_main(argc - 1, argv + 1);
     }
 
     const char *jliRelaunch = getenv_nonempty("JESSI_LAUNCHED_BY_JLI");
