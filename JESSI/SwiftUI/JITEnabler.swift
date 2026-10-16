@@ -197,11 +197,30 @@ final class JITEnabler: ObservableObject {
     }
 
     private func launchHelper(pairingData: Data, targetIP: String, eventPort: UInt16, tunnelPort: UInt16) throws {
-        guard let helperID = Self.helperBundleIdentifier else {
+        var payload: [String: Any] = [:]
+        let helperID: String
+        if jessi_is_livecontainer_installed() {
+            guard let liveProcessID = JessiWorkerHost.liveProcessIdentifier else {
+                throw HelperLaunchError("JESSI is running inside LiveContainer, which can't start JESSI's JIT helper. Update LiveContainer to 3.8 or newer, or launch JESSI with JIT from LiveContainer.")
+            }
+            var problem: NSString?
+            guard let path = JessiWorkerHost.liveProcessPayloadPath(forFramework: "JessiJIT.framework", folder: "JITPayload", problem: &problem) else {
+                throw HelperLaunchError(problem as String? ?? "Couldn't prepare the JIT helper for LiveContainer.")
+            }
+            helperID = liveProcessID
+            payload = ["customPayloadDylib": path, "customPayloadEntry": "jessi_jit_payload_main"]
+        } else if let id = Self.helperBundleIdentifier {
+            helperID = id
+        } else {
             throw HelperLaunchError("The JIT helper extension is missing from this copy of JESSI. Make sure your signing tool keeps app extensions.")
         }
 
-        let helper = try NSExtension(identifier: helperID)
+        let helper: NSExtension
+        do {
+            helper = try NSExtension(identifier: helperID)
+        } catch {
+            throw HelperLaunchError("iOS couldn't load the JIT helper extension (\(error.localizedDescription)).")
+        }
         helper.setRequestInterruptionBlock { [weak self] _ in
             DispatchQueue.main.async { self?.helperExited(reason: "The JIT helper was interrupted.") }
         }
@@ -216,14 +235,13 @@ final class JITEnabler: ObservableObject {
         helperExtension = helper
 
         let item = NSExtensionItem()
-        item.userInfo = [
-            "pid": NSNumber(value: getpid()),
-            "pairingFile": pairingData,
-            "eventPort": NSNumber(value: eventPort),
-            "txm": NSNumber(value: usesJITScript),
-            "targetIP": targetIP,
-            "tunnelPort": NSNumber(value: tunnelPort),
-        ]
+        payload["pid"] = NSNumber(value: getpid())
+        payload["pairingFile"] = pairingData
+        payload["eventPort"] = NSNumber(value: eventPort)
+        payload["txm"] = NSNumber(value: usesJITScript)
+        payload["targetIP"] = targetIP
+        payload["tunnelPort"] = NSNumber(value: tunnelPort)
+        item.userInfo = payload
 
         appendLog("Starting JIT helper (\(usesJITScript ? "TXM, staying attached" : "attach and detach"))…")
         helper.beginRequest(withInputItems: [item]) { [weak self] requestID in
@@ -269,7 +287,7 @@ final class JITEnabler: ObservableObject {
 
     private func verifyEnabled() {
         jitEnabled = Self.isJITUsable
-        finish(jitEnabled ? .enabled : .failed("The debugger attached, but iOS did not mark JESSI as debugged."))
+        finish(jitEnabled ? .enabled : .failed("The debugger attached, but iOS did not mark JESSI as debugged (code signing flags 0x\(String(jessi_codesign_flags(), radix: 16)))."))
     }
 
     private func helperExited(reason: String?) {

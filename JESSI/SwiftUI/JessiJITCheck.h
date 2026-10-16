@@ -14,6 +14,7 @@ void * _Nullable jessi_dlopen_with_dyld_bypass(const char * _Nonnull path, int f
 bool jessi_is_ios26_or_later(void);
 bool jessi_is_txm_device(void);
 bool jessi_is_debugger_attached(void);
+unsigned int jessi_codesign_flags(void);
 
 bool jessi_is_trollstore_installed(void);
 bool jessi_is_jailbreak_installed(void);

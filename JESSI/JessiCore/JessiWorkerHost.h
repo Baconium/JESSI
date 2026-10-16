@@ -17,9 +17,11 @@ typedef void (^JessiWorkerJITStarter)(pid_t pid, void (^log)(NSString *line), vo
 @property (class, nonatomic, readonly) BOOL shouldUseWorkers;
 @property (class, nonatomic, readonly) BOOL workerExtensionAvailable;
 @property (class, nonatomic, readonly) BOOL runsJITInProcess;
+@property (class, nonatomic, readonly, nullable) NSString *liveProcessIdentifier;
 @property (class, nonatomic, copy, nullable) JessiWorkerJITStarter jitStarter;
 
 + (void)reapOrphanedWorkers;
++ (nullable NSString *)liveProcessPayloadPathForFramework:(NSString *)framework folder:(NSString *)folder problem:(NSString *_Nullable *_Nullable)problem;
 
 + (JessiWorker *)launchJob:(NSDictionary *)job
                   needsJIT:(BOOL)needsJIT

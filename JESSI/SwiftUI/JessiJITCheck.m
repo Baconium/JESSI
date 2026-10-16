@@ -133,6 +133,12 @@ BOOL jessi_check_jit_enabled(void) {
     return (flags & CS_DEBUGGED) != 0;
 }
 
+unsigned int jessi_codesign_flags(void) {
+    int flags = 0;
+    if (csops(getpid(), CS_OPS_STATUS, &flags, sizeof(flags)) != 0) return 0;
+    return (unsigned int)flags;
+}
+
 static __attribute__((unused)) BOOL jessi_is_debugger_attached(void) {
     int flags = 0;
     if (csops(getpid(), CS_OPS_STATUS, &flags, sizeof(flags)) != 0) {

@@ -48,7 +48,6 @@ void jessi_keep_extension_running_in_background(id extension) {
 + (void)rememberWorkerPID:(pid_t)pid;
 + (void)forgetWorkerPID:(pid_t)pid;
 + (nullable NSString *)workerExtensionIdentifier;
-+ (nullable NSString *)liveProcessIdentifier;
 + (nullable NSString *)payloadPathForLiveProcess:(NSString *_Nullable *_Nullable)problem;
 + (NSArray<NSData *> *)containerBookmarks;
 + (NSDictionary *)settingsSnapshot;
@@ -450,8 +449,8 @@ static BOOL g_inLiveContainer(void) {
 }
 
 static NSString *liveContainerBundlePath(void) {
-    const char *executable = _dyld_get_image_name(0);
-    if (!executable) return nil;
+    char executable[4 * MAXPATHLEN];
+    if (proc_pidpath(getpid(), executable, sizeof(executable)) <= 0) return nil;
     NSString *bundle = @(executable).stringByDeletingLastPathComponent;
     return [bundle.pathExtension isEqualToString:@"app"] ? bundle : nil;
 }
@@ -485,27 +484,32 @@ static NSString *liveContainerBundlePath(void) {
 }
 
 + (NSString *)payloadPathForLiveProcess:(NSString **)problem {
-    NSString *source = [[JessiPaths appBundle].privateFrameworksPath stringByAppendingPathComponent:JessiWorkerFrameworkName];
-    NSString *binary = [source stringByAppendingPathComponent:@"JessiWorkerCore"];
+    return [self liveProcessPayloadPathForFramework:JessiWorkerFrameworkName folder:@"WorkerPayload" problem:problem];
+}
+
++ (NSString *)liveProcessPayloadPathForFramework:(NSString *)framework folder:(NSString *)folder problem:(NSString **)problem {
+    NSString *source = [[JessiPaths appBundle].privateFrameworksPath stringByAppendingPathComponent:framework];
+    NSString *binaryName = framework.stringByDeletingPathExtension;
+    NSString *binary = [source stringByAppendingPathComponent:binaryName];
     NSFileManager *fm = [NSFileManager defaultManager];
     NSDictionary *attributes = [fm attributesOfItemAtPath:binary error:nil];
     if (!attributes) {
-        if (problem) *problem = @"JessiWorkerCore.framework is missing from this copy of JESSI.";
+        if (problem) *problem = [NSString stringWithFormat:@"%@ is missing from this copy of JESSI.", framework];
         return nil;
     }
 
     Class sharedUtils = NSClassFromString(@"LCSharedUtils");
     NSURL *group = [sharedUtils respondsToSelector:@selector(appGroupPath)] ? [sharedUtils performSelector:@selector(appGroupPath)] : nil;
     if (![group isKindOfClass:[NSURL class]]) {
-        if (problem) *problem = @"Couldn't find LiveContainer's app group, which the server process needs to load JESSI's code from. Make sure LiveContainer was installed with SideStore or AltStore's app group.";
+        if (problem) *problem = @"Couldn't find LiveContainer's app group, which JESSI's helper processes need to load JESSI's code from. Make sure LiveContainer was installed with SideStore or AltStore's app group.";
         return nil;
     }
     if ([source hasPrefix:[group.path stringByAppendingString:@"/"]]) return binary;
 
     NSString *stamp = [NSString stringWithFormat:@"%llu-%.0f", [attributes fileSize], [[attributes fileModificationDate] timeIntervalSince1970]];
-    NSString *root = [group.path stringByAppendingPathComponent:@"JESSI/WorkerPayload"];
-    NSString *destination = [[root stringByAppendingPathComponent:stamp] stringByAppendingPathComponent:JessiWorkerFrameworkName];
-    NSString *destinationBinary = [destination stringByAppendingPathComponent:@"JessiWorkerCore"];
+    NSString *root = [[group.path stringByAppendingPathComponent:@"JESSI"] stringByAppendingPathComponent:folder];
+    NSString *destination = [[root stringByAppendingPathComponent:stamp] stringByAppendingPathComponent:framework];
+    NSString *destinationBinary = [destination stringByAppendingPathComponent:binaryName];
     if ([fm fileExistsAtPath:destinationBinary]) return destinationBinary;
 
     for (NSString *old in [fm contentsOfDirectoryAtPath:root error:nil]) {
@@ -514,7 +518,7 @@ static NSString *liveContainerBundlePath(void) {
     NSError *error = nil;
     if (![fm createDirectoryAtPath:destination.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:&error] ||
         ![fm copyItemAtPath:source toPath:destination error:&error]) {
-        if (problem) *problem = [NSString stringWithFormat:@"Couldn't copy JESSI's server code to LiveContainer's app group: %@", error.localizedDescription];
+        if (problem) *problem = [NSString stringWithFormat:@"Couldn't copy %@ to LiveContainer's app group: %@", framework, error.localizedDescription];
         return nil;
     }
     return destinationBinary;

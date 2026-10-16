@@ -2078,7 +2078,6 @@ struct SettingsView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
-                        
                         Spacer(minLength: 0)
                     }
                     .padding(.vertical, 16)
@@ -2113,6 +2112,33 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
                     .onTapGesture {
                         showrooootmenu = true
+                    }
+
+                    Rectangle()
+                        .fill(Color(UIColor.separator))
+                        .frame(height: 1 / UIScreen.main.scale)
+                        .padding(.horizontal, 20)
+                    
+                    HStack(spacing: 16) {
+                        Image("redstonedisorder")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 60, height: 60)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("RedstoneDisorder")
+                                .font(.headline)
+                            Text("Helps out frequently with the github repo, and added some QoL features.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 16)
+                    .onTapGesture {
+                        UIApplication.shared.open(URL(string: "https://github.com/RedstoneDisorder")!, options: [:], completionHandler: nil)
                     }
                 }
                 .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
@@ -2169,7 +2195,7 @@ struct SettingsView: View {
             } header: {
                 Text("Simulator Test")
             } footer: {
-                Text("You shouldnt see this as a normal JESSI consumer, if you do, ignore it or [report it](https://github.com/Baconium/JESSI/issues/new) to big daddy roooot (or baconmania)")
+                Text("You shouldnt see this as a normal JESSI user, if you do, ignore it or [report it](https://github.com/Baconium/JESSI/issues/new) to big daddy roooot (or baconmania)")
             }
 #endif
         }

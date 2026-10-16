@@ -58,6 +58,7 @@
 		B1C0F700A1B2C3D4E5F60421 /* JESSIWorker.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60404 /* JESSIWorker.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B1C0F700A1B2C3D4E5F60422 /* JessiWorkerEntry.m in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60407 /* JessiWorkerEntry.m */; };
 		B1C0F700A1B2C3D4E5F60511 /* JITSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60501 /* JITSession.swift */; };
+		B1C0F700A1B2C3D4E5F60732 /* JITHelperRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60722 /* JITHelperRunner.swift */; };
 		B1C0F700A1B2C3D4E5F60512 /* JessiJIT.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */; };
 		B1C0F700A1B2C3D4E5F60513 /* JessiJIT.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */; platformFilter = ios; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		B1C0F700A1B2C3D4E5F60514 /* JessiJIT.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */; platformFilter = ios; };
@@ -202,6 +203,7 @@
 		B1C0F700A1B2C3D4E5F60406 /* JessiWorkerHost.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiWorkerHost.m; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60407 /* JessiWorkerEntry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiWorkerEntry.m; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60501 /* JITSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JITSession.swift; sourceTree = "<group>"; };
+		B1C0F700A1B2C3D4E5F60722 /* JITHelperRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JITHelperRunner.swift; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60502 /* JessiJIT.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = JessiJIT.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1C0F700A1B2C3D4E5F60601 /* JessiWorkerPayload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = JessiWorkerPayload.m; sourceTree = "<group>"; };
 		B1C0F700A1B2C3D4E5F60602 /* JessiWorkerCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = JessiWorkerCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -412,6 +414,7 @@
 				B1C0F700A1B2C3D4E5F60284 /* IdeviceSupport.swift */,
 				B1C0F700A1B2C3D4E5F60285 /* JITScriptRunner.swift */,
 				B1C0F700A1B2C3D4E5F60501 /* JITSession.swift */,
+				B1C0F700A1B2C3D4E5F60722 /* JITHelperRunner.swift */,
 				B1C0F700A1B2C3D4E5F602C1 /* Resources */,
 			);
 			path = JessiJIT;
@@ -671,6 +674,7 @@
 				B1C0F700A1B2C3D4E5F60204 /* IdeviceSupport.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60205 /* JITScriptRunner.swift in Sources */,
 				B1C0F700A1B2C3D4E5F60511 /* JITSession.swift in Sources */,
+				B1C0F700A1B2C3D4E5F60732 /* JITHelperRunner.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
