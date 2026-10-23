@@ -20,6 +20,9 @@
   <a href="https://github.com/baconium/JESSI/releases">
     <img src="https://img.shields.io/github/v/release/baconium/JESSI" alt="Release">
   </a>
+  <a href="https://github.com/baconium/JESSI/releases">
+    <img src="https://img.shields.io/github/downloads/baconium/JESSI/total?color=blue" alt="GitHub downloads">
+  </a>
 </p>
 
 <p align="center">
